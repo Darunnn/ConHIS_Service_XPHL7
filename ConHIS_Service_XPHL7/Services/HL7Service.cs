@@ -24,21 +24,51 @@ namespace ConHIS_Service_XPHL7.Services
                 {
                     if (string.IsNullOrWhiteSpace(line)) continue;
 
-                    var segmentType = line.Substring(0, 3);
+                    // guard for very short lines
+                    if (line.Length < 3) continue;
+
+                    var segmentType = line.Substring(0, 3).ToUpperInvariant();
                     var fields = line.Split(FIELD_SEPARATOR[0]);
 
+
+                    // Only parse MSH and PID segments; skip all other segments silently
                     switch (segmentType)
                     {
-                        case "MSH": message.MessageHeader = ParseMSH(fields); break; // HL7 MSH Segment
-                        case "PID": message.PatientIdentification = ParsePID(fields); break; // HL7 PID Segment
-                        case "PV1": message.PatientVisit = ParsePV1(fields); break; // HL7 PV1 Segment
-                        case "ORC": message.CommonOrder = ParseORC(fields); break; // HL7 ORC Segment
-                        case "AL1": message.Allergies.Add(ParseAL1(fields)); break; // HL7 AL1 Segment
-                        case "RXD": message.PharmacyDispense.Add(ParseRXD(fields)); break; // HL7 RXD Segment
-                        case "RXR": message.RouteInfo.Add(ParseRXR(fields)); break; // HL7 RXR Segment
-                        case "NTE": message.Notes.Add(ParseNTE(fields)); break; // HL7 NTE Segment
+                        case "MSH":
+                            message.MessageHeader = ParseMSH(fields);
+                            break;
+                        case "PID":
+                            message.PatientIdentification = ParsePID(fields);
+                            break;
+                        case "PV1":
+                            message.PatientVisit = ParsePV1(fields);
+                            break;
+                        case "ORC":
+                            message.CommonOrder = ParseORC(fields);
+                            break;
+                        case "AL1":
+                            var allergy = ParseAL1(fields);
+                            if (allergy != null)
+                                message.Allergies.Add(allergy);
+                            break;
+                        case "RXD":
+                            var dispense = ParseRXD(fields);
+                            if (dispense != null)
+                                message.PharmacyDispense.Add(dispense);
+                            break;
+                        case "RXR":
+                            var route = ParseRXR(fields);
+                            if (route != null)
+                                message.RouteInfo.Add(route);
+                            break;
+                        case "NTE":
+                            var note = ParseNTE(fields);
+                            if (note != null)
+                                message.Notes.Add(note);
+                            break;
                         default:
-                            throw new Exception($"Unknown HL7 segment: {segmentType}");
+                            // Log unknown segments but don't throw
+                            continue;
                     }
                 }
 
@@ -140,7 +170,9 @@ namespace ConHIS_Service_XPHL7.Services
                 PatientClass = GetField(fields, 2),
                 AssignedPatientLocation = new AssignedLocation
                 {
-                    PointOfCare = GetComponent(locationComponents, 0)
+                    PointOfCare = GetComponent(locationComponents, 0),
+                    Room = GetComponent(locationComponents, 1),
+                    Bed = GetComponent(locationComponents, 2)
                 },
                 AdmittingDoctor = new AdmittingDoctor
                 {
@@ -362,8 +394,8 @@ namespace ConHIS_Service_XPHL7.Services
         private string GeneratePV1(PV1 pv1)
         {
             // AssignedPatientLocation PID-3
-            string location = $"{pv1.AssignedPatientLocation.PointOfCare}";
-
+            string location = $"{pv1.AssignedPatientLocation.PointOfCare}^{pv1.AssignedPatientLocation.Room}^{pv1.AssignedPatientLocation.Room}";
+            
             // AdmittingDoctor PV1-17
             string admittingDoctor = $"{pv1.AdmittingDoctor.ID}^{pv1.AdmittingDoctor.LastName}^{pv1.AdmittingDoctor.FirstName}^^{pv1.AdmittingDoctor.Prefix}";
 

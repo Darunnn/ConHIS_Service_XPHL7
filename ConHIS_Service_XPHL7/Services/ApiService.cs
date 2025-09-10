@@ -21,7 +21,7 @@ namespace ConHIS_Service_XPHL7.Services
 
         public bool SendToMiddleware(object data)
         {
-            _logger.LogInfo("SendToMiddleware: Start");
+            _logger.LogInfo($"SendToMiddleware: Start, Endpoint = {_apiEndpoint}"); // log endpoint name
             try
             {
                 var json = JsonConvert.SerializeObject(data, Formatting.Indented);
@@ -47,6 +47,38 @@ namespace ConHIS_Service_XPHL7.Services
             {
                 _logger.LogError("Error calling API", ex);
                 throw new Exception($"Error calling API: {ex.Message}", ex);
+            }
+        }
+
+        public bool SendPrescriptionApi(System.Collections.Generic.List<object> prescriptions, string apiUrl)
+        {
+            _logger.LogInfo($"SendPrescriptionApi: Start, Endpoint = {apiUrl}");
+            try
+            {
+                var body = new { data = prescriptions };
+                var json = JsonConvert.SerializeObject(body, Formatting.Indented);
+                _logger.LogInfo($"SendPrescriptionApi: JSON = {json}");
+                var content = new StringContent(json, Encoding.UTF8, "application/json");
+
+                var response = _httpClient.PostAsync(apiUrl, content).Result;
+                _logger.LogInfo($"SendPrescriptionApi: Response status = {response.StatusCode}");
+
+                if (response.IsSuccessStatusCode)
+                {
+                    _logger.LogInfo("SendPrescriptionApi: Success");
+                    return true;
+                }
+                else
+                {
+                    var errorContent = response.Content.ReadAsStringAsync().Result;
+                    _logger.LogError($"API call failed: {response.StatusCode}, Content: {errorContent}");
+                    throw new Exception($"API call failed: {response.StatusCode}, Content: {errorContent}");
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError("Error calling prescription API", ex);
+                throw new Exception($"Error calling prescription API: {ex.Message}", ex);
             }
         }
 

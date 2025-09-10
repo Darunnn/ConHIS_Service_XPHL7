@@ -32,7 +32,7 @@ namespace ConHIS_Service_XPHL7.Services
                     conn.Open();
                     _logger.LogInfo("Database connection opened for GetPendingDispenseData");
                     var sql = @"SELECT drug_dispense_ipd_id, presc_id, drug_request_msg_type, 
-                               hl7_data, drug_dispense_datetime, recieve_status, recieve_status_datetime
+                               hl7_data, drug_dispense_datetime, recieve_status, recieve_status_datetime, recieve_order_type
                                FROM drug_dispense_ipd 
                                WHERE recieve_status = 'N'
                                ORDER BY drug_dispense_datetime";
@@ -41,19 +41,27 @@ namespace ConHIS_Service_XPHL7.Services
                     using (var reader = cmd.ExecuteReader())
                     {
                         int recieveStatusDatetimeOrdinal = reader.GetOrdinal("recieve_status_datetime");
+                        int recieveOrderTypeOrdinal = reader.GetOrdinal("recieve_order_type");
                         while (reader.Read())
                         {
+                            var orderType = reader.IsDBNull(recieveOrderTypeOrdinal) ? null : reader.GetString(recieveOrderTypeOrdinal);
+                            var prescId = reader.GetInt32("presc_id");
+
                             result.Add(new DrugDispenseipd
                             {
                                 DrugDispenseipdId = reader.GetInt32("drug_dispense_ipd_id"),
-                                PrescId = reader.GetInt32("presc_id"),
+                                PrescId = prescId,
                                 DrugRequestMsgType = reader.GetString("drug_request_msg_type"),
                                 Hl7Data = reader["hl7_data"] as byte[],
                                 DrugDispenseDatetime = reader.GetDateTime("drug_dispense_datetime"),
                                 RecieveStatus = reader.GetChar("recieve_status"),
                                 RecieveStatusDatetime = reader.IsDBNull(recieveStatusDatetimeOrdinal) ?
-                                    (DateTime?)null : reader.GetDateTime(recieveStatusDatetimeOrdinal)
+                                    (DateTime?)null : reader.GetDateTime(recieveStatusDatetimeOrdinal),
+                                RecieveOrderType = orderType
                             });
+
+                            // Log each row's presc id and order type for debugging
+                            _logger.LogInfo($"GetPendingDispenseData: Row PrescId={prescId}, RecieveOrderType={orderType}");
                         }
                         // log เฉพาะจำนวน row สุดท้าย
                         _logger.LogInfo($"GetPendingDispenseData: Found {result.Count} rows");
@@ -99,36 +107,5 @@ namespace ConHIS_Service_XPHL7.Services
             }
         }
 
-        public void InsertDrugMachineData(DrugMachineipd data)
-        {
-            _logger.LogInfo($"InsertDrugMachineData: Start for PrescId {data.PrescId}");
-            try
-            {
-                using (var conn = new MySqlConnection(_connectionString))
-                {
-                    conn.Open();
-                    _logger.LogInfo("Database connection opened for InsertDrugMachineData");
-                    var sql = @"INSERT INTO drug_dispense_ipd 
-                               (presc_id, drug_request_msg_type, hl7_data, drug_machine_datetime, recieve_status)
-                               VALUES (@presc_id, @msg_type, @hl7_data, @datetime, @status)";
-
-                    using (var cmd = new MySqlCommand(sql, conn))
-                    {
-                        cmd.Parameters.AddWithValue("@presc_id", data.PrescId);
-                        cmd.Parameters.AddWithValue("@msg_type", data.DrugRequestMsgType);
-                        cmd.Parameters.AddWithValue("@hl7_data", data.Hl7Data);
-                        cmd.Parameters.AddWithValue("@datetime", data.DrugMachineDatetime);
-                        cmd.Parameters.AddWithValue("@status", data.RecieveStatus);
-                        cmd.ExecuteNonQuery();
-                        _logger.LogInfo($"InsertDrugMachineData: Inserted for PrescId {data.PrescId}");
-                    }
-                }
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError($"Error inserting drug machine data for PrescId {data.PrescId}", ex);
-                throw new Exception($"Error inserting drug machine data: {ex.Message}", ex);
-            }
-        }
     }
 }

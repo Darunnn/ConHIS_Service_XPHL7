@@ -11,9 +11,28 @@ namespace ConHIS_Service_XPHL7.Configuration
         private const string ConfigFile = "appsettings.txt";
 
         public string ConnectionString { get; private set; }
-        public string ApiEndpoint { get; private set; }
+        public static string ApiEndpoint { get; private set; }
         public int ProcessingIntervalSeconds { get; private set; } = 30;
         public bool AutoStart { get; private set; } = true;
+
+        static AppConfig()
+        {
+            var path = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, ConfigFolder, ConfigFile);
+            if (File.Exists(path))
+            {
+                var lines = File.ReadAllLines(path);
+                foreach (var line in lines)
+                {
+                    if (string.IsNullOrWhiteSpace(line) || line.StartsWith("#")) continue;
+                    var parts = line.Split('=');
+                    if (parts.Length != 2) continue;
+                    var key = parts[0].Trim();
+                    var value = parts[1].Trim();
+                    if (key.ToUpper() == "APIENDPOINT")
+                        ApiEndpoint = value;
+                }
+            }
+        }
 
         public bool LoadConfiguration()
         {

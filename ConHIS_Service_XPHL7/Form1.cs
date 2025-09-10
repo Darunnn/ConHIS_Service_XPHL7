@@ -41,8 +41,11 @@ namespace ConHIS_Service_XPHL7
                 // Show count on form title (example)
                 this.Text = $"Pending dispense items: {pending.Count}";
 
-                // --- เรียก DrugDispenseProcessor เพื่อเข้าสู่ขั้นตอน Read Format HL7 ---
-                var apiService = new ApiService(_appConfig.ApiEndpoint);
+                // Replace this line:
+                // var apiService = new ApiService(_appConfig.ApiEndpoint);
+
+                // With this line:
+                var apiService = new ApiService(AppConfig.ApiEndpoint);
                 var hl7Service = new HL7Service();
                 _processor = new DrugDispenseProcessor(_databaseService, hl7Service, apiService);
                 _processor.ProcessPendingOrders(msg => _logger.LogInfo(msg));

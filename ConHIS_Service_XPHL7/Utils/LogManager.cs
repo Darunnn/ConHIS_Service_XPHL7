@@ -1,6 +1,7 @@
 ﻿using System;
 using System.IO;
 using System.Diagnostics;
+using Newtonsoft.Json;
 
 namespace ConHIS_Service_XPHL7.Utils
 {
@@ -51,6 +52,45 @@ namespace ConHIS_Service_XPHL7.Utils
             }
         }
 
+        // Method to log parsed HL7 data to a separate folder (hl7_parsed)
+        public void LogParsedHL7Data(string prescId, object parsedData, string parsedLogFolder = "hl7_parsed")
+        {
+            var appFolder = AppDomain.CurrentDomain.BaseDirectory ?? Environment.CurrentDirectory;
+            var parsedLogDir = Path.Combine(appFolder, parsedLogFolder);
+            Directory.CreateDirectory(parsedLogDir);
+            var parsedLogPath = Path.Combine(parsedLogDir, $"hl7_data_parsed_{prescId}.txt");
+            try
+            {
+                var jsonData = JsonConvert.SerializeObject(parsedData, Formatting.Indented);
+                File.WriteAllText(parsedLogPath, jsonData);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Failed to write HL7 parsed data file for PrescId {prescId}: {ex}");
+            }
+        }
+        // Method to log API response data to a separate folder (api_response)
+        public void LogApiResponseData(string prescId, string responseData, string responseLogFolder = "api_response")
+        {
+            var appFolder = AppDomain.CurrentDomain.BaseDirectory ?? Environment.CurrentDirectory;
+            var responseLogDir = Path.Combine(appFolder, responseLogFolder);
+            Directory.CreateDirectory(responseLogDir);
+            var responseLogPath = Path.Combine(responseLogDir, $"api_response_{prescId}_{DateTime.Now:yyyyMMdd_HHmmss}.txt");
+            try
+            {
+                var logEntry = $"[{DateTime.Now:yyyy-MM-dd HH:mm:ss}] Response for PrescId: {prescId}{Environment.NewLine}";
+                logEntry += $"Response Data: {responseData}{Environment.NewLine}";
+                File.WriteAllText(responseLogPath, logEntry);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Failed to write API response data file for PrescId {prescId}: {ex}");
+            }
+        }
+
+        
+       
+
         // Method to log HL7 read/parse errors to a separate folder (logreaderror)
         public void LogReadError(string prescId, string errorMessage, string errorLogFolder = "logreaderror")
         {
@@ -84,5 +124,6 @@ namespace ConHIS_Service_XPHL7.Utils
         {
             LogToFile(message, "WARNING");
         }
+
     }
 }
