@@ -7,12 +7,10 @@ namespace ConHIS_Service_XPHL7.Services
     public class HL7Service
     {
         private const string FIELD_SEPARATOR = "|";
-        private const string COMPONENT_SEPARATOR = "^";
-        private const string SUBCOMPONENT_SEPARATOR = "&";
-        private const string REPETITION_SEPARATOR = "~";
-        private const string ESCAPE_CHARACTER = "\\";
+        private const string COMPONENT_SEPARATOR = "^" ;
 
-        // อ่าน HL7 Message และแปลงเป็น Object Model
+
+       
         public HL7Message ParseHL7Message(string hl7Data)
         {
             try
@@ -29,7 +27,7 @@ namespace ConHIS_Service_XPHL7.Services
 
                     var segmentType = line.Substring(0, 3).ToUpperInvariant();
                     var fields = line.Split(FIELD_SEPARATOR[0]);
-
+                    var COMPONENT = line.Split(COMPONENT_SEPARATOR[0]);
 
                     // Only parse MSH and PID segments; skip all other segments silently
                     switch (segmentType)
@@ -50,6 +48,11 @@ namespace ConHIS_Service_XPHL7.Services
                             var allergy = ParseAL1(fields);
                             if (allergy != null)
                                 message.Allergies.Add(allergy);
+                            break;
+                        case "RXE":
+                            var rxe = ParseRXE(fields);
+                            if (rxe != null)
+                                message.PharmacyDispense.Add(rxe);
                             break;
                         case "RXD":
                             var dispense = ParseRXD(fields);
@@ -91,6 +94,7 @@ namespace ConHIS_Service_XPHL7.Services
                 ReceivingApplication = GetField(fields, 4),
                 ReceivingFacility = GetField(fields, 5),
                 MessageDateTime = ParseDateTime(GetField(fields, 6)),
+                Security = GetField(fields, 7),
                 MessageType = GetField(fields, 8),
                 MessageControlID = GetField(fields, 9),
                 ProcessingID = GetField(fields, 10),
@@ -200,9 +204,9 @@ namespace ConHIS_Service_XPHL7.Services
                 PlacerOrderNumber = GetField(fields, 2),
                 FillerOrderNumber = GetField(fields, 3),
                 PlacerGroupID = GetField(fields, 4),
-                PlacerGroupName = "", // Not used
-                OrderStatus = GetField(fields, 5),
-                ResponseFlag = GetField(fields, 6),
+                PlacerGroupName = GetField(fields, 5), // Not used
+                OrderStatus ="0",
+                ResponseFlag = "0",
                 QuantityTiming = ParseInt(GetField(fields, 7)),
                 Parent = GetField(fields, 8),
                 TransactionDateTime = ParseDateTime(GetField(fields, 9)),
@@ -253,7 +257,80 @@ namespace ConHIS_Service_XPHL7.Services
             };
         }
 
+        private RXD ParseRXE(string[] fields)
+        {
+            var drugComponents = GetField(fields, 2).Split(COMPONENT_SEPARATOR[0]);
+            var staffComponents = GetField(fields, 5).Split(COMPONENT_SEPARATOR[0]);
+            var usageUnitComponents = GetField(fields, 14).Split(COMPONENT_SEPARATOR[0]);
+            var frequencyComponents = GetField(fields, 15).Split(COMPONENT_SEPARATOR[0]);
+            var timeComponents = GetField(fields, 16).Split(COMPONENT_SEPARATOR[0]);
+            var deptComponents = GetField(fields, 18).Split(COMPONENT_SEPARATOR[0]);
+            var doctorComponents = GetField(fields, 19).Split(COMPONENT_SEPARATOR[0]);
+            var substandComponents = GetField(fields, 20).Split(COMPONENT_SEPARATOR[0]);
 
+            return new RXD
+            {
+                SetID = ParseInt(GetField(fields, 1)),
+                Dispensegivecode = new Dispensegivecode
+                {
+                    Identifier = GetComponent(drugComponents, 0),
+                    DrugName = GetComponent(drugComponents, 1),
+                    DrugNamePrint = GetComponent(drugComponents, 2),
+                    DrugNameThai = GetComponent(drugComponents, 3)
+                },
+                DateTimeDispensed = ParseDateTime(GetField(fields, 3)),
+                ActualDispense = ParseInt(GetField(fields, 4)),
+                Modifystaff = new Modifystaff
+                {
+                    StaffCode = GetComponent(staffComponents, 0),
+                    StaffName = GetComponent(staffComponents, 1)
+                },
+                QTY = ParseInt(GetField(fields, 6)),
+                Dose = ParseInt(GetField(fields, 7)),
+                UsageCODE = GetField(fields, 8),
+                UsageLine1 = GetField(fields, 9),
+                UsageLine2 = GetField(fields, 10),
+                UsageLine3 = GetField(fields, 11),
+                UsageLine4 = GetField(fields, 12),
+                DosageForm = GetField(fields, 13),
+                UsageUnit = new UsageUnit
+                {
+                    Code = GetComponent(usageUnitComponents, 0),
+                    Name = GetComponent(usageUnitComponents, 1),
+                    UnitName = GetComponent(usageUnitComponents, 2)
+                },
+                Frequency = new FrequencyInfo
+                {
+                    FrequencyID = GetComponent(frequencyComponents, 0),
+                    FrequencyName = GetComponent(frequencyComponents, 1)
+                },
+                Time = new TimeInfo
+                {
+                    TimeID = GetComponent(timeComponents, 0),
+                    TimeName = GetComponent(timeComponents, 1)
+                },
+                StrengthUnit = GetField(fields, 17),
+                Department = new DepartmentOrder
+                {
+                    DepartmentCode = GetComponent(deptComponents, 0),
+                    DepartmentName = GetComponent(deptComponents, 1)
+                },
+                Doctor = new DoctorOrder
+                {
+                    DoctorCode = GetComponent(doctorComponents, 0),
+                    DoctorName = GetComponent(doctorComponents, 1)
+                },
+                Substand = new SubstandInfo
+                {
+                    DrugProperty = GetComponent(substandComponents, 0),
+                    LabelHelp = GetComponent(substandComponents, 1)
+                },
+                FinanceStatus = GetField(fields, 21),
+                DrugType = GetField(fields, 23),
+                TotalPrice = ParseDecimal(GetField(fields, 27)),
+                 IsRXE = true
+            };
+        }
         private RXD ParseRXD(string[] fields)
         {
             var drugComponents = GetField(fields, 2).Split(COMPONENT_SEPARATOR[0]);
@@ -324,7 +401,8 @@ namespace ConHIS_Service_XPHL7.Services
                 },
                 FinanceStatus = GetField(fields, 21),
                 DrugType = GetField(fields, 23),
-                TotalPrice = ParseDecimal(GetField(fields, 27))
+                TotalPrice = ParseDecimal(GetField(fields, 27)),
+                IsRXE = false
             };
         }
 
@@ -364,7 +442,13 @@ namespace ConHIS_Service_XPHL7.Services
             if (message.PatientVisit != null) sb.AppendLine(GeneratePV1(message.PatientVisit));
             if (message.CommonOrder != null) sb.AppendLine(GenerateORC(message.CommonOrder));
 
-            foreach (var allergy in message.Allergies) sb.AppendLine(GenerateAL1(allergy));
+            foreach (var rxd in message.PharmacyDispense)
+            {
+                if (rxd.IsRXE)
+                    sb.AppendLine(GenerateRXE(rxd));
+                else
+                    sb.AppendLine(GenerateRXD(rxd));
+            }
             foreach (var rxd in message.PharmacyDispense) sb.AppendLine(GenerateRXD(rxd));
             foreach (var rxr in message.RouteInfo) sb.AppendLine(GenerateRXR(rxr));
             foreach (var nte in message.Notes) sb.AppendLine(GenerateNTE(nte));
@@ -375,7 +459,7 @@ namespace ConHIS_Service_XPHL7.Services
         private string GenerateMSH(MSH msh)
         {
             return $"MSH|{msh.EncodingCharacters}|{msh.SendingApplication}|{msh.SendingFacility}|" +
-                   $"{msh.ReceivingApplication}|{msh.ReceivingFacility}|{FormatDateTime(msh.MessageDateTime)}||" +
+                   $"{msh.ReceivingApplication}|{msh.ReceivingFacility}|{FormatDateTime(msh.MessageDateTime)}|{msh.Security}|" +
                    $"{msh.MessageType}|{msh.MessageControlID}|{msh.ProcessingID}|{msh.VersionID}";
         }
 
@@ -412,7 +496,7 @@ namespace ConHIS_Service_XPHL7.Services
             string verifiedBy = $"{orc.VerifiedBy.ID}^{orc.VerifiedBy.LastName}^{orc.VerifiedBy.FirstName}^{orc.VerifiedBy.MiddleName}^{orc.VerifiedBy.Prefix}^{orc.VerifiedBy.Suffix}";
             string orderingProvider = $"{orc.OrderingProvider.ID}^{orc.OrderingProvider.LastName}^{orc.OrderingProvider.FirstName}^{orc.OrderingProvider.MiddleName}^{orc.OrderingProvider.Prefix}^{orc.OrderingProvider.Suffix}";
 
-            return $"ORC|{orc.OrderControl}|{orc.PlacerOrderNumber}|{orc.FillerOrderNumber}|{orc.PlacerGroupID}|{orc.OrderStatus}|" +
+            return $"ORC|{orc.OrderControl}|{orc.PlacerOrderNumber}|{orc.FillerOrderNumber}|{orc.PlacerGroupID}^{orc.PlacerGroupName}|{orc.OrderStatus}|" +
                    $"{orc.ResponseFlag}|{orc.QuantityTiming}|{orc.Parent}|{FormatDateTime(orc.TransactionDateTime)}|{orc.EnteredBy}|" +
                    $"{verifiedBy}|{orderingProvider}|{orc.EnterersLocationID}|{orc.CallBackPhoneNumber}|{FormatDateTime(orc.OrderEffectiveDateTime)}|" +
                    $"{orc.OrderControlCodeReason}|{orc.EnteringOrganization}|{orc.EnteringDevice}|{orc.ActionBy}|{orc.AdvancedCodeBeneficiaryNotice}|" +
@@ -424,7 +508,22 @@ namespace ConHIS_Service_XPHL7.Services
         {
             return $"AL1|{al1.SetID}|{al1.AllergyTypeCode}|{al1.AllergyName}|{al1.AllergySeverity}|{al1.AllergyReaction}|{FormatDateTime(al1.IdentificationDate)}";
         }
-
+        private string GenerateRXE(RXD rxd)
+        {
+            return $"RXE|{rxd.SetID}|" +
+                   $"{rxd.Dispensegivecode.Identifier}^{rxd.Dispensegivecode.DrugName}^{rxd.Dispensegivecode.DrugNamePrint}^{rxd.Dispensegivecode.DrugNameThai}|" +
+                   $"{FormatDateTime(rxd.DateTimeDispensed)}|{rxd.ActualDispense}|" +
+                   $"{rxd.Modifystaff.StaffCode}^{rxd.Modifystaff.StaffName}|" +
+                   $"{rxd.QTY}|{rxd.Dose}|{rxd.UsageCODE}|{rxd.UsageLine1}|{rxd.UsageLine2}|{rxd.UsageLine3}|{rxd.UsageLine4}|" +
+                   $"{rxd.DosageForm}|" +
+                   $"{rxd.UsageUnit.Code}^{rxd.UsageUnit.Name}^{rxd.UsageUnit.UnitName}|" +
+                   $"{rxd.Frequency.FrequencyID}^{rxd.Frequency.FrequencyName}|" +
+                   $"{rxd.Time.TimeID}^{rxd.Time.TimeName}|{rxd.StrengthUnit}|" +
+                   $"{rxd.Department.DepartmentCode}^{rxd.Department.DepartmentName}|" +
+                   $"{rxd.Doctor.DoctorCode}^{rxd.Doctor.DoctorName}|" +
+                   $"{rxd.Substand.DrugProperty}^{rxd.Substand.LabelHelp}|" +
+                   $"{rxd.FinanceStatus}||{rxd.DrugType}||||{rxd.TotalPrice}";
+        }
 
         private string GenerateRXD(RXD rxd)
         {

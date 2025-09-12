@@ -19,12 +19,13 @@ namespace ConHIS_Service_XPHL7.Models
     // ================== MSH ==================
     public class MSH
     {
-        public string EncodingCharacters { get; set; } = "^\\&"; // MSH-2
+        public string EncodingCharacters { get; set; }   // MSH-2
         public string SendingApplication { get; set; } = "DRUGORDER"; // MSH-3
         public string SendingFacility { get; set; } = "BMS-HOSxP";    // MSH-4
         public string ReceivingApplication { get; set; } = "DrugDispense"; // MSH-5
         public string ReceivingFacility { get; set; }   // MSH-6
         public DateTime MessageDateTime { get; set; }   // MSH-7
+        public string Security { get; set; }               // MSH-8 (Not Used)
         public string MessageType { get; set; }         // MSH-8 (ORM^O01, etc.)
         public string MessageControlID { get; set; }    // MSH-9
         public string ProcessingID { get; set; } = "P"; // MSH-10
@@ -226,10 +227,10 @@ namespace ConHIS_Service_XPHL7.Models
         public string PlacerGroupName { get; set; }
 
         // 5 Order Status (Dispensestatus) - Default = 0
-        public string OrderStatus { get; set; } = "0";
+        public string OrderStatus { get; set; } 
 
         // 6 Response Flag (Status) - Default = 0
-        public string ResponseFlag { get; set; } = "0";
+        public string ResponseFlag { get; set; } 
 
         // 7 Quantity/Timing (จำนวนยาที่สั่ง)
         public int QuantityTiming { get; set; }
@@ -313,6 +314,7 @@ namespace ConHIS_Service_XPHL7.Models
     // ================== RXD ==================
     public class RXD
     {
+        public bool IsRXE { get; set; } = false;
         public int SetID { get; set; }                        // RXD-1: Set ID
         public Dispensegivecode Dispensegivecode { get; set; } = new Dispensegivecode(); // RXD-2: Drug ID / Dispense Give Code
 
