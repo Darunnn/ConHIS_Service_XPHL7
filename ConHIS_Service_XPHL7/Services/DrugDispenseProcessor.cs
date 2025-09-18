@@ -1,10 +1,9 @@
 ﻿using ConHIS_Service_XPHL7.Models;
 using ConHIS_Service_XPHL7.Utils;
-using System;
-using System.Text;
-using System.Windows.Forms.Design;
-using System.IO;
 using Newtonsoft.Json;
+using System;
+using System.Linq;
+using System.Text;
 
 namespace ConHIS_Service_XPHL7.Services
 {
@@ -41,7 +40,7 @@ namespace ConHIS_Service_XPHL7.Services
                     catch (Exception ex)
                     {
                         _logger.LogError($"Error processing order {data.PrescId}", ex);
-                       
+
                         logAction($"Error processing order {data.PrescId}: {ex.Message}");
                     }
                 }
@@ -65,19 +64,19 @@ namespace ConHIS_Service_XPHL7.Services
                 if (tisEncoding != null) { hl7String = tisEncoding.GetString(data.Hl7Data); }
                 else { hl7String = Encoding.UTF8.GetString(data.Hl7Data); }
 
-               
+
             }
             catch (Exception ex)
             {
                 _logger.LogWarning($"Failed to decode HL7 data with TIS-620: {ex.Message}. Falling back to UTF8.");
                 hl7String = Encoding.UTF8.GetString(data.Hl7Data);
-                
+
             }
 
             // สร้าง log แยกไฟล์ hl7_data_raw_xxx.txt ในโฟลเดอร์ hl7_raw
             try
             {
-                _logger.LogRawHL7Data(data.PrescId.ToString(), hl7String, "hl7_raw");
+                _logger.LogRawHL7Data(data.DrugDispenseipdId.ToString(), data.RecieveOrderType.ToString(), hl7String, "hl7_raw");
                 _logger.LogInfo($"HL7 raw data saved to hl7_raw/hl7_data_raw_{data.PrescId}.txt");
             }
             catch (Exception ex)
@@ -95,17 +94,17 @@ namespace ConHIS_Service_XPHL7.Services
                 _logger.LogInfo($"Parsed HL7 message for prescription ID: {data.PrescId}");
 
                 // Log parsed HL7 data
-                _logger.LogParsedHL7Data(data.PrescId.ToString(), hl7Message, "hl7_parsed");
+                _logger.LogParsedHL7Data(data.DrugDispenseipdId.ToString(), hl7Message, "hl7_parsed");
 
-           
-               
+
+
             }
             catch (Exception ex)
             {
                 var errorMsg = $"Error parsing HL7 for prescription ID: {data.PrescId} - {ex.Message}";
                 _databaseService.UpdateReceiveStatus(data.DrugDispenseipdId, 'F'); // เปลี่ยนสถานะในฐานข้อมูล
                 _logger.LogReadError(data.PrescId.ToString(), errorMsg, "logreaderror");
-                
+
                 _logger.LogInfo($"Create log success {data.PrescId}");
                 _logger.LogError(errorMsg, ex);
                 logAction(errorMsg);
@@ -121,7 +120,7 @@ namespace ConHIS_Service_XPHL7.Services
                 var errorMsg = $"Invalid HL7 format for prescription ID: {data.PrescId}. Error fields: {string.Join(", ", errorFields)}";
                 _databaseService.UpdateReceiveStatus(data.DrugDispenseipdId, 'F'); // เปลี่ยนสถานะในฐานข้อมูล
                 _logger.LogReadError(data.PrescId.ToString(), errorMsg, "logreaderror");
-               
+
                 _logger.LogInfo($"Create log success {data.PrescId}");
                 _logger.LogError(errorMsg);
                 logAction(errorMsg);
@@ -131,7 +130,7 @@ namespace ConHIS_Service_XPHL7.Services
             {
                 _logger.LogInfo($"Check success {data.PrescId}");
                 // Log data transformation step: HL7 validation
-              
+
             }
 
             // Determine order type based on RecieveOrderType from database
@@ -139,14 +138,14 @@ namespace ConHIS_Service_XPHL7.Services
             _logger.LogInfo($"OrderControl: {orderControl} for prescription ID: {data.PrescId}");
 
             // Log data transformation step: Order type determination
-           
+
 
             if (orderControl == "NW")
             {
                 ProcessNewOrder(data, hl7Message, logAction);
                 _databaseService.UpdateReceiveStatus(data.DrugDispenseipdId, 'Y');
                 _logger.LogInfo($"Updated receive status for prescription ID: {data.PrescId}");
-               
+
                 logAction($"Updated receive status for prescription ID: {data.PrescId}");
             }
             else if (orderControl == "RP")
@@ -154,13 +153,13 @@ namespace ConHIS_Service_XPHL7.Services
                 ProcessReplaceOrder(data, hl7Message, logAction);
                 _databaseService.UpdateReceiveStatus(data.DrugDispenseipdId, 'Y');
                 _logger.LogInfo($"Updated receive status for prescription ID: {data.PrescId}");
-               
+
                 logAction($"Updated receive status for prescription ID: {data.PrescId}");
             }
             else
             {
                 _logger.LogWarning($"Unknown order control: {orderControl} for prescription ID: {data.PrescId}");
-              
+
                 logAction($"Unknown order control: {orderControl}");
                 // ไม่อัพเดต status เป็น Y
             }
@@ -178,7 +177,7 @@ namespace ConHIS_Service_XPHL7.Services
             var bodyJson = JsonConvert.SerializeObject(bodyObj, Formatting.Indented);
 
             // Log data transformation step: API body creation
-           
+
 
             // Log API request data
             var apiRequestData = new
@@ -205,10 +204,10 @@ namespace ConHIS_Service_XPHL7.Services
             // }
 
             // Create machine data entry
-           
 
-         
-           
+
+
+
         }
 
         private void ProcessReplaceOrder(DrugDispenseipd data, HL7Message hl7Message, Action<string> logAction)
@@ -222,7 +221,7 @@ namespace ConHIS_Service_XPHL7.Services
             var bodyObj = CreatePrescriptionBody(hl7Message, data);
             var bodyJson = JsonConvert.SerializeObject(bodyObj, Formatting.Indented);
 
-            
+
 
             // Log API request data
             var apiRequestData = new
@@ -233,7 +232,7 @@ namespace ConHIS_Service_XPHL7.Services
                 OrderType = "Replace",
                 Timestamp = DateTime.Now
             };
-            
+
 
             _logger.LogInfo($"API URL: {apiUrl}");
             _logger.LogInfo($"API Method: {apiMethod}");
@@ -252,7 +251,7 @@ namespace ConHIS_Service_XPHL7.Services
             // }
 
 
-            
+
         }
 
         private object PrepareApiData(HL7Message hl7Message)
@@ -282,7 +281,8 @@ namespace ConHIS_Service_XPHL7.Services
             DateTime? headerDt = hl7?.MessageHeader != null ? (DateTime?)hl7.MessageHeader.MessageDateTime : null;
             DateTime? patientDob = hl7?.PatientIdentification != null ? (DateTime?)hl7.PatientIdentification.DateOfBirth : null;
 
-            var prescription = new
+            // ✅ map ทุก PharmacyDispense
+            var prescriptions = hl7?.PharmacyDispense?.Select(d => new
             {
                 UniqID = hl7?.MessageHeader?.MessageControlID ?? data.PrescId.ToString(),
                 f_prescriptionno = hl7?.CommonOrder?.PlacerOrderNumber ?? "",
@@ -323,18 +323,18 @@ namespace ConHIS_Service_XPHL7.Services
                 f_right = (string)null,
                 f_drugallergy = (string)null,
                 f_dianosis = (string)null,
-                f_orderitemcode = hl7?.PharmacyDispense?.Count > 0 ? hl7.PharmacyDispense[0].Dispensegivecode?.Identifier ?? "" : "",
-                f_orderitemname = hl7?.PharmacyDispense?.Count > 0 ? hl7.PharmacyDispense[0].Dispensegivecode?.DrugName ?? "" : "",
-                f_orderitemnameTH = hl7?.PharmacyDispense?.Count > 0 ? hl7.PharmacyDispense[0].Dispensegivecode?.DrugNameThai ?? "" : "",
-                f_orderitemnamegeneric = hl7?.PharmacyDispense?.Count > 0 ? hl7.PharmacyDispense[0].Dispensegivecode?.DrugNamePrint ?? "" : "",
-                f_orderqty = hl7?.PharmacyDispense?.Count > 0 ? hl7.PharmacyDispense[0].QTY : 0,
-                f_orderunitcode = hl7?.PharmacyDispense?.Count > 0 ? hl7.PharmacyDispense[0].UsageUnit?.Code ?? "" : "",
-                f_orderunitdesc = hl7?.PharmacyDispense?.Count > 0 ? hl7.PharmacyDispense[0].UsageUnit?.UnitName ?? "" : "",
-                f_dosage = hl7?.PharmacyDispense?.Count > 0 ? hl7.PharmacyDispense[0].Dose : 0,
-                f_dosageunit = hl7?.PharmacyDispense?.Count > 0 ? hl7.PharmacyDispense[0].UsageUnit?.Code ?? "" : "",
+                f_orderitemcode = d?.Dispensegivecode?.Identifier ?? "",
+                f_orderitemname = d?.Dispensegivecode?.DrugName ?? "",
+                f_orderitemnameTH = d?.Dispensegivecode?.DrugNameThai ?? "",
+                f_orderitemnamegeneric = d?.Dispensegivecode?.DrugNamePrint ?? "",
+                f_orderqty = d?.QTY ?? 0,
+                f_orderunitcode = d?.UsageUnit?.Code ?? "",
+                f_orderunitdesc = d?.UsageUnit?.UnitName ?? "",
+                f_dosage = d?.Dose ?? 0,
+                f_dosageunit = d?.UsageUnit?.Code ?? "",
                 f_dosagetext = (string)null,
-                f_drugformcode = hl7?.PharmacyDispense?.Count > 0 ? hl7.PharmacyDispense[0].DosageForm ?? "" : "",
-                f_drugformdesc = hl7?.PharmacyDispense?.Count > 0 ? hl7.PharmacyDispense[0].DosageForm ?? "" : "",
+                f_drugformcode = d?.DosageForm ?? "",
+                f_drugformdesc = d?.DosageForm ?? "",
                 f_HAD = "0",
                 f_narcoticFlg = "0",
                 f_psychotropic = "0",
@@ -342,12 +342,12 @@ namespace ConHIS_Service_XPHL7.Services
                 f_itemidentify = (string)null,
                 f_itemlotno = (string)null,
                 f_itemlotexpire = (string)null,
-                f_instructioncode = hl7?.PharmacyDispense?.Count > 0 ? hl7.PharmacyDispense[0].UsageCODE ?? "" : "",
-                f_instructiondesc = hl7?.PharmacyDispense?.Count > 0 ? hl7.PharmacyDispense[0].UsageLine1 ?? "" : "",
-                f_frequencycode = hl7?.PharmacyDispense?.Count > 0 ? hl7.PharmacyDispense[0].Frequency?.FrequencyID ?? "" : "",
-                f_frequencydesc = hl7?.PharmacyDispense?.Count > 0 ? hl7.PharmacyDispense[0].Frequency?.FrequencyName ?? "" : "",
-                f_timecode = hl7?.PharmacyDispense?.Count > 0 ? hl7.PharmacyDispense[0].Time?.TimeID ?? "" : "",
-                f_timedesc = hl7?.PharmacyDispense?.Count > 0 ? hl7.PharmacyDispense[0].Time?.TimeName ?? "" : "",
+                f_instructioncode = d?.UsageCODE ?? "",
+                f_instructiondesc = d?.UsageLine1 ?? "",
+                f_frequencycode = d?.Frequency?.FrequencyID ?? "",
+                f_frequencydesc = d?.Frequency?.FrequencyName ?? "",
+                f_timecode = d?.Time?.TimeID ?? "",
+                f_timedesc = d?.Time?.TimeName ?? "",
                 f_frequencytime = (string)null,
                 f_dosagedispense = (string)null,
                 f_dayofweek = (string)null,
@@ -358,10 +358,11 @@ namespace ConHIS_Service_XPHL7.Services
                 f_tomachineno = "0",
                 f_ipd_order_recordno = (string)null,
                 f_status = hl7?.CommonOrder?.OrderControl == "NW" ? 1 :
-           hl7?.CommonOrder?.OrderControl == "RP" ? 0 : (int?)null,
-            };
+                           hl7?.CommonOrder?.OrderControl == "RP" ? 0 : (int?)null,
+            }).ToArray();
 
-            return new { data = new[] { prescription } };
+            return new { data = prescriptions ?? Array.Empty<object>() };
         }
+
     }
 }

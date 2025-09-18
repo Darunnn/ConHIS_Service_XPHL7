@@ -33,7 +33,7 @@ namespace ConHIS_Service_XPHL7.Services
                     switch (segmentType)
                     {
                         case "MSH":
-                            message.MessageHeader = ParseMSH(fields);
+                            message.MessageHeader = ParseMSH(fields, COMPONENT);
                             break;
                         case "PID":
                             message.PatientIdentification = ParsePID(fields);
@@ -84,7 +84,7 @@ namespace ConHIS_Service_XPHL7.Services
         }
 
         #region Parse Segments
-        private MSH ParseMSH(string[] fields)
+        private MSH ParseMSH(string[] fields, string[] COMPONENT)
         {
             return new MSH
             {

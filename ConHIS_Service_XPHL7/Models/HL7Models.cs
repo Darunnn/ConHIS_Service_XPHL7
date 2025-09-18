@@ -324,7 +324,6 @@ namespace ConHIS_Service_XPHL7.Models
         public int QTY { get; set; }                          // RXD-6: Quantity Dispensed
         public int Dose { get; set; }                         // RXD-7: Dose Amount
         public string UsageCODE { get; set; }                 // RXD-8: Usage Code
-
         public string UsageLine1 { get; set; }                // RXD-9: Usage Line 1
         public string UsageLine2 { get; set; }                // RXD-10: Usage Line 2
         public string UsageLine3 { get; set; }                // RXD-11: Usage Line 3
