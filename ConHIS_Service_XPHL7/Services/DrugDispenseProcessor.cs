@@ -142,33 +142,30 @@ namespace ConHIS_Service_XPHL7.Services
 
             if (orderControl == "NW")
             {
-                ProcessNewOrder(data, hl7Message, logAction);
+                ProcessNewOrder(data, hl7Message);
                 _databaseService.UpdateReceiveStatus(data.DrugDispenseipdId, 'Y');
                 _logger.LogInfo($"Updated receive status for prescription ID: {data.PrescId}");
 
-                logAction($"Updated receive status for prescription ID: {data.PrescId}");
+                
             }
             else if (orderControl == "RP")
             {
-                ProcessReplaceOrder(data, hl7Message, logAction);
+                ProcessReplaceOrder(data, hl7Message);
                 _databaseService.UpdateReceiveStatus(data.DrugDispenseipdId, 'Y');
                 _logger.LogInfo($"Updated receive status for prescription ID: {data.PrescId}");
-
-                logAction($"Updated receive status for prescription ID: {data.PrescId}");
             }
             else
             {
                 _logger.LogWarning($"Unknown order control: {orderControl} for prescription ID: {data.PrescId}");
 
-                logAction($"Unknown order control: {orderControl}");
-                // ไม่อัพเดต status เป็น Y
+               
             }
         }
 
-        private void ProcessNewOrder(DrugDispenseipd data, HL7Message hl7Message, Action<string> logAction)
+        private void ProcessNewOrder(DrugDispenseipd data, HL7Message hl7Message)
         {
             _logger.LogInfo($"Processing new order for prescription: {data.PrescId}");
-            logAction($"Processing new order for prescription: {data.PrescId}");
+            
 
             // Prepare prescription API body
             var apiUrl = ConHIS_Service_XPHL7.Configuration.AppConfig.ApiEndpoint; // static property
@@ -190,9 +187,7 @@ namespace ConHIS_Service_XPHL7.Services
             _logger.LogInfo($"API URL: {apiUrl}");
             _logger.LogInfo($"API Method: {apiMethod}");
             _logger.LogInfo($"API Body: {bodyJson}");
-            logAction($"API URL: {apiUrl}");
-            logAction($"API Method: {apiMethod}");
-            logAction($"API Body: {bodyJson}");
+
 
             // ส่ง API จริง (คอมเมนต์ไว้ก่อน)
             // var success = _apiService.SendToMiddleware(apiData);
@@ -210,10 +205,10 @@ namespace ConHIS_Service_XPHL7.Services
 
         }
 
-        private void ProcessReplaceOrder(DrugDispenseipd data, HL7Message hl7Message, Action<string> logAction)
+        private void ProcessReplaceOrder(DrugDispenseipd data, HL7Message hl7Message)
         {
             _logger.LogInfo($"Processing replace order for prescription: {data.PrescId}");
-            logAction($"Processing replace order for prescription: {data.PrescId}");
+          
 
             // Prepare prescription API body
             var apiUrl = ConHIS_Service_XPHL7.Configuration.AppConfig.ApiEndpoint; // static property
@@ -237,9 +232,7 @@ namespace ConHIS_Service_XPHL7.Services
             _logger.LogInfo($"API URL: {apiUrl}");
             _logger.LogInfo($"API Method: {apiMethod}");
             _logger.LogInfo($"API Body: {bodyJson}");
-            logAction($"API URL: {apiUrl}");
-            logAction($"API Method: {apiMethod}");
-            logAction($"API Body: {bodyJson}");
+
 
             // ส่ง API จริง (คอมเมนต์ไว้ก่อน)
             // var success = _apiService.SendToMiddleware(apiData);
@@ -281,13 +274,16 @@ namespace ConHIS_Service_XPHL7.Services
             DateTime? headerDt = hl7?.MessageHeader != null ? (DateTime?)hl7.MessageHeader.MessageDateTime : null;
             DateTime? patientDob = hl7?.PatientIdentification != null ? (DateTime?)hl7.PatientIdentification.DateOfBirth : null;
 
-            // ✅ map ทุก PharmacyDispense
-            var prescriptions = hl7?.PharmacyDispense?.Select(d => new
+            // คำนวณจำนวนใบยาทั้งหมด
+            int totalPrescriptions = hl7?.PharmacyDispense?.Count() ?? 0;
+
+            // ✅ map ทุก PharmacyDispense พร้อม seq numbering
+            var prescriptions = hl7?.PharmacyDispense?.Select((d, index) => new
             {
-                UniqID = hl7?.MessageHeader?.MessageControlID ?? data.PrescId.ToString(),
+                UniqID = d?.Dispensegivecode?.Identifier ?? "",
                 f_prescriptionno = hl7?.CommonOrder?.PlacerOrderNumber ?? "",
-                f_seq = 1,
-                f_seqmax = 1,
+                f_seq = index + 1,  // เริ่มจาก 1, 2, 3, ...
+                f_seqmax = totalPrescriptions,  // จำนวนใบยาทั้งหมด
                 f_prescriptiondate = FormatDate(headerDt, "yyyyMMdd"),
                 f_ordercreatedate = FormatDate(headerDt, "yyyy-MM-dd HH:mm:ss"),
                 f_ordertargetdate = FormatDate(headerDt, "yyyy-MM-dd"),
