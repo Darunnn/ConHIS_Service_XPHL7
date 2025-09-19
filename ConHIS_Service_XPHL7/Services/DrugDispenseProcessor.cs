@@ -185,13 +185,13 @@ namespace ConHIS_Service_XPHL7.Services
 
 
             // ส่ง API จริง (คอมเมนต์ไว้ก่อน)
-            var success = _apiService.SendToMiddleware(bodyObj);
-            _logger.LogInfo($"SendToMiddleware result: {success} for new order: {data.PrescId}");
-            if (!success)
-            {
-                _logger.LogError($"Failed to send data to middleware API for new order: {data.PrescId}");
-                throw new Exception("Failed to send data to middleware API");
-            }
+            //var success = _apiService.SendToMiddleware(bodyObj);
+            //_logger.LogInfo($"SendToMiddleware result: {success} for new order: {data.PrescId}");
+            //if (!success)
+            //{
+            //    _logger.LogError($"Failed to send data to middleware API for new order: {data.PrescId}");
+            //    throw new Exception("Failed to send data to middleware API");
+            //}
 
             // Create machine data entry
 
@@ -230,13 +230,13 @@ namespace ConHIS_Service_XPHL7.Services
 
 
             // ส่ง API จริง (คอมเมนต์ไว้ก่อน)
-            var success = _apiService.SendToMiddleware(bodyObj);
-            _logger.LogInfo($"SendToMiddleware result: {success} for new order: {data.PrescId}");
-            if (!success)
-            {
-                _logger.LogError($"Failed to send data to middleware API for new order: {data.PrescId}");
-                throw new Exception("Failed to send data to middleware API");
-            }
+            //var success = _apiService.SendToMiddleware(bodyObj);
+            //_logger.LogInfo($"SendToMiddleware result: {success} for new order: {data.PrescId}");
+            //if (!success)
+            //{
+            //    _logger.LogError($"Failed to send data to middleware API for new order: {data.PrescId}");
+            //    throw new Exception("Failed to send data to middleware API");
+            //}
 
 
 

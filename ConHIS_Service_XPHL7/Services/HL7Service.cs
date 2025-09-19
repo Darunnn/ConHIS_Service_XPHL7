@@ -90,15 +90,22 @@ namespace ConHIS_Service_XPHL7.Services
             {
                 EncodingCharacters = GetField(fields, 1),
                 SendingApplication = GetField(fields, 2),
-                SendingFacility = GetField(fields, 3),
-                ReceivingApplication = GetField(fields, 4),
+                ReceivingApplication = GetField(fields, 3),
+                SendingFacility = GetField(fields, 4),
                 ReceivingFacility = GetField(fields, 5),
                 MessageDateTime = ParseDateTime(GetField(fields, 6)),
                 Security = GetField(fields, 7),
                 MessageType = GetField(fields, 8),
                 MessageControlID = GetField(fields, 9),
                 ProcessingID = GetField(fields, 10),
-                VersionID = GetField(fields, 11)
+                VersionID = GetField(fields, 11),
+                MSH12 = GetField(fields, 12),
+                MSH13 = GetField(fields, 13),
+                MSH14 = GetField(fields, 14),
+                MSH15 = GetField(fields, 15),
+                MSH16 = GetField(fields, 16),
+                MSH17 = GetField(fields, 17),
+                MSH18 = GetField(fields, 18),
             };
         }
 
@@ -110,10 +117,11 @@ namespace ConHIS_Service_XPHL7.Services
             var aliasNameComponents = GetField(fields, 9).Split(COMPONENT_SEPARATOR[0]);
             // PID-11 Address
             var addressComponents = GetField(fields, 11).Split(COMPONENT_SEPARATOR[0]);
-
+            // PID-28 Nationality
+            var nationalityComponents = GetField(fields, 28).Split(COMPONENT_SEPARATOR[0]);
             return new PID
             {
-                SetID = GetField(fields, 1),                        // PID-1
+                SetID = int.TryParse(GetField(fields, 1), out var setId) ? setId : 1,                        // PID-1
                 PatientIDExternal = GetField(fields, 2),           // PID-2
                 PatientIDInternal = GetField(fields, 3),           // PID-3
                 AlternatePatientID = GetField(fields, 4),          // PID-4
@@ -158,16 +166,42 @@ namespace ConHIS_Service_XPHL7.Services
                 },
 
                 Country = GetField(fields, 12),                     // PID-12
-                PhoneNumberHome = GetField(fields, 13)              // PID-13
+                PhoneNumberHome = GetField(fields, 13),              // PID-13
+                PID14 = GetField(fields, 14),                     // PID-14
+                PID15 = GetField(fields, 15),                     // PID-15
+                Marital = GetField(fields, 16),               // PID-16
+                Religion = GetField(fields, 17),                    // PID-17
+                PID18 = GetField(fields, 18),                     // PID-18
+                PID19 = GetField(fields, 19),                     // PID-19
+                PID20 = GetField(fields, 20),                     // PID-20
+                PID21 = GetField(fields, 21),                     // PID-21
+                PID22 = GetField(fields, 22),                     // PID-22
+                PID23 = GetField(fields, 23),                     // PID-23
+                PID24 = GetField(fields, 24),                     // PID-24
+                PID25 = GetField(fields, 25),                     // PID-25
+                PID26 = GetField(fields, 26),                     // PID-26
+                PID27 = GetField(fields, 27),                     // PID-27
+                
+                Nationality = new Nationality                   // PID-28
+                {
+                    Nationality1 = GetComponent(nationalityComponents, 0),
+                    NameNationality = GetComponent(nationalityComponents, 1)
+                },
+
+                PID29 = GetField(fields, 29),                     // PID-29
+                PID30 = GetField(fields, 30),                     // PID-30
+
             };
         }
 
         private PV1 ParsePV1(string[] fields)
         {
             var locationComponents = GetField(fields, 3).Split(COMPONENT_SEPARATOR[0]);
+            var attendingDoctorComponents = GetField(fields, 7).Split(COMPONENT_SEPARATOR[0]);
+            var referringDoctorComponents = GetField(fields, 8).Split(COMPONENT_SEPARATOR[0]);
             var admittingDoctorComponents = GetField(fields, 17).Split(COMPONENT_SEPARATOR[0]);
             var patientTypeComponents = GetField(fields, 18).Split(COMPONENT_SEPARATOR[0]);
-
+            var FinancialClassComponents = GetField(fields, 20).Split(COMPONENT_SEPARATOR[0]);
             return new PV1
             {
                 SetID = GetField(fields, 1),
@@ -177,6 +211,16 @@ namespace ConHIS_Service_XPHL7.Services
                     PointOfCare = GetComponent(locationComponents, 0),
                     Room = GetComponent(locationComponents, 1),
                     Bed = GetComponent(locationComponents, 2)
+                },
+                AttendingDoctor = new AttendingDoctor
+                {
+                    ID = GetComponent(attendingDoctorComponents, 0),
+                    Name = GetComponent(attendingDoctorComponents, 1),
+                },
+                ReferringDoctor = new ReferringDoctor
+                {
+                    ID = GetComponent(referringDoctorComponents, 0),
+                    Name = GetComponent(referringDoctorComponents, 1),
                 },
                 AdmittingDoctor = new AdmittingDoctor
                 {
@@ -189,24 +233,59 @@ namespace ConHIS_Service_XPHL7.Services
                 {
                     ID = GetComponent(patientTypeComponents, 0),
                     Name = GetComponent(patientTypeComponents, 1)
-                }
-                // ส่วน field อื่น ๆ ที่ไม่ใช้ ไม่ต้อง map จะได้เป็น default
+                },
+               FinancialClass = new FinancialClass
+                {
+                    ID = GetComponent(FinancialClassComponents, 0),
+                    Name = GetComponent(FinancialClassComponents, 1)
+                },
+                AdmitDateTime = ParseDateTime(GetField(fields, 44))
+
             };
         }
         private ORC ParseORC(string[] fields)
         {
+            var   PlacerGroupComponents = GetField(fields,4).Split(COMPONENT_SEPARATOR[0]);
             var verifiedByComponents = GetField(fields, 11).Split(COMPONENT_SEPARATOR[0]);
             var orderingProviderComponents = GetField(fields, 12).Split(COMPONENT_SEPARATOR[0]);
+            string raw = GetField(fields, 13);
+            string[] enterersLocationComponents;
 
+            // เช็คว่ามี ^ หรือไม่
+            if (raw.Contains("^"))
+            {
+                enterersLocationComponents = raw.Split('^');
+            }
+            else
+            {
+                // แยกด้วยช่องว่างตัวแรก
+                int spaceIndex = raw.IndexOf(' ');
+                if (spaceIndex > 0)
+                {
+                    enterersLocationComponents = new string[]
+                    {
+            raw.Substring(0, spaceIndex),       // ID
+            raw.Substring(spaceIndex + 1)       // Name
+                    };
+                }
+                else
+                {
+                   
+                    enterersLocationComponents = new string[] { raw };
+                }
+            }
             return new ORC
             {
                 OrderControl = GetField(fields, 1),
                 PlacerOrderNumber = GetField(fields, 2),
                 FillerOrderNumber = GetField(fields, 3),
-                PlacerGroupID = GetField(fields, 4),
-                PlacerGroupName = GetField(fields, 5), // Not used
-                OrderStatus ="0",
-                ResponseFlag = "0",
+                PlacerGroup = new PlacerGroup
+                {
+                    ID= GetComponent(PlacerGroupComponents, 0),
+                    Name = GetComponent(PlacerGroupComponents, 1),
+                },
+                OrderStatus = string.IsNullOrWhiteSpace(GetField(fields, 5)) ? "0" : GetField(fields, 5),
+                ResponseFlag = string.IsNullOrWhiteSpace(GetField(fields, 6)) ? "0" : GetField(fields, 6),
                 QuantityTiming = ParseInt(GetField(fields, 7)),
                 Parent = GetField(fields, 8),
                 TransactionDateTime = ParseDateTime(GetField(fields, 9)),
@@ -223,14 +302,26 @@ namespace ConHIS_Service_XPHL7.Services
                 OrderingProvider = new OrderingProvider
                 {
                     ID = GetComponent(orderingProviderComponents, 0),
-                    LastName = GetComponent(orderingProviderComponents, 1),
-                    FirstName = GetComponent(orderingProviderComponents, 2),
-                    MiddleName = GetComponent(orderingProviderComponents, 3),
-                    Prefix = GetComponent(orderingProviderComponents, 4),
-                    Suffix = GetComponent(orderingProviderComponents, 5)
+                    OrderingProvider1 = GetComponent(orderingProviderComponents, 1),
+                    Name = GetComponent(orderingProviderComponents, 2),
+                    OrderingProvider3 = GetComponent(orderingProviderComponents, 3),
+                    OrderingProvider4 = GetComponent(orderingProviderComponents, 4),
+                    OrderingProvider5 = GetComponent(orderingProviderComponents, 5),
+                    OrderingProvider6 = GetComponent(orderingProviderComponents, 6),
+                    OrderingProvider7 = GetComponent(orderingProviderComponents, 7),
+                    OrderingProvider8 = GetComponent(orderingProviderComponents, 8),
+                    OrderingProvider9 = GetComponent(orderingProviderComponents, 9),
+                    OrderingProvider10 = GetComponent(orderingProviderComponents, 10),
+                    OrderingProvider11 = GetComponent(orderingProviderComponents, 11),
+                    OrderingProvider12 = GetComponent(orderingProviderComponents, 12),
+                    OrderingProvider13 = GetComponent(orderingProviderComponents, 13),
+                    OrderingProvider14 = GetComponent(orderingProviderComponents, 14)
                 },
-                EnterersLocationID = GetField(fields, 13),
-                EnterersLocationName = "", // Not used
+                EnterersLocation = new EnterersLocation
+                {
+                    ID = GetComponent(enterersLocationComponents, 0),
+                    Name = GetComponent(enterersLocationComponents, 1)
+                },
                 CallBackPhoneNumber = GetField(fields, 14),
                 OrderEffectiveDateTime = ParseDateTime(GetField(fields, 15)),
                 OrderControlCodeReason = GetField(fields, 16),

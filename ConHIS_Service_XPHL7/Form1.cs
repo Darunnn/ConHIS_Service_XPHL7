@@ -29,7 +29,7 @@ namespace ConHIS_Service_XPHL7
             _logger = new LogManager();
         }
 
-        private async void Form1_Load(object sender, EventArgs e)
+        private  void Form1_Load(object sender, EventArgs e)
         {
             _logger.LogInfo("Start Interface");
             UpdateStatus("Initializing...");

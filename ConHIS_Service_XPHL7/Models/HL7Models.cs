@@ -19,23 +19,31 @@ namespace ConHIS_Service_XPHL7.Models
     // ================== MSH ==================
     public class MSH
     {
-        public string EncodingCharacters { get; set; }   // MSH-2
-        public string SendingApplication { get; set; } = "DRUGORDER"; // MSH-3
-        public string SendingFacility { get; set; } = "BMS-HOSxP";    // MSH-4
-        public string ReceivingApplication { get; set; } = "DrugDispense"; // MSH-5
-        public string ReceivingFacility { get; set; }   // MSH-6
-        public DateTime MessageDateTime { get; set; }   // MSH-7
-        public string Security { get; set; }               // MSH-8 (Not Used)
+        public string EncodingCharacters { get; set; }   // MSH-1
+        public string SendingApplication { get; set; } // MSH-2
+        public string ReceivingApplication { get; set; }  // MSH-3
+        public string SendingFacility { get; set; }  // MSH-4
+        public string ReceivingFacility { get; set; }   // MSH-5
+        public DateTime MessageDateTime { get; set; }   // MSH-6
+        public string Security { get; set; }               // MSH-7 (Not Used)
         public string MessageType { get; set; }         // MSH-8 (ORM^O01, etc.)
         public string MessageControlID { get; set; }    // MSH-9
-        public string ProcessingID { get; set; } = "P"; // MSH-10
-        public string VersionID { get; set; } = "2.3";  // MSH-11
+        public string ProcessingID { get; set; }  // MSH-10
+        public string VersionID { get; set; }   // MSH-11
+        public string MSH12 { get; set; }   // MSH-12
+        public string MSH13 { get; set; }   // MSH-13
+        public string MSH14 { get; set; }   // MSH-14
+        public string MSH15 { get; set; }   // MSH-15
+        public string MSH16 { get; set; }   // MSH-16
+        public string MSH17 { get; set; }   // MSH-17
+        public string MSH18 { get; set; }   // MSH-18
+
     }
 
     // ================== PID ==================
     public class PID
     {
-        public string SetID { get; set; } = "1";              // PID-1
+        public int SetID { get; set; }              // PID-1
         public string PatientIDExternal { get; set; }         // PID-2 HN
         public string PatientIDInternal { get; set; }         // PID-3 HN
         public string AlternatePatientID { get; set; }        // PID-4 (Not Used)
@@ -49,6 +57,25 @@ namespace ConHIS_Service_XPHL7.Models
         public PatientAddress Address { get; set; } = new PatientAddress();  // PID-11
         public string Country { get; set; }               // PID-12
         public string PhoneNumberHome { get; set; }           // PID-13
+        public string PID14 { get; set; }   // PID-14 
+        public string PID15 { get; set; }  // PID-15
+        public string Marital { get; set; } // PID-16
+        public string Religion { get; set; } // PID-17
+        public string PID18 { get; set; } // PID-18
+        public string PID19 { get; set; } // PID-19
+        public string PID20 { get; set; } // PID-20
+        public string PID21 { get; set; } // PID-21
+        public string PID22 { get; set; } // PID-22
+        public string PID23 { get; set; } // PID-23
+        public string PID24 { get; set; } // PID-24
+        public string PID25 { get; set; } // PID-25
+        public string PID26 { get; set; } // PID-26
+        public string PID27 { get; set; } // PID-27
+        public Nationality Nationality { get; set; } = new Nationality();  // PID-28
+        public string PID29 { get; set; } // PID-29
+        public string PID30 { get; set; } // PID-30
+
+
     }
 
     public class PatientName
@@ -73,10 +100,15 @@ namespace ConHIS_Service_XPHL7.Models
         
     }
 
+    public class Nationality
+    {
+        public string Nationality1 { get; set; }
+        public string NameNationality { get; set; }
+        
+    }
+
     // ================== PV1 ==================
-    /// <summary>
-    /// PV1 – Patient Visit Segment
-    /// </summary>
+
     public class PV1
     {
         // 1 Set ID – PV1
@@ -101,7 +133,7 @@ namespace ConHIS_Service_XPHL7.Models
         public AttendingDoctor AttendingDoctor { get; set; } = new AttendingDoctor();
 
         // 8 Referring Doctor (Not Used)
-        public string ReferringDoctor { get; set; }
+        public ReferringDoctor ReferringDoctor { get; set; } = new ReferringDoctor();
 
         // 9 Consulting Doctor (Not Used)
         public string ConsultingDoctor { get; set; }
@@ -138,7 +170,7 @@ namespace ConHIS_Service_XPHL7.Models
         public string VisitNumber { get; set; }
 
         // 20–52 ทั้งหมด Not Used (เก็บเป็น string/DateTime/decimal? แบบสั้น ๆ)
-        public string FinancialClass { get; set; }
+        public  FinancialClass FinancialClass { get; set; } = new FinancialClass();
         public string ChargePriceIndicator { get; set; }
         public string CourtesyCode { get; set; }
         public string CreditRating { get; set; }
@@ -187,12 +219,15 @@ namespace ConHIS_Service_XPHL7.Models
     public class AttendingDoctor
     {
         public string ID { get; set; }        // 7.1
-        public string LastName { get; set; }  // 7.2
-        public string FirstName { get; set; } // 7.3
-        public string MiddleName { get; set; } // 7.4
-        public string Suffix { get; set; }    // 7.5
-        public string Prefix { get; set; }    // 7.6
+        public string Name { get; set; }  // 7.2
     }
+    public class ReferringDoctor
+    {
+        public string ID { get; set; }        // 8.1
+        public string Name { get; set; }  // 2.2
+    }
+
+    
     public class AdmittingDoctor
     {
         public string ID { get; set; }        // 17.1
@@ -205,12 +240,18 @@ namespace ConHIS_Service_XPHL7.Models
 
     public class PatientType
     {
-        public string ID { get; set; }     // pttype
-        public string Name { get; set; }   // pttype.name
+        public string ID { get; set; }     // 18.1 pttype.pttype
+        public string Name { get; set; }   // 18.2 pttype.name
     }
 
+    public class FinancialClass
+    {
+        public string ID { get; set; }     // 20.1
+        public string Name { get; set; }   // 20.2 
 
-    // Replace target-typed object creation with explicit type
+    }
+
+    // ================== ORC ==================
     public class ORC
     {
         // 1 Order Control (NW, RP)
@@ -223,8 +264,7 @@ namespace ConHIS_Service_XPHL7.Models
         public string FillerOrderNumber { get; set; }
 
         // 4 Placer Group (Not Used)
-        public string PlacerGroupID { get; set; }
-        public string PlacerGroupName { get; set; }
+        public PlacerGroup PlacerGroup { get; set; } = new PlacerGroup();
 
         // 5 Order Status (Dispensestatus) - Default = 0
         public string OrderStatus { get; set; } 
@@ -251,8 +291,7 @@ namespace ConHIS_Service_XPHL7.Models
         public OrderingProvider OrderingProvider { get; set; } = new OrderingProvider();
 
         // 13 Enterer’s Location (Not Used)
-        public string EnterersLocationID { get; set; }
-        public string EnterersLocationName { get; set; }
+        public EnterersLocation EnterersLocation { get; set; } = new EnterersLocation();
 
         // 14 Call Back Phone Number (Not Used)
         public string CallBackPhoneNumber { get; set; }
@@ -281,7 +320,11 @@ namespace ConHIS_Service_XPHL7.Models
         // 22 Ordering Facility Address (Not Used)
         public string OrderingFacilityAddress { get; set; }
     }
-
+    public class PlacerGroup
+        {
+        public string ID { get; set; }        // 4.1
+        public string Name { get; set; }      // 4.2
+    }
     public class VerifiedBy
     {
         public string ID { get; set; }        // 11.1
@@ -293,12 +336,27 @@ namespace ConHIS_Service_XPHL7.Models
     }
     public class OrderingProvider
     {
-        public string ID { get; set; }        // 12.1
-        public string LastName { get; set; }  // 12.2
-        public string FirstName { get; set; } // 12.3
-        public string MiddleName { get; set; } // 12.4
-        public string Suffix { get; set; }    // 12.5
-        public string Prefix { get; set; }    // 12.6
+        public string ID { get; set; }             // 12.1 (Identifier number)
+        public string OrderingProvider1{ get; set; }          // 12.2 (Family Name)
+        public string Name { get; set; }               // 12.3 (Given Name)
+        public string OrderingProvider3 { get; set; }        // 12.4 (Middle Name)
+        public string OrderingProvider4 { get; set; }        // 12.5 (Suffix)
+        public string OrderingProvider5 { get; set; }        // 12.6 (Prefix)
+        public string OrderingProvider6 { get; set; }        // 12.7 (Degree)
+        public string OrderingProvider7 { get; set; }        // 12.8 (Source Table)
+        public string OrderingProvider8 { get; set; }        // 12.9 (Assigning Authority)
+        public string OrderingProvider9 { get; set; }        // 12.10 (Name Type Code)
+        public string OrderingProvider10 { get; set; }       // 12.11 (Identifier Check Digit)
+        public string OrderingProvider11 { get; set; }       // 12.12 (Check Digit Scheme)
+        public string OrderingProvider12 { get; set; }       // 12.13 (Identifier Type Code)
+        public string OrderingProvider13 { get; set; }       // 12.14 (Assigning Facility)
+        public string OrderingProvider14 { get; set; }       // 12.15 
+    }
+
+    public class EnterersLocation
+    {
+        public string ID { get; set; }        // 13.1
+        public string Name { get; set; }      // 13.2
     }
     // ================== AL1 ==================
     public class AL1

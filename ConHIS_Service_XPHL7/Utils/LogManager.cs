@@ -9,7 +9,7 @@ namespace ConHIS_Service_XPHL7.Utils
     public class LogManager
     {
         private string _logFolder;
-        private AppConfig appConfig;
+        
 
         public string LogFolder => _logFolder;
 
