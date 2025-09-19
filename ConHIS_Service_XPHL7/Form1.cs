@@ -49,8 +49,6 @@ namespace ConHIS_Service_XPHL7
                 var hl7Service = new HL7Service();
                 _processor = new DrugDispenseProcessor(_databaseService, hl7Service, apiService);
 
-                // Initial check
-                await CheckPendingOrders();
 
                 UpdateStatus("Ready - Service Stopped");
                 startStopButton.Enabled = true;
