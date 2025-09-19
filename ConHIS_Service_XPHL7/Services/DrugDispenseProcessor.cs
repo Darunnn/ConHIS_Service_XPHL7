@@ -172,11 +172,6 @@ namespace ConHIS_Service_XPHL7.Services
             var apiMethod = "POST";
             var bodyObj = CreatePrescriptionBody(hl7Message, data);
             var bodyJson = JsonConvert.SerializeObject(bodyObj, Formatting.Indented);
-
-            // Log data transformation step: API body creation
-
-
-            // Log API request data
             var apiRequestData = new
             {
                 Url = apiUrl,
@@ -300,8 +295,8 @@ namespace ConHIS_Service_XPHL7.Services
                 f_prioritycode = "",
                 f_prioritydesc = "",
                 f_hn = hl7?.PatientIdentification?.PatientIDExternal ?? "",
-                f_an = "",
-                f_vn = hl7?.CommonOrder?.FillerOrderNumber ?? "",
+                f_an = hl7?.CommonOrder?.FillerOrderNumber ?? "",
+                f_vn = "1234",
                 f_title = (hl7?.PatientIdentification?.OfficialName != null)
                     ? $"{hl7.PatientIdentification.OfficialName.Suffix}".Trim()
                     : "",

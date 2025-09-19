@@ -2,12 +2,14 @@
 using System.IO;
 using System.Diagnostics;
 using Newtonsoft.Json;
+using ConHIS_Service_XPHL7.Configuration;
 
 namespace ConHIS_Service_XPHL7.Utils
 {
     public class LogManager
     {
         private string _logFolder;
+        private AppConfig appConfig;
 
         public string LogFolder => _logFolder;
 
@@ -17,6 +19,11 @@ namespace ConHIS_Service_XPHL7.Utils
             var desired = Path.Combine(appFolder, logFolder);
             Directory.CreateDirectory(desired);
             _logFolder = desired;
+        }
+
+        public LogManager(AppConfig appConfig)
+        {
+            this.appConfig = appConfig;
         }
 
         public void LogToFile(string message, string logType = "INFO")
