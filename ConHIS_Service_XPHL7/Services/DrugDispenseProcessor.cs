@@ -241,23 +241,6 @@ namespace ConHIS_Service_XPHL7.Services
 
 
         }
-
-        private object PrepareApiData(HL7Message hl7Message)
-        {
-            return new
-            {
-                MessageHeader = hl7Message.MessageHeader,
-                Patient = hl7Message.PatientIdentification,
-                Visit = hl7Message.PatientVisit,
-                Order = hl7Message.CommonOrder,
-                Allergies = hl7Message.Allergies,
-                Medications = hl7Message.PharmacyDispense,
-                Routes = hl7Message.RouteInfo,
-                Notes = hl7Message.Notes,
-                ProcessedDateTime = DateTime.Now
-            };
-        }
-
         private object CreatePrescriptionBody(HL7Message hl7, DrugDispenseipd data)
         {
             // Helper for safe DateTime formatting

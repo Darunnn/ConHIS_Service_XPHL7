@@ -21,11 +21,6 @@ namespace ConHIS_Service_XPHL7.Utils
             _logFolder = desired;
         }
 
-        public LogManager(AppConfig appConfig)
-        {
-            this.appConfig = appConfig;
-        }
-
         public void LogToFile(string message, string logType = "INFO")
         {
             var logFileName = $"{DateTime.Now:yyyy-MM-dd}.txt";
@@ -76,26 +71,7 @@ namespace ConHIS_Service_XPHL7.Utils
                 Console.WriteLine($"Failed to write HL7 parsed data file for DrugDispenseipdId {DrugDispenseipdId}: {ex}");
             }
         }
-        // Method to log API response data to a separate folder (api_response)
-        public void LogApiResponseData(string DrugDispenseipdId, string responseData, string responseLogFolder = "api_response")
-        {
-            var appFolder = AppDomain.CurrentDomain.BaseDirectory ?? Environment.CurrentDirectory;
-            var responseLogDir = Path.Combine(appFolder, responseLogFolder);
-            Directory.CreateDirectory(responseLogDir);
-            var responseLogPath = Path.Combine(responseLogDir, $"api_response_{DrugDispenseipdId}_{DateTime.Now:yyyyMMdd_HHmmss}.txt");
-            try
-            {
-                var logEntry = $"[{DateTime.Now:yyyy-MM-dd HH:mm:ss}] Response for DrugDispenseipdId: {DrugDispenseipdId}{Environment.NewLine}";
-                logEntry += $"Response Data: {responseData}{Environment.NewLine}";
-                File.WriteAllText(responseLogPath, logEntry);
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"Failed to write API response data file for DrugDispenseipdId {DrugDispenseipdId}: {ex}");
-            }
-        }
 
-        
        
 
         // Method to log HL7 read/parse errors to a separate folder (logreaderror)
