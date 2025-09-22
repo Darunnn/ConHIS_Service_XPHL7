@@ -8,7 +8,7 @@ namespace ConHIS_Service_XPHL7.Services
     {
         private const string FIELD_SEPARATOR = "|";
         private const string COMPONENT_SEPARATOR = "^" ;
-
+        private const string ENTITY_SEPARATOR = ";" ;
 
        
         public HL7Message ParseHL7Message(string hl7Data)
@@ -27,13 +27,13 @@ namespace ConHIS_Service_XPHL7.Services
 
                     var segmentType = line.Substring(0, 3).ToUpperInvariant();
                     var fields = line.Split(FIELD_SEPARATOR[0]);
-                    var COMPONENT = line.Split(COMPONENT_SEPARATOR[0]);
+                    
 
                     // Only parse MSH and PID segments; skip all other segments silently
                     switch (segmentType)
                     {
                         case "MSH":
-                            message.MessageHeader = ParseMSH(fields, COMPONENT);
+                            message.MessageHeader = ParseMSH(fields);
                             break;
                         case "PID":
                             message.PatientIdentification = ParsePID(fields);
@@ -84,7 +84,7 @@ namespace ConHIS_Service_XPHL7.Services
         }
 
         #region Parse Segments
-        private MSH ParseMSH(string[] fields, string[] COMPONENT)
+        private MSH ParseMSH(string[] fields)
         {
             return new MSH
             {
@@ -93,7 +93,7 @@ namespace ConHIS_Service_XPHL7.Services
                 ReceivingApplication = GetField(fields, 3),
                 SendingFacility = GetField(fields, 4),
                 ReceivingFacility = GetField(fields, 5),
-                MessageDateTime = ParseDateTime(GetField(fields, 6)),
+                MessageDateTime = (DateTime)ParseDateTime(GetField(fields, 6)),
                 Security = GetField(fields, 7),
                 MessageType = GetField(fields, 8),
                 MessageControlID = GetField(fields, 9),
@@ -333,8 +333,6 @@ namespace ConHIS_Service_XPHL7.Services
                 OrderingFacilityAddress = GetField(fields, 22)
             };
         }
-
-
         private AL1 ParseAL1(string[] fields)
         {
             return new AL1
@@ -352,150 +350,183 @@ namespace ConHIS_Service_XPHL7.Services
         {
             var drugComponents = GetField(fields, 2).Split(COMPONENT_SEPARATOR[0]);
             var staffComponents = GetField(fields, 5).Split(COMPONENT_SEPARATOR[0]);
-            var usageUnitComponents = GetField(fields, 14).Split(COMPONENT_SEPARATOR[0]);
-            var frequencyComponents = GetField(fields, 15).Split(COMPONENT_SEPARATOR[0]);
-            var timeComponents = GetField(fields, 16).Split(COMPONENT_SEPARATOR[0]);
-            var deptComponents = GetField(fields, 18).Split(COMPONENT_SEPARATOR[0]);
-            var doctorComponents = GetField(fields, 19).Split(COMPONENT_SEPARATOR[0]);
-            var substandComponents = GetField(fields, 20).Split(COMPONENT_SEPARATOR[0]);
-
+            var SubstandComponents = GetField(fields, 7).Split(COMPONENT_SEPARATOR[0]);
+            var SubstandComponents2 = GetField(fields, 7).Split(ENTITY_SEPARATOR[0]);
+            var usageUnitComponents = GetField(fields, 11).Split(COMPONENT_SEPARATOR[0]);
+            var DoctorComponents = GetField(fields, 14).Split(COMPONENT_SEPARATOR[0]);
+            var OrderunitcodeComponents = GetField(fields, 29).Split(COMPONENT_SEPARATOR[0]);
+            var UsagecodeComponents = GetField(fields, 30).Split(COMPONENT_SEPARATOR[0]);
             return new RXD
             {
-                SetID = ParseInt(GetField(fields, 1)),
+                QTY = ParseInt(GetField(fields, 1)),
                 Dispensegivecode = new Dispensegivecode
                 {
-                    Identifier = GetComponent(drugComponents, 0),
-                    DrugName = GetComponent(drugComponents, 1),
-                    DrugNamePrint = GetComponent(drugComponents, 2),
-                    DrugNameThai = GetComponent(drugComponents, 3)
-                },
+                    Dispense = GetComponent(drugComponents, 0),
+                    UniqID = GetComponent(drugComponents, 1),
+                    RXD203 = GetComponent(drugComponents, 2),
+                    Identifier = GetComponent(drugComponents, 3),
+                    DrugName = GetComponent(drugComponents, 4),
+                    DrugNamePrint = GetComponent(drugComponents, 5),
+                    DrugNameThai = GetComponent(drugComponents, 6)
+                },//2
                 DateTimeDispensed = ParseDateTime(GetField(fields, 3)),
                 ActualDispense = ParseInt(GetField(fields, 4)),
                 Modifystaff = new Modifystaff
                 {
                     StaffCode = GetComponent(staffComponents, 0),
                     StaffName = GetComponent(staffComponents, 1)
-                },
-                QTY = ParseInt(GetField(fields, 6)),
-                Dose = ParseInt(GetField(fields, 7)),
-                UsageCODE = GetField(fields, 8),
-                UsageLine1 = GetField(fields, 9),
-                UsageLine2 = GetField(fields, 10),
-                UsageLine3 = GetField(fields, 11),
-                UsageLine4 = GetField(fields, 12),
-                DosageForm = GetField(fields, 13),
-                UsageUnit = new UsageUnit
+                },//5
+                Dosageform = GetField(fields, 6),
+                Substand = new Substand
                 {
-                    Code = GetComponent(usageUnitComponents, 0),
-                    Name = GetComponent(usageUnitComponents, 1),
-                    UnitName = GetComponent(usageUnitComponents, 2)
-                },
-                Frequency = new FrequencyInfo
+                    RXD701 = GetComponent(SubstandComponents, 0),
+                    Medicinalproperties = GetComponent(SubstandComponents, 1),
+                    Labelhelp = GetComponent(SubstandComponents, 2),
+                    RXD704 = GetComponent(SubstandComponents, 3),
+                    Usageline1 = GetComponent(SubstandComponents2, 4),
+                    Usageline2 = GetComponent(SubstandComponents2, 5),
+                    Usageline3 = GetComponent(SubstandComponents2, 6),
+                    Noteprocessing = GetComponent(SubstandComponents, 7)
+
+                },//7
+                RXD8 = GetField(fields, 8),
+                prioritycode = GetField(fields, 9),
+                Dose = ParseInt(GetField(fields, 10)),
+                Usageunit = new Usageunit
                 {
-                    FrequencyID = GetComponent(frequencyComponents, 0),
-                    FrequencyName = GetComponent(frequencyComponents, 1)
-                },
-                Time = new TimeInfo
+                    ID = GetComponent(usageUnitComponents, 0),
+                    Name = GetComponent(usageUnitComponents, 1)
+                },//11
+                RXD12 = GetField(fields, 12),
+                RXD13 = GetField(fields, 13),
+                Doctor = new Doctor
                 {
-                    TimeID = GetComponent(timeComponents, 0),
-                    TimeName = GetComponent(timeComponents, 1)
-                },
-                StrengthUnit = GetField(fields, 17),
-                Department = new DepartmentOrder
+                    ID = GetComponent(DoctorComponents, 0),
+                    Name = GetComponent(DoctorComponents, 1)
+                },//14
+                RXD15 = GetField(fields, 15),
+                RXD16 = GetField(fields, 16),
+                RXD17 = GetField(fields, 17),
+                Prescriptiondate = ParseDateTime(GetField(fields, 18)),
+                RXD19 = GetField(fields, 19),
+                RXD20 = GetField(fields, 20),
+                RXD21 = GetField(fields, 21),
+                RXD22 = GetField(fields, 22),
+                RXD23 = GetField(fields, 23),
+                RXD24 = GetField(fields, 24),
+                RXD25 = GetField(fields, 25),
+                dosagetext = GetField(fields, 26),
+                RXD27 = GetField(fields, 27),
+                RXD28 = GetField(fields, 28),
+                Orderunitcode = new Orderunitcode
                 {
-                    DepartmentCode = GetComponent(deptComponents, 0),
-                    DepartmentName = GetComponent(deptComponents, 1)
-                },
-                Doctor = new DoctorOrder
+                    Nameeng = GetComponent(OrderunitcodeComponents, 0),
+                    Namethai = GetComponent(OrderunitcodeComponents, 1)
+                },//29
+                Usagecode = new Usagecode
                 {
-                    DoctorCode = GetComponent(doctorComponents, 0),
-                    DoctorName = GetComponent(doctorComponents, 1)
-                },
-                Substand = new SubstandInfo
-                {
-                    DrugProperty = GetComponent(substandComponents, 0),
-                    LabelHelp = GetComponent(substandComponents, 1)
-                },
-                FinanceStatus = GetField(fields, 21),
-                DrugType = GetField(fields, 23),
-                TotalPrice = ParseDecimal(GetField(fields, 27)),
-                 IsRXE = true
+                    Instructioncode = GetComponent(UsagecodeComponents, 0),
+                    RXD3002 = GetComponent(UsagecodeComponents, 1),
+                    RXD3003 = GetComponent(UsagecodeComponents, 2),
+                    Frequencycode = GetComponent(UsagecodeComponents, 3),
+                    Frequencydesc = GetComponent(UsagecodeComponents, 4),
+                    RXD3006 = GetComponent(UsagecodeComponents, 5),
+                    RXD3007 = GetComponent(UsagecodeComponents, 6)
+                },//30
+                IsRXE = true
             };
         }
         private RXD ParseRXD(string[] fields)
         {
             var drugComponents = GetField(fields, 2).Split(COMPONENT_SEPARATOR[0]);
             var staffComponents = GetField(fields, 5).Split(COMPONENT_SEPARATOR[0]);
-            var usageUnitComponents = GetField(fields, 14).Split(COMPONENT_SEPARATOR[0]);
-            var frequencyComponents = GetField(fields, 15).Split(COMPONENT_SEPARATOR[0]);
-            var timeComponents = GetField(fields, 16).Split(COMPONENT_SEPARATOR[0]);
-            var deptComponents = GetField(fields, 18).Split(COMPONENT_SEPARATOR[0]);
-            var doctorComponents = GetField(fields, 19).Split(COMPONENT_SEPARATOR[0]);
-            var substandComponents = GetField(fields, 20).Split(COMPONENT_SEPARATOR[0]);
-
+            var SubstandComponents = GetField(fields, 7).Split(COMPONENT_SEPARATOR[0]);
+            var SubstandComponents2 = GetField(fields, 7).Split(ENTITY_SEPARATOR[0]);
+            var usageUnitComponents = GetField(fields, 11).Split(COMPONENT_SEPARATOR[0]);
+            var DoctorComponents = GetField(fields, 14).Split(COMPONENT_SEPARATOR[0]);
+            var OrderunitcodeComponents = GetField(fields, 29).Split(COMPONENT_SEPARATOR[0]);
+            var UsagecodeComponents = GetField(fields, 30).Split(COMPONENT_SEPARATOR[0]);
             return new RXD
             {
-                SetID = ParseInt(GetField(fields, 1)),
+                QTY = ParseInt(GetField(fields, 1)),
                 Dispensegivecode = new Dispensegivecode
                 {
-                    Identifier = GetComponent(drugComponents, 0),
-                    DrugName = GetComponent(drugComponents, 1),
-                    DrugNamePrint = GetComponent(drugComponents, 2),
-                    DrugNameThai = GetComponent(drugComponents, 3)
-                },
+                    Dispense = GetComponent(drugComponents, 0),
+                    UniqID = GetComponent(drugComponents, 1),
+                    RXD203 = GetComponent(drugComponents, 2),
+                    Identifier = GetComponent(drugComponents, 3),
+                    DrugName = GetComponent(drugComponents, 4),
+                    DrugNamePrint = GetComponent(drugComponents, 5),
+                    DrugNameThai = GetComponent(drugComponents, 6)
+                },//2
                 DateTimeDispensed = ParseDateTime(GetField(fields, 3)),
                 ActualDispense = ParseInt(GetField(fields, 4)),
                 Modifystaff = new Modifystaff
                 {
                     StaffCode = GetComponent(staffComponents, 0),
                     StaffName = GetComponent(staffComponents, 1)
-                },
-                QTY = ParseInt(GetField(fields, 6)),
-                Dose = ParseInt(GetField(fields, 7)),
-                UsageCODE = GetField(fields, 8),
-                UsageLine1 = GetField(fields, 9),
-                UsageLine2 = GetField(fields, 10),
-                UsageLine3 = GetField(fields, 11),
-                UsageLine4 = GetField(fields, 12),
-                DosageForm = GetField(fields, 13),
-                UsageUnit = new UsageUnit
+                },//5
+                Dosageform = GetField(fields, 6),
+                Substand = new Substand
                 {
-                    Code = GetComponent(usageUnitComponents, 0),
-                    Name = GetComponent(usageUnitComponents, 1),
-                    UnitName = GetComponent(usageUnitComponents, 2)
-                },
-                Frequency = new FrequencyInfo
+                    RXD701 = GetComponent(SubstandComponents, 0),
+                    Medicinalproperties = GetComponent(SubstandComponents, 1),
+                    Labelhelp = GetComponent(SubstandComponents, 2),
+                    RXD704 = GetComponent(SubstandComponents, 3),
+                    Usageline1 = GetComponent(SubstandComponents2, 4),
+                    Usageline2 = GetComponent(SubstandComponents2, 5),
+                    Usageline3 = GetComponent(SubstandComponents2, 6),
+                    Noteprocessing = GetComponent(SubstandComponents, 7)
+
+                },//7
+                RXD8 = GetField(fields, 8),
+                prioritycode = GetField(fields, 9),
+                Dose = ParseInt(GetField(fields, 10)),
+                Usageunit = new Usageunit
                 {
-                    FrequencyID = GetComponent(frequencyComponents, 0),
-                    FrequencyName = GetComponent(frequencyComponents, 1)
-                },
-                Time = new TimeInfo
+                    ID = GetComponent(usageUnitComponents, 0),
+                    Name = GetComponent(usageUnitComponents, 1)
+                },//11
+                RXD12 = GetField(fields, 12),
+                RXD13 = GetField(fields, 13),
+                Doctor = new Doctor
                 {
-                    TimeID = GetComponent(timeComponents, 0),
-                    TimeName = GetComponent(timeComponents, 1)
-                },
-                StrengthUnit = GetField(fields, 17),
-                Department = new DepartmentOrder
+                    ID = GetComponent(DoctorComponents, 0),
+                    Name = GetComponent(DoctorComponents, 1)
+                },//14
+                RXD15 = GetField(fields, 15),
+                RXD16 = GetField(fields, 16),
+                RXD17 = GetField(fields, 17),
+                Prescriptiondate = ParseDateTime(GetField(fields, 18)),
+                RXD19 = GetField(fields, 19),
+                RXD20 = GetField(fields, 20),
+                RXD21 = GetField(fields, 21),
+                RXD22 = GetField(fields, 22),
+                RXD23 = GetField(fields, 23),
+                RXD24 = GetField(fields, 24),
+                RXD25 = GetField(fields, 25),
+                dosagetext = GetField(fields, 26),
+                RXD27 = GetField(fields, 27),
+                RXD28 = GetField(fields, 28),
+                Orderunitcode = new Orderunitcode
                 {
-                    DepartmentCode = GetComponent(deptComponents, 0),
-                    DepartmentName = GetComponent(deptComponents, 1)
-                },
-                Doctor = new DoctorOrder
+                    Nameeng = GetComponent(OrderunitcodeComponents, 0),
+                    Namethai = GetComponent(OrderunitcodeComponents, 1)
+                },//29
+                Usagecode = new Usagecode
                 {
-                    DoctorCode = GetComponent(doctorComponents, 0),
-                    DoctorName = GetComponent(doctorComponents, 1)
-                },
-                Substand = new SubstandInfo
-                {
-                    DrugProperty = GetComponent(substandComponents, 0),
-                    LabelHelp = GetComponent(substandComponents, 1)
-                },
-                FinanceStatus = GetField(fields, 21),
-                DrugType = GetField(fields, 23),
-                TotalPrice = ParseDecimal(GetField(fields, 27)),
-                IsRXE = false
+                    Instructioncode = GetComponent(UsagecodeComponents, 0),
+                    RXD3002 = GetComponent(UsagecodeComponents, 1),
+                    RXD3003 = GetComponent(UsagecodeComponents, 2),
+                    Frequencycode = GetComponent(UsagecodeComponents, 3),
+                    Frequencydesc = GetComponent(UsagecodeComponents, 4),
+                    RXD3006 = GetComponent(UsagecodeComponents, 5),
+                    RXD3007 = GetComponent(UsagecodeComponents, 6)
+                },//30
+                IsRXE = true
             };
         }
+       
 
 
         private RXR ParseRXR(string[] fields)
@@ -536,24 +567,27 @@ namespace ConHIS_Service_XPHL7.Services
             return index < components.Length ? components[index] : "";
         }
 
-        private DateTime ParseDateTime(string dateTimeStr)
+        private DateTime? ParseDateTime(string dateTimeStr)
         {
-            if (string.IsNullOrWhiteSpace(dateTimeStr)) return DateTime.MinValue;
+            if (string.IsNullOrWhiteSpace(dateTimeStr))
+                return null;
 
-            if (DateTime.TryParseExact(dateTimeStr, "yyyyMMddHHmmss", null,
+            var provider = System.Globalization.CultureInfo.InvariantCulture;
+
+            if (DateTime.TryParseExact(dateTimeStr, "yyyyMMddHHmmss", provider,
                 System.Globalization.DateTimeStyles.None, out DateTime result))
                 return result;
 
-            if (DateTime.TryParseExact(dateTimeStr, "yyyyMMdd", null,
+            if (DateTime.TryParseExact(dateTimeStr, "yyyyMMdd", provider,
                 System.Globalization.DateTimeStyles.None, out result))
                 return result;
 
-            return DateTime.MinValue;
+            return null;
         }
 
         private string FormatDateTime(DateTime? dateTime)
         {
-            return (!dateTime.HasValue || dateTime == DateTime.MinValue) ? "" : dateTime.Value.ToString("yyyyMMddHHmmss");
+            return (!dateTime.HasValue) ? "" : dateTime.Value.ToString("yyyyMMddHHmmss");
         }
 
         private int ParseInt(string value)

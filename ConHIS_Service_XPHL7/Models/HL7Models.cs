@@ -1,5 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Numerics;
+using System.Xml.Linq;
 
 namespace ConHIS_Service_XPHL7.Models
 {
@@ -24,7 +26,7 @@ namespace ConHIS_Service_XPHL7.Models
         public string ReceivingApplication { get; set; }  // MSH-3
         public string SendingFacility { get; set; }  // MSH-4
         public string ReceivingFacility { get; set; }   // MSH-5
-        public DateTime MessageDateTime { get; set; }   // MSH-6
+        public DateTime MessageDateTime { get; set; }   // MSH-6 f_import_createtime*
         public string Security { get; set; }               // MSH-7 (Not Used)
         public string MessageType { get; set; }         // MSH-8 (ORM^O01, etc.)
         public string MessageControlID { get; set; }    // MSH-9
@@ -44,23 +46,23 @@ namespace ConHIS_Service_XPHL7.Models
     public class PID
     {
         public int SetID { get; set; }              // PID-1
-        public string PatientIDExternal { get; set; }         // PID-2 HN
-        public string PatientIDInternal { get; set; }         // PID-3 HN
-        public string AlternatePatientID { get; set; }        // PID-4 (Not Used)
+        public string PatientIDExternal { get; set; }         // PID-2 f_hn
+        public string PatientIDInternal { get; set; }         // PID-3 f_hn
+        public string AlternatePatientID { get; set; }        // PID-4 f_patient_idcard*
 
-        public PatientName OfficialName { get; set; } = new PatientName(); // PID-5 (Not Used)
-        public string Mothermaidenname { get; set; } // PID-6(Not Used)
-        public DateTime? DateOfBirth { get; set; }            // PID-7
-        public string Sex { get; set; }          // PID-8 (Not Used)
+        public PatientName OfficialName { get; set; } = new PatientName(); // PID-5 f_patientname (5.2 + 5.3 + 5.1) f_title(5.4)
+        public string Mothermaidenname { get; set; } // PID-6
+        public DateTime? DateOfBirth { get; set; }            // PID-7 f_patientdob
+        public string Sex { get; set; }          // PID-8 f_sex
         public PatientName AliasName { get; set; } = new PatientName();    // PID-9
-        public  string Race { get; set; }                // PID-10 (Not Used)
-        public PatientAddress Address { get; set; } = new PatientAddress();  // PID-11
+        public  string Race { get; set; }                // PID-10 
+        public PatientAddress Address { get; set; } = new PatientAddress();  // PID-11 f_patient_address*
         public string Country { get; set; }               // PID-12
         public string PhoneNumberHome { get; set; }           // PID-13
         public string PID14 { get; set; }   // PID-14 
         public string PID15 { get; set; }  // PID-15
         public string Marital { get; set; } // PID-16
-        public string Religion { get; set; } // PID-17
+        public string Religion { get; set; } // PID-17 f_patient_religion*
         public string PID18 { get; set; } // PID-18
         public string PID19 { get; set; } // PID-19
         public string PID20 { get; set; } // PID-20
@@ -71,7 +73,7 @@ namespace ConHIS_Service_XPHL7.Models
         public string PID25 { get; set; } // PID-25
         public string PID26 { get; set; } // PID-26
         public string PID27 { get; set; } // PID-27
-        public Nationality Nationality { get; set; } = new Nationality();  // PID-28
+        public Nationality Nationality { get; set; } = new Nationality();  // PID-28 f_patient_nationality*
         public string PID29 { get; set; } // PID-29
         public string PID30 { get; set; } // PID-30
 
@@ -167,10 +169,10 @@ namespace ConHIS_Service_XPHL7.Models
         public PatientType PatientType { get; set; } = new PatientType();
 
         // 19 Visit Number (Not Used)
-        public string VisitNumber { get; set; }
+        public string VisitNumber { get; set; } //f_vn
 
         // 20–52 ทั้งหมด Not Used (เก็บเป็น string/DateTime/decimal? แบบสั้น ๆ)
-        public  FinancialClass FinancialClass { get; set; } = new FinancialClass();
+        public  FinancialClass FinancialClass { get; set; } = new FinancialClass(); //PV1 20 f_right(20.1 | 20.2)
         public string ChargePriceIndicator { get; set; }
         public string CourtesyCode { get; set; }
         public string CreditRating { get; set; }
@@ -194,7 +196,7 @@ namespace ConHIS_Service_XPHL7.Models
         public string AccountStatus { get; set; }
         public string PendingLocation { get; set; }
         public string PriorTemporaryLocation { get; set; }
-        public DateTime? AdmitDateTime { get; set; }
+        public DateTime? AdmitDateTime { get; set; } //PV1 44 f_admitdate*
         public DateTime? DischargeDateTime { get; set; }
         public decimal? CurrentPatientBalance { get; set; }
         public decimal? TotalCharges { get; set; }
@@ -208,12 +210,12 @@ namespace ConHIS_Service_XPHL7.Models
  
     public class AssignedLocation
     {
-        // 3.1 Point Of Care
-        public string PointOfCare { get; set; }   // Depcode
-                                               // 3.2 Room (Not Used)
-        public string Room { get; set; }
-        // 3.3 Bed (Not Used)
-        public string Bed { get; set; }
+        
+        public string PointOfCare { get; set; }  // 3.1 f_wardcode 
+                                                
+        public string Room { get; set; } // 3.2 f_warddesc
+        
+        public string Bed { get; set; }// 3.3 
     }
 
     public class AttendingDoctor
@@ -255,10 +257,10 @@ namespace ConHIS_Service_XPHL7.Models
     public class ORC
     {
         // 1 Order Control (NW, RP)
-        public string OrderControl { get; set; }
+        public string OrderControl { get; set; } //f_status
 
         // 2 Placer Order Number (presc_id)
-        public string PlacerOrderNumber { get; set; }
+        public string PlacerOrderNumber { get; set; } //f_prescriptionno
 
         // 3 Filler Order Number (VN)
         public string FillerOrderNumber { get; set; }
@@ -279,10 +281,10 @@ namespace ConHIS_Service_XPHL7.Models
         public string Parent { get; set; }
 
         // 9 Date/Time of Transaction (วันที่ใบสั่งยา)
-        public DateTime? TransactionDateTime { get; set; }
+        public DateTime? TransactionDateTime { get; set; } //f_ordercreatedate & f_orderacceptdate
 
         // 10 Entered By (Not Used)
-        public string EnteredBy { get; set; }
+        public string EnteredBy { get; set; }//f_patientname (*ถ้า PID ไม่มีส่งมา)
 
         // 11 Verified By (ผู้บันทึกจัดยา)
         public VerifiedBy VerifiedBy { get; set; } = new VerifiedBy();
@@ -338,7 +340,7 @@ namespace ConHIS_Service_XPHL7.Models
     {
         public string ID { get; set; }             // 12.1 (Identifier number)
         public string OrderingProvider1{ get; set; }          // 12.2 (Family Name)
-        public string Name { get; set; }               // 12.3 (Given Name)
+        public string Name { get; set; }               // 12.3 f_useracceptby  (*ถ้า  RXE ไม่มีส่งมา)
         public string OrderingProvider3 { get; set; }        // 12.4 (Middle Name)
         public string OrderingProvider4 { get; set; }        // 12.5 (Suffix)
         public string OrderingProvider5 { get; set; }        // 12.6 (Prefix)
@@ -355,8 +357,9 @@ namespace ConHIS_Service_XPHL7.Models
 
     public class EnterersLocation
     {
-        public string ID { get; set; }        // 13.1
-        public string Name { get; set; }      // 13.2
+        public string ID { get; set; }        // 13.1 f_pharmacylocationcode (20digit)f_pharmacylocationdesc(100digit)
+
+        public string Name { get; set; }      // 13.2 f_pharmacylocationcode (20digit)f_pharmacylocationdesc(100digit)
     }
     // ================== AL1 ==================
     public class AL1
@@ -373,91 +376,95 @@ namespace ConHIS_Service_XPHL7.Models
     public class RXD
     {
         public bool IsRXE { get; set; } = false;
-        public int SetID { get; set; }                        // RXD-1: Set ID
+        public int QTY { get; set; }                        // RXD-1: จำนวนยา
         public Dispensegivecode Dispensegivecode { get; set; } = new Dispensegivecode(); // RXD-2: Drug ID / Dispense Give Code
 
         public DateTime? DateTimeDispensed { get; set; }      // RXD-3: Date/Time Dispensed
         public int ActualDispense { get; set; }              // RXD-4: Actual Dispense
         public Modifystaff Modifystaff { get; set; } = new Modifystaff(); // RXD-5: Modified Staff
-        public int QTY { get; set; }                          // RXD-6: Quantity Dispensed
-        public int Dose { get; set; }                         // RXD-7: Dose Amount
-        public string UsageCODE { get; set; }                 // RXD-8: Usage Code
-        public string UsageLine1 { get; set; }                // RXD-9: Usage Line 1
-        public string UsageLine2 { get; set; }                // RXD-10: Usage Line 2
-        public string UsageLine3 { get; set; }                // RXD-11: Usage Line 3
-        public string UsageLine4 { get; set; }                // RXD-12: Usage Line 4
-        public string DosageForm { get; set; }                // RXD-13: Dosage Form
+        public string Dosageform  { get; set; }                          // RXD-6: Quantity Dispensed
+        public Substand Substand { get; set; } = new Substand();                        // RXD-7
+        public string RXD8 { get; set; }                 // RXD-8
+        public string prioritycode { get; set; }                // RXD-9
+        public int Dose { get; set; }                // RXD-10
+        public Usageunit Usageunit { get; set; } = new Usageunit();              // RXD-11
+        public string RXD12 { get; set; }                // RXD-12
+        public string RXD13 { get; set; }                // RXD-13
 
-        public UsageUnit UsageUnit { get; set; } = new UsageUnit();        // RXD-14: Usage Unit
-        public FrequencyInfo Frequency { get; set; } = new FrequencyInfo(); // RXD-15: Frequency
-        public TimeInfo Time { get; set; } = new TimeInfo();               // RXD-16: Time
-        public string StrengthUnit { get; set; }                           // RXD-17: Strength Unit
+        public Doctor  Doctor { get; set; } = new Doctor();        // RXD-14
+        public string RXD15 { get; set; } // RXD-15
+        public string RXD16 { get; set; }               // RXD-16
+        public string RXD17 { get; set; }                         // RXD-17
 
-        public DepartmentOrder Department { get; set; } = new DepartmentOrder(); // RXD-18: Department Order
-        public DoctorOrder Doctor { get; set; } = new DoctorOrder();             // RXD-19: Doctor Order
+        public DateTime? Prescriptiondate { get; set; } // RXD-18
+        public string RXD19 { get; set; }             // RXD-19
 
-        public SubstandInfo Substand { get; set; } = new SubstandInfo();         // RXD-20: Substand (Drug Property / Label Help)
-
-        public string FinanceStatus { get; set; } // RXD-21: Finance Status (Y = Clear, N = Not Clear)
-        public string LightProtect { get; set; } // RXD-22: Light Protect (Not Used)
-        public string DrugType { get; set; }     // RXD-23: Drug Type (ED/NED)
-        public string DispensePackageMethod { get; set; } // RXD-24: Dispense Package Method (Not Used)
-        public DateTime? StartDatetime { get; set; } // RXD-25: Start Datetime (Not Used)
-        public DateTime? EndDatetime { get; set; }   // RXD-26: End Datetime (Not Used)
-        public decimal TotalPrice { get; set; }      // RXD-27: Total Price
+        public string RXD20 { get; set; }          // RXD-20
+        public string RXD21 { get; set; }  // RXD-21
+        public string RXD22 { get; set; }  // RXD-22
+        public string RXD23 { get; set; }     // RXD-23
+        public string RXD24 { get; set; }  // RXD-24
+        public string RXD25 { get; set; }  // RXD-25
+        public string dosagetext { get; set; }   // RXD-26
+        public string RXD27 { get; set; }       // RXD-27 f_pharmacylocationcode (20digit)
+        public string RXD28 { get; set; }   // RXD-28 f_pharmacylocationdesc (100digit)
+        public Orderunitcode Orderunitcode { get; set; } = new Orderunitcode();   // RXD-29
+        public Usagecode Usagecode { get; set; } = new Usagecode();   // RXD-30
     }
-
+    
     public class Dispensegivecode
     {
-        public string Identifier { get; set; }   // RXD-2.1: Drug Identifier
-        public string DrugName { get; set; }     // RXD-2.2: Drug Name
-        public string DrugNamePrint { get; set; } // RXD-2.3: Drug Name Print
-        public string DrugNameThai { get; set; } // RXD-2.4: Drug Name Thai
+        public string Dispense { get; set; }        // RXD-2.1
+        public string UniqID { get; set; }      // RXD-2.2
+        public string RXD203 { get; set; }      // RXD-2.3
+        public string Identifier { get; set; }  // RXD-2.4
+        public string DrugName  { get; set; }     // RXD-2.5
+        public string DrugNamePrint { get; set; }  // RXD-2.6
+        public string DrugNameThai { get; set; }      // RXD-2.7
     }
-
     public class Modifystaff
     {
-        public string StaffCode { get; set; }   // RXD-5.1: Staff Code
-        public string StaffName { get; set; }   // RXD-5.2: Staff Name
-    }
+        public string StaffCode { get; set; }        // RXD-5.1
+        public string StaffName { get; set; }  // RXD-5.2
 
-    public class UsageUnit
+    }
+    public class Substand
     {
-        public string Code { get; set; }     // RXD-14.1: Usage Unit Code
-        public string Name { get; set; }     // RXD-14.2: Usage Unit Name
-        public string UnitName { get; set; } // RXD-14.3: Unit Name
-    }
+        public string RXD701 { get; set; }
+        public string Medicinalproperties { get; set; }
+        public string Labelhelp { get; set; }
+        public string RXD704 { get; set; }
+        public string Usageline1 { get; set; }
+        public string Usageline2 { get; set; }
+        public string Usageline3 { get; set; }
+        public string Noteprocessing { get; set; }
 
-    public class FrequencyInfo
+    }
+    public class Usageunit
     {
-        public string FrequencyID { get; set; }   // RXD-15.1: Frequency ID
-        public string FrequencyName { get; set; } // RXD-15.2: Frequency Name
+        public string ID { get; set; }        // RXD-11.1
+        public string Name { get; set; }  // RXD-11.2
     }
-
-    public class TimeInfo
+    public class Doctor
     {
-        public string TimeID { get; set; }   // RXD-16.1: Time ID
-        public string TimeName { get; set; } // RXD-16.2: Time Name
+        public string ID { get; set; }        // RXD-14.1
+        public string Name { get; set; }  // RXD-14.2
     }
-
-    public class DepartmentOrder
+    public class Orderunitcode
     {
-        public string DepartmentCode { get; set; } // RXD-18.1: Department Code
-        public string DepartmentName { get; set; } // RXD-18.2: Department Name
+        public string Nameeng { get; set; }        // RXD-29.1
+        public string Namethai { get; set; }  // RXD-29.2
     }
-
-    public class DoctorOrder
+    public class Usagecode
     {
-        public string DoctorCode { get; set; } // RXD-19.1: Doctor Code
-        public string DoctorName { get; set; } // RXD-19.2: Doctor Name
+        public string Instructioncode { get; set; }        // RXD-30.1
+        public string RXD3002 { get; set; }  // RXD-30.2
+        public string RXD3003 { get; set; }  // RXD-30.3
+        public string Frequencycode { get; set; }  // RXD-30.4
+        public string Frequencydesc { get; set; }  // RXD-30.5
+        public string RXD3006 { get; set; }  // RXD-30.6
+        public string RXD3007 { get; set; }  // RXD-30.7
     }
-
-    public class SubstandInfo
-    {
-        public string DrugProperty { get; set; } // RXD-20.1: Drug Property (สรรพคุณยา)
-        public string LabelHelp { get; set; }    // RXD-20.2: Label Help (ฉลากช่วย)
-    }
-
     // ================== RXR ==================
     public class RXR
     {
