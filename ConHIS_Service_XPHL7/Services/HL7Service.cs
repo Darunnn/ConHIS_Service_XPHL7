@@ -234,7 +234,8 @@ namespace ConHIS_Service_XPHL7.Services
                     ID = GetComponent(patientTypeComponents, 0),
                     Name = GetComponent(patientTypeComponents, 1)
                 },
-               FinancialClass = new FinancialClass
+                VisitNumber = GetField(fields, 19),
+                FinancialClass = new FinancialClass
                 {
                     ID = GetComponent(FinancialClassComponents, 0),
                     Name = GetComponent(FinancialClassComponents, 1)
@@ -585,10 +586,6 @@ namespace ConHIS_Service_XPHL7.Services
             return null;
         }
 
-        private string FormatDateTime(DateTime? dateTime)
-        {
-            return (!dateTime.HasValue) ? "" : dateTime.Value.ToString("yyyyMMddHHmmss");
-        }
 
         private int ParseInt(string value)
         {

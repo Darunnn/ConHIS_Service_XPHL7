@@ -285,7 +285,7 @@ namespace ConHIS_Service_XPHL7.Services
                 f_prioritycode = d?.prioritycode?? "",
                 f_prioritydesc = "",// ยังไม่เจอ field ใดใน HL7
                 f_hn = hl7?.PatientIdentification?.PatientIDExternal ?? "",
-                f_an = hl7?.CommonOrder?.FillerOrderNumber ?? "",
+                f_an = hl7?.PatientVisit?.VisitNumber??"",
                 f_vn = hl7?.PatientVisit?.VisitNumber??"",
                 f_title = (hl7?.PatientIdentification?.OfficialName != null)
                     ? $"{hl7.PatientIdentification.OfficialName.Suffix}".Trim()
@@ -298,7 +298,7 @@ namespace ConHIS_Service_XPHL7.Services
                                     hl7.PatientIdentification.OfficialName.LastName
                                 }.Where(x => !string.IsNullOrWhiteSpace(x)))
                                 : hl7?.CommonOrder?.EnteredBy ?? "",
-            f_sex = hl7?.PatientIdentification?.Sex ?? "",
+                f_sex = hl7?.PatientIdentification?.Sex ?? "",
                 f_patientdob = FormatDate(hl7?.PatientIdentification?.DateOfBirth, "yyyy-MM-dd"),
                 f_wardcode = hl7?.PatientVisit?.AssignedPatientLocation?.PointOfCare ?? "",
                 f_warddesc = hl7?.PatientVisit?.AssignedPatientLocation?.Room ?? "",// ยังไม่เจอ field ใดใน HL7
