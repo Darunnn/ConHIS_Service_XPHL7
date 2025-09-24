@@ -293,7 +293,7 @@ namespace ConHIS_Service_XPHL7.Models
         public OrderingProvider OrderingProvider { get; set; } = new OrderingProvider();
 
         // 13 Enterer’s Location (Not Used)
-        public EnterersLocation EnterersLocation { get; set; } = new EnterersLocation();
+        public string EnterersLocation { get; set; } 
 
         // 14 Call Back Phone Number (Not Used)
         public string CallBackPhoneNumber { get; set; }
@@ -355,12 +355,7 @@ namespace ConHIS_Service_XPHL7.Models
         public string OrderingProvider14 { get; set; }       // 12.15 
     }
 
-    public class EnterersLocation
-    {
-        public string ID { get; set; }        // 13.1 f_pharmacylocationcode (20digit)f_pharmacylocationdesc(100digit)
-
-        public string Name { get; set; }      // 13.2 f_pharmacylocationcode (20digit)f_pharmacylocationdesc(100digit)
-    }
+    
     // ================== AL1 ==================
     public class AL1
     {

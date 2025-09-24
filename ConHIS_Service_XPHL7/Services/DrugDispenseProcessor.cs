@@ -286,10 +286,20 @@ namespace ConHIS_Service_XPHL7.Services
                          : hl7?.CommonOrder?.OrderingProvider.Name ?? "",
          f_orderacceptdate = FormatDate(hl7?.CommonOrder.TransactionDateTime, "yyyy-MM-dd HH:mm:ss"),
          f_orderacceptfromip = (string)null,// ยังไม่เจอ field ใดใน HL7
-         f_pharmacylocationcode = hl7?.CommonOrder?.EnterersLocation?.ID ?? d?.Departmentcode ?? "",
-         f_pharmacylocationdesc = hl7?.CommonOrder?.EnterersLocation?.Name ?? d?.Departmentname ?? "",
-         f_prioritycode = d?.prioritycode ?? "",
-         f_prioritydesc = "",// ยังไม่เจอ field ใดใน HL7
+         f_pharmacylocationcode = !string.IsNullOrEmpty(d?.Departmentcode)
+    ? d.Departmentcode.Substring(0, Math.Min(d.Departmentcode.Length, 20))
+    : (!string.IsNullOrEmpty(hl7?.CommonOrder?.EnterersLocation)
+        ? hl7.CommonOrder.EnterersLocation.Substring(0, Math.Min(hl7.CommonOrder.EnterersLocation.Length, 20))
+        : ""),
+         f_pharmacylocationdesc = !string.IsNullOrEmpty(d?.Departmentname)
+    ? d.Departmentname.Substring(0, Math.Min(d.Departmentname.Length, 100))
+    : (!string.IsNullOrEmpty(hl7?.CommonOrder?.EnterersLocation)
+        ? hl7.CommonOrder.EnterersLocation.Substring(0, Math.Min(hl7.CommonOrder.EnterersLocation.Length, 100))
+        : ""),       
+         f_prioritycode = !string.IsNullOrEmpty(d?.prioritycode)
+    ? d.prioritycode.Substring(0, Math.Min(d.prioritycode.Length, 10)) : "",   
+         f_prioritydesc = !string.IsNullOrEmpty(d?.prioritycode)
+    ? d.prioritycode.Substring(0, Math.Min(d.prioritycode.Length, 50)) : "",
          f_hn = hl7?.PatientIdentification?.PatientIDExternal ?? "",
          f_an = hl7?.PatientVisit?.VisitNumber ?? "",
          f_vn = hl7?.PatientVisit?.VisitNumber ?? "",
@@ -323,7 +333,7 @@ namespace ConHIS_Service_XPHL7.Services
          f_orderunitcode = d?.Usageunit?.ID ?? "",
          f_orderunitdesc = d?.Usageunit?.Name ?? "",
          f_dosage = d?.Dose ?? 0,
-         f_dosageunit = "",// ยังไม่เจอ field ใดใน HL7
+         f_dosageunit = d?.Usageunit?.Name ?? "",
          f_dosagetext = d?.Strengthunit ?? "",
          f_drugformcode = d?.Dosageform ?? "",
          f_drugformdesc = "",// ยังไม่เจอ field ใดใน HL7
@@ -349,8 +359,12 @@ namespace ConHIS_Service_XPHL7.Services
          f_prn = "0",// ยังไม่เจอ field ใดใน HL7
          f_stat = "0",// ยังไม่เจอ field ใดใน HL7
          f_comment = (string)null,// ยังไม่เจอ field ใดใน HL7
-         f_tomachineno = r?.AdministrationDevice ?? "0",
-         f_ipd_order_recordno = (string)null,// ยังไม่เจอ field ใดใน HL7
+         f_tomachineno = r?.AdministrationDevice
+    ?? (!string.IsNullOrEmpty(d?.Actualdispense) &&
+        d.Actualdispense.IndexOf("proud", StringComparison.OrdinalIgnoreCase) >= 0
+            ? "2"
+            : "0"),
+     f_ipd_order_recordno = (string)null,// ยังไม่เจอ field ใดใน HL7
          f_status = hl7?.CommonOrder?.OrderControl == "NW" ? 0 :
                     hl7?.CommonOrder?.OrderControl == "RP" ? 1 : (int?)null,
      };

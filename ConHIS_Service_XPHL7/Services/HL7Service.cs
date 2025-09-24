@@ -320,11 +320,7 @@ namespace ConHIS_Service_XPHL7.Services
                     OrderingProvider13 = GetComponent(orderingProviderComponents, 13),
                     OrderingProvider14 = GetComponent(orderingProviderComponents, 14)
                 },
-                EnterersLocation = new EnterersLocation
-                {
-                    ID = GetComponent(enterersLocationComponents, 0),
-                    Name = GetComponent(enterersLocationComponents, 1)
-                },
+                EnterersLocation = GetField(fields, 13),
                 CallBackPhoneNumber = GetField(fields, 14),
                 OrderEffectiveDateTime = ParseDateTime(GetField(fields, 15)),
                 OrderControlCodeReason = GetField(fields, 16),
