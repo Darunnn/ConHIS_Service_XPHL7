@@ -383,8 +383,8 @@ namespace ConHIS_Service_XPHL7.Models
         public int ActualDispense { get; set; }              // RXD-4: Actual Dispense
         public Modifystaff Modifystaff { get; set; } = new Modifystaff(); // RXD-5: Modified Staff
         public string Dosageform  { get; set; }                          // RXD-6: Quantity Dispensed
-        public Substand Substand { get; set; } = new Substand();                        // RXD-7
-        public string RXD8 { get; set; }                 // RXD-8
+        public Substand Substand { get; set; } = new Substand();   // RXD-7
+        public string Actualdispense  { get; set; }                 // RXD-8
         public string prioritycode { get; set; }                // RXD-9
         public int Dose { get; set; }                // RXD-10
         public Usageunit Usageunit { get; set; } = new Usageunit();              // RXD-11
@@ -405,9 +405,9 @@ namespace ConHIS_Service_XPHL7.Models
         public string RXD23 { get; set; }     // RXD-23
         public string RXD24 { get; set; }  // RXD-24
         public string RXD25 { get; set; }  // RXD-25
-        public string dosagetext { get; set; }   // RXD-26
-        public string RXD27 { get; set; }       // RXD-27 f_pharmacylocationcode (20digit)
-        public string RXD28 { get; set; }   // RXD-28 f_pharmacylocationdesc (100digit)
+        public string Strengthunit  { get; set; }   // RXD-26 dosagetext
+        public string Departmentcode  { get; set; }       // RXD-27 f_pharmacylocationcode (20digit)
+        public string Departmentname  { get; set; }   // RXD-28 f_pharmacylocationdesc (100digit)
         public Orderunitcode Orderunitcode { get; set; } = new Orderunitcode();   // RXD-29
         public Usagecode Usagecode { get; set; } = new Usagecode();   // RXD-30
     }

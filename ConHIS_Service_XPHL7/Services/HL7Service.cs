@@ -1,6 +1,8 @@
-﻿using System;
+﻿using ConHIS_Service_XPHL7.Models;
+using System;
+using System.Collections.Generic;
+using System.Linq;
 using System.Text;
-using ConHIS_Service_XPHL7.Models;
 
 namespace ConHIS_Service_XPHL7.Services
 {
@@ -8,9 +10,9 @@ namespace ConHIS_Service_XPHL7.Services
     {
         private const string FIELD_SEPARATOR = "|";
         private const string COMPONENT_SEPARATOR = "^" ;
-        private const string ENTITY_SEPARATOR = ";" ;
-
        
+
+
         public HL7Message ParseHL7Message(string hl7Data)
         {
             try
@@ -27,7 +29,7 @@ namespace ConHIS_Service_XPHL7.Services
 
                     var segmentType = line.Substring(0, 3).ToUpperInvariant();
                     var fields = line.Split(FIELD_SEPARATOR[0]);
-                    
+                 
 
                     // Only parse MSH and PID segments; skip all other segments silently
                     switch (segmentType)
@@ -82,7 +84,7 @@ namespace ConHIS_Service_XPHL7.Services
                 throw new Exception($"Error parsing HL7 message: {ex.Message}", ex);
             }
         }
-
+        
         #region Parse Segments
         private MSH ParseMSH(string[] fields)
         {
@@ -347,19 +349,66 @@ namespace ConHIS_Service_XPHL7.Services
             };
         }
 
+        // แก้ไขเฉพาะจุดที่มีปัญหา - ใน ParseRXE และ ParseRXD methods
+
         private RXD ParseRXE(string[] fields)
         {
             var drugComponents = GetField(fields, 2).Split(COMPONENT_SEPARATOR[0]);
             var staffComponents = GetField(fields, 5).Split(COMPONENT_SEPARATOR[0]);
-            var SubstandComponents = GetField(fields, 7).Split(COMPONENT_SEPARATOR[0]);
-            var SubstandComponents2 = GetField(fields, 7).Split(ENTITY_SEPARATOR[0]);
-            var usageUnitComponents = GetField(fields, 11).Split(COMPONENT_SEPARATOR[0]);
-            var DoctorComponents = GetField(fields, 14).Split(COMPONENT_SEPARATOR[0]);
-            var OrderunitcodeComponents = GetField(fields, 29).Split(COMPONENT_SEPARATOR[0]);
-            var UsagecodeComponents = GetField(fields, 30).Split(COMPONENT_SEPARATOR[0]);
+
+            // **การแก้ไขหลัก: รวม field 7 ที่ถูกแยกโดย pipe**
+            string field7Combined = "";
+            List<string> adjustedFields = new List<string>(fields);
+
+            // หา field 7 และรวมกับ field ที่ถัดไป หากมี pipe ใน medicinal properties
+            if (fields.Length > 7)
+            {
+                field7Combined = GetField(fields, 7);
+
+                // ถ้า field 8 ไม่ใช่ตัวเลขหรือ keyword ที่คาดหวัง แสดงว่าเป็นส่วนต่อของ field 7
+                int fieldIndex = 8;
+                while (fieldIndex < fields.Length &&
+                       !string.IsNullOrEmpty(GetField(fields, fieldIndex)) &&
+                       !IsValidField8OrLater(GetField(fields, fieldIndex)))
+                {
+                    // รวม field นี้เข้ากับ field 7
+                    field7Combined += GetField(fields, fieldIndex);
+                    fieldIndex++;
+                }
+
+                // สร้าง array ใหม่โดยรวม field 7 และปรับลำดับที่เหลือ
+                adjustedFields.Clear();
+                for (int i = 0; i <= 6; i++)
+                {
+                    adjustedFields.Add(GetField(fields, i));
+                }
+                adjustedFields.Add(field7Combined); // field 7 ที่รวมแล้ว
+
+                // เพิ่ม field ที่เหลือ
+                for (int i = fieldIndex; i < fields.Length; i++)
+                {
+                    adjustedFields.Add(GetField(fields, i));
+                }
+            }
+
+            // ใช้ adjustedFields แทน fields
+            var adjustedFieldsArray = adjustedFields.ToArray();
+
+            // แยก components ของ field 7 ที่แก้ไขแล้ว
+            var SubstandComponents = adjustedFieldsArray[7].Split(COMPONENT_SEPARATOR[0]);
+            var usageParts = (GetComponent(SubstandComponents, 4) ?? "")
+                            .Split(new[] { ';' }, StringSplitOptions.RemoveEmptyEntries)
+                            .Select(p => p.Trim())
+                            .ToArray();
+
+            var usageUnitComponents = GetField(adjustedFieldsArray, 11).Split(COMPONENT_SEPARATOR[0]);
+            var DoctorComponents = GetField(adjustedFieldsArray, 14).Split(COMPONENT_SEPARATOR[0]);
+            var OrderunitcodeComponents = GetField(adjustedFieldsArray, 29).Split(COMPONENT_SEPARATOR[0]);
+            var UsagecodeComponents = GetField(adjustedFieldsArray, 30).Split(COMPONENT_SEPARATOR[0]);
+
             return new RXD
             {
-                QTY = ParseInt(GetField(fields, 1)),
+                QTY = ParseInt(GetField(adjustedFieldsArray, 1)),
                 Dispensegivecode = new Dispensegivecode
                 {
                     Dispense = GetComponent(drugComponents, 0),
@@ -369,61 +418,60 @@ namespace ConHIS_Service_XPHL7.Services
                     DrugName = GetComponent(drugComponents, 4),
                     DrugNamePrint = GetComponent(drugComponents, 5),
                     DrugNameThai = GetComponent(drugComponents, 6)
-                },//2
-                DateTimeDispensed = ParseDateTime(GetField(fields, 3)),
-                ActualDispense = ParseInt(GetField(fields, 4)),
+                },
+                DateTimeDispensed = ParseDateTime(GetField(adjustedFieldsArray, 3)),
+                ActualDispense = ParseInt(GetField(adjustedFieldsArray, 4)),
                 Modifystaff = new Modifystaff
                 {
                     StaffCode = GetComponent(staffComponents, 0),
                     StaffName = GetComponent(staffComponents, 1)
-                },//5
-                Dosageform = GetField(fields, 6),
+                },
+                Dosageform = GetField(adjustedFieldsArray, 6),
                 Substand = new Substand
                 {
                     RXD701 = GetComponent(SubstandComponents, 0),
-                    Medicinalproperties = GetComponent(SubstandComponents, 1),
+                    Medicinalproperties = GetComponent(SubstandComponents, 1), // ตอนนี้จะได้ "รีชมพูแผงทึบ"
                     Labelhelp = GetComponent(SubstandComponents, 2),
                     RXD704 = GetComponent(SubstandComponents, 3),
-                    Usageline1 = GetComponent(SubstandComponents2, 4),
-                    Usageline2 = GetComponent(SubstandComponents2, 5),
-                    Usageline3 = GetComponent(SubstandComponents2, 6),
-                    Noteprocessing = GetComponent(SubstandComponents, 7)
-
-                },//7
-                RXD8 = GetField(fields, 8),
-                prioritycode = GetField(fields, 9),
-                Dose = ParseInt(GetField(fields, 10)),
+                    Usageline1 = usageParts.Length > 0 ? usageParts[0] : "",
+                    Usageline2 = usageParts.Length > 1 ? usageParts[1] : "",
+                    Usageline3 = usageParts.Length > 2 ? usageParts[2] : "",
+                    Noteprocessing = GetComponent(SubstandComponents, 5)
+                },
+                Actualdispense = GetField(adjustedFieldsArray, 8),
+                prioritycode = GetField(adjustedFieldsArray, 9),
+                Dose = ParseInt(GetField(adjustedFieldsArray, 10)),
                 Usageunit = new Usageunit
                 {
                     ID = GetComponent(usageUnitComponents, 0),
                     Name = GetComponent(usageUnitComponents, 1)
-                },//11
-                RXD12 = GetField(fields, 12),
-                RXD13 = GetField(fields, 13),
+                },
+                RXD12 = GetField(adjustedFieldsArray, 12),
+                RXD13 = GetField(adjustedFieldsArray, 13),
                 Doctor = new Doctor
                 {
                     ID = GetComponent(DoctorComponents, 0),
                     Name = GetComponent(DoctorComponents, 1)
-                },//14
-                RXD15 = GetField(fields, 15),
-                RXD16 = GetField(fields, 16),
-                RXD17 = GetField(fields, 17),
-                Prescriptiondate = ParseDateTime(GetField(fields, 18)),
-                RXD19 = GetField(fields, 19),
-                RXD20 = GetField(fields, 20),
-                RXD21 = GetField(fields, 21),
-                RXD22 = GetField(fields, 22),
-                RXD23 = GetField(fields, 23),
-                RXD24 = GetField(fields, 24),
-                RXD25 = GetField(fields, 25),
-                dosagetext = GetField(fields, 26),
-                RXD27 = GetField(fields, 27),
-                RXD28 = GetField(fields, 28),
+                },
+                RXD15 = GetField(adjustedFieldsArray, 15),
+                RXD16 = GetField(adjustedFieldsArray, 16),
+                RXD17 = GetField(adjustedFieldsArray, 17),
+                Prescriptiondate = ParseDateTime(GetField(adjustedFieldsArray, 18)),
+                RXD19 = GetField(adjustedFieldsArray, 19),
+                RXD20 = GetField(adjustedFieldsArray, 20),
+                RXD21 = GetField(adjustedFieldsArray, 21),
+                RXD22 = GetField(adjustedFieldsArray, 22),
+                RXD23 = GetField(adjustedFieldsArray, 23),
+                RXD24 = GetField(adjustedFieldsArray, 24),
+                RXD25 = GetField(adjustedFieldsArray, 25),
+                Strengthunit = GetField(adjustedFieldsArray, 26),
+                Departmentcode = GetField(adjustedFieldsArray, 27),
+                Departmentname = GetField(adjustedFieldsArray, 28),
                 Orderunitcode = new Orderunitcode
                 {
                     Nameeng = GetComponent(OrderunitcodeComponents, 0),
                     Namethai = GetComponent(OrderunitcodeComponents, 1)
-                },//29
+                },
                 Usagecode = new Usagecode
                 {
                     Instructioncode = GetComponent(UsagecodeComponents, 0),
@@ -433,7 +481,7 @@ namespace ConHIS_Service_XPHL7.Services
                     Frequencydesc = GetComponent(UsagecodeComponents, 4),
                     RXD3006 = GetComponent(UsagecodeComponents, 5),
                     RXD3007 = GetComponent(UsagecodeComponents, 6)
-                },//30
+                },
                 IsRXE = true
             };
         }
@@ -441,15 +489,60 @@ namespace ConHIS_Service_XPHL7.Services
         {
             var drugComponents = GetField(fields, 2).Split(COMPONENT_SEPARATOR[0]);
             var staffComponents = GetField(fields, 5).Split(COMPONENT_SEPARATOR[0]);
-            var SubstandComponents = GetField(fields, 7).Split(COMPONENT_SEPARATOR[0]);
-            var SubstandComponents2 = GetField(fields, 7).Split(ENTITY_SEPARATOR[0]);
-            var usageUnitComponents = GetField(fields, 11).Split(COMPONENT_SEPARATOR[0]);
-            var DoctorComponents = GetField(fields, 14).Split(COMPONENT_SEPARATOR[0]);
-            var OrderunitcodeComponents = GetField(fields, 29).Split(COMPONENT_SEPARATOR[0]);
-            var UsagecodeComponents = GetField(fields, 30).Split(COMPONENT_SEPARATOR[0]);
+
+            // **การแก้ไขหลัก: รวม field 7 ที่ถูกแยกโดย pipe**
+            string field7Combined = "";
+            List<string> adjustedFields = new List<string>(fields);
+
+            // หา field 7 และรวมกับ field ที่ถัดไป หากมี pipe ใน medicinal properties
+            if (fields.Length > 7)
+            {
+                field7Combined = GetField(fields, 7);
+
+                // ถ้า field 8 ไม่ใช่ตัวเลขหรือ keyword ที่คาดหวัง แสดงว่าเป็นส่วนต่อของ field 7
+                int fieldIndex = 8;
+                while (fieldIndex < fields.Length &&
+                       !string.IsNullOrEmpty(GetField(fields, fieldIndex)) &&
+                       !IsValidField8OrLater(GetField(fields, fieldIndex)))
+                {
+                    // รวม field นี้เข้ากับ field 7
+                    field7Combined += GetField(fields, fieldIndex);
+                    fieldIndex++;
+                }
+
+                // สร้าง array ใหม่โดยรวม field 7 และปรับลำดับที่เหลือ
+                adjustedFields.Clear();
+                for (int i = 0; i <= 6; i++)
+                {
+                    adjustedFields.Add(GetField(fields, i));
+                }
+                adjustedFields.Add(field7Combined); // field 7 ที่รวมแล้ว
+
+                // เพิ่ม field ที่เหลือ
+                for (int i = fieldIndex; i < fields.Length; i++)
+                {
+                    adjustedFields.Add(GetField(fields, i));
+                }
+            }
+
+            // ใช้ adjustedFields แทน fields
+            var adjustedFieldsArray = adjustedFields.ToArray();
+
+            // แยก components ของ field 7 ที่แก้ไขแล้ว
+            var SubstandComponents = adjustedFieldsArray[7].Split(COMPONENT_SEPARATOR[0]);
+            var usageParts = (GetComponent(SubstandComponents, 4) ?? "")
+                            .Split(new[] { ';' }, StringSplitOptions.RemoveEmptyEntries)
+                            .Select(p => p.Trim())
+                            .ToArray();
+
+            var usageUnitComponents = GetField(adjustedFieldsArray, 11).Split(COMPONENT_SEPARATOR[0]);
+            var DoctorComponents = GetField(adjustedFieldsArray, 14).Split(COMPONENT_SEPARATOR[0]);
+            var OrderunitcodeComponents = GetField(adjustedFieldsArray, 29).Split(COMPONENT_SEPARATOR[0]);
+            var UsagecodeComponents = GetField(adjustedFieldsArray, 30).Split(COMPONENT_SEPARATOR[0]);
+
             return new RXD
             {
-                QTY = ParseInt(GetField(fields, 1)),
+                QTY = ParseInt(GetField(adjustedFieldsArray, 1)),
                 Dispensegivecode = new Dispensegivecode
                 {
                     Dispense = GetComponent(drugComponents, 0),
@@ -459,61 +552,60 @@ namespace ConHIS_Service_XPHL7.Services
                     DrugName = GetComponent(drugComponents, 4),
                     DrugNamePrint = GetComponent(drugComponents, 5),
                     DrugNameThai = GetComponent(drugComponents, 6)
-                },//2
-                DateTimeDispensed = ParseDateTime(GetField(fields, 3)),
-                ActualDispense = ParseInt(GetField(fields, 4)),
+                },
+                DateTimeDispensed = ParseDateTime(GetField(adjustedFieldsArray, 3)),
+                ActualDispense = ParseInt(GetField(adjustedFieldsArray, 4)),
                 Modifystaff = new Modifystaff
                 {
                     StaffCode = GetComponent(staffComponents, 0),
                     StaffName = GetComponent(staffComponents, 1)
-                },//5
-                Dosageform = GetField(fields, 6),
+                },
+                Dosageform = GetField(adjustedFieldsArray, 6),
                 Substand = new Substand
                 {
                     RXD701 = GetComponent(SubstandComponents, 0),
-                    Medicinalproperties = GetComponent(SubstandComponents, 1),
+                    Medicinalproperties = GetComponent(SubstandComponents, 1), // ตอนนี้จะได้ "รีชมพูแผงทึบ"
                     Labelhelp = GetComponent(SubstandComponents, 2),
                     RXD704 = GetComponent(SubstandComponents, 3),
-                    Usageline1 = GetComponent(SubstandComponents2, 4),
-                    Usageline2 = GetComponent(SubstandComponents2, 5),
-                    Usageline3 = GetComponent(SubstandComponents2, 6),
-                    Noteprocessing = GetComponent(SubstandComponents, 7)
-
-                },//7
-                RXD8 = GetField(fields, 8),
-                prioritycode = GetField(fields, 9),
-                Dose = ParseInt(GetField(fields, 10)),
+                    Usageline1 = usageParts.Length > 0 ? usageParts[0] : "",
+                    Usageline2 = usageParts.Length > 1 ? usageParts[1] : "",
+                    Usageline3 = usageParts.Length > 2 ? usageParts[2] : "",
+                    Noteprocessing = GetComponent(SubstandComponents, 5)
+                },
+                Actualdispense = GetField(adjustedFieldsArray, 8),
+                prioritycode = GetField(adjustedFieldsArray, 9),
+                Dose = ParseInt(GetField(adjustedFieldsArray, 10)),
                 Usageunit = new Usageunit
                 {
                     ID = GetComponent(usageUnitComponents, 0),
                     Name = GetComponent(usageUnitComponents, 1)
-                },//11
-                RXD12 = GetField(fields, 12),
-                RXD13 = GetField(fields, 13),
+                },
+                RXD12 = GetField(adjustedFieldsArray, 12),
+                RXD13 = GetField(adjustedFieldsArray, 13),
                 Doctor = new Doctor
                 {
                     ID = GetComponent(DoctorComponents, 0),
                     Name = GetComponent(DoctorComponents, 1)
-                },//14
-                RXD15 = GetField(fields, 15),
-                RXD16 = GetField(fields, 16),
-                RXD17 = GetField(fields, 17),
-                Prescriptiondate = ParseDateTime(GetField(fields, 18)),
-                RXD19 = GetField(fields, 19),
-                RXD20 = GetField(fields, 20),
-                RXD21 = GetField(fields, 21),
-                RXD22 = GetField(fields, 22),
-                RXD23 = GetField(fields, 23),
-                RXD24 = GetField(fields, 24),
-                RXD25 = GetField(fields, 25),
-                dosagetext = GetField(fields, 26),
-                RXD27 = GetField(fields, 27),
-                RXD28 = GetField(fields, 28),
+                },
+                RXD15 = GetField(adjustedFieldsArray, 15),
+                RXD16 = GetField(adjustedFieldsArray, 16),
+                RXD17 = GetField(adjustedFieldsArray, 17),
+                Prescriptiondate = ParseDateTime(GetField(adjustedFieldsArray, 18)),
+                RXD19 = GetField(adjustedFieldsArray, 19),
+                RXD20 = GetField(adjustedFieldsArray, 20),
+                RXD21 = GetField(adjustedFieldsArray, 21),
+                RXD22 = GetField(adjustedFieldsArray, 22),
+                RXD23 = GetField(adjustedFieldsArray, 23),
+                RXD24 = GetField(adjustedFieldsArray, 24),
+                RXD25 = GetField(adjustedFieldsArray, 25),
+                Strengthunit = GetField(adjustedFieldsArray, 26),
+                Departmentcode = GetField(adjustedFieldsArray, 27),
+                Departmentname = GetField(adjustedFieldsArray, 28),
                 Orderunitcode = new Orderunitcode
                 {
                     Nameeng = GetComponent(OrderunitcodeComponents, 0),
                     Namethai = GetComponent(OrderunitcodeComponents, 1)
-                },//29
+                },
                 Usagecode = new Usagecode
                 {
                     Instructioncode = GetComponent(UsagecodeComponents, 0),
@@ -523,11 +615,38 @@ namespace ConHIS_Service_XPHL7.Services
                     Frequencydesc = GetComponent(UsagecodeComponents, 4),
                     RXD3006 = GetComponent(UsagecodeComponents, 5),
                     RXD3007 = GetComponent(UsagecodeComponents, 6)
-                },//30
+                },
                 IsRXE = true
             };
         }
-       
+
+        // Helper method เพื่อตรวจสอบว่า field ที่กำลังดูเป็น field ใหม่จริงหรือไม่
+        private bool IsValidField8OrLater(string fieldValue)
+        {
+            if (string.IsNullOrEmpty(fieldValue)) return true;
+
+            // ตรวจสอบรูปแบบที่คาดหวังสำหรับ field 8+ ของ RXE/RXD
+            // เช่น field 8 มักจะเป็นค่าว่างหรือตัวเลข
+            // field 9 มักจะเป็น "PROUD" หรือ priority code อื่น
+
+            // หาก field นี้มี ^ แสดงว่าน่าจะเป็นส่วนต่อของ field 7
+            if (fieldValue.StartsWith("^")) return false;
+
+            // หาก field นี้มีรูปแบบของ component (มี ^^) แสดงว่าน่าจะเป็นส่วนต่อของ field 7  
+            if (fieldValue.Contains("^^")) return false;
+
+            // หาก field นี้เป็น "PROUD" หรือคำที่คาดหวัง แสดงว่าเป็น field ใหม่
+            if (fieldValue.Equals("PROUD") || fieldValue.All(char.IsDigit)) return true;
+
+            // หาก field นี้มีรูปแบบของ usage instruction แสดงว่าน่าจะเป็นส่วนต่อของ field 7
+            if (fieldValue.Contains("รับประทาน") || fieldValue.Contains("เม็ด") || fieldValue.Contains("ครั้ง")) return false;
+
+            return true;
+        }
+
+        // ใช้ method เดียวกันสำหรับ ParseRXD โดยเปลี่ยน IsRXE = false
+        
+
 
 
         private RXR ParseRXR(string[] fields)
@@ -575,13 +694,18 @@ namespace ConHIS_Service_XPHL7.Services
 
             var provider = System.Globalization.CultureInfo.InvariantCulture;
 
-            if (DateTime.TryParseExact(dateTimeStr, "yyyyMMddHHmmss", provider,
-                System.Globalization.DateTimeStyles.None, out DateTime result))
-                return result;
+            string[] formats =
+            {
+                     "yyyyMMddHHmmss",   // เช่น 20240304084624
+                      "yyyyMMdd",         // เช่น 20240304
+                     "yyyyMMddHH:mm:ss"  // เช่น 2024030408:46:24
+                 };
 
-            if (DateTime.TryParseExact(dateTimeStr, "yyyyMMdd", provider,
-                System.Globalization.DateTimeStyles.None, out result))
+            if (DateTime.TryParseExact(dateTimeStr, formats, provider,
+                System.Globalization.DateTimeStyles.None, out DateTime result))
+            {
                 return result;
+            }
 
             return null;
         }
@@ -592,10 +716,7 @@ namespace ConHIS_Service_XPHL7.Services
             return int.TryParse(value, out int result) ? result : 0;
         }
 
-        private decimal ParseDecimal(string value)
-        {
-            return decimal.TryParse(value, out decimal result) ? result : 0;
-        }
+       
         #endregion
     }
 }

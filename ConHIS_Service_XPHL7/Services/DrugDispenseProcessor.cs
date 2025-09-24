@@ -257,17 +257,22 @@ namespace ConHIS_Service_XPHL7.Services
             int totalPrescriptions = hl7?.PharmacyDispense?.Count() ?? 0;
 
             // ✅ map ทุก PharmacyDispense พร้อม seq numbering
-            var prescriptions = hl7?.PharmacyDispense?.Select((d, index) =>
-                                hl7?.RouteInfo?.Select((r) =>
-                                hl7?.Notes?.Select((n) => new
-            {
-                UniqID = d?.Dispensegivecode?.UniqID ?? "",
+            var prescriptions = hl7?.PharmacyDispense?
+     .Select((d, index) =>
+     {
+         // หา RXR ที่ match กับ drug
+         var r = hl7?.RouteInfo?.ElementAtOrDefault(index);
+         var n = hl7?.Notes?.ElementAtOrDefault(index);
+
+         return new
+     {
+                UniqID = $"{d?.Dispensegivecode?.UniqID}-{FormatDate(d?.DateTimeDispensed, "yyyyMMdd")}" ?? "",
                 f_prescriptionno = hl7?.CommonOrder?.PlacerOrderNumber ?? "",
-                f_seq = n?.SetID??index+1,
+                f_seq =  n?.SetID ?? (index + 1),
                 f_seqmax = totalPrescriptions,  // ยังไม่เจอ field ใดใน HL7
                 f_prescriptiondate = FormatDate(d?.Prescriptiondate, "yyyyMMdd"),
                 f_ordercreatedate = FormatDate(hl7?.CommonOrder.TransactionDateTime, "yyyy-MM-dd HH:mm:ss"),
-                f_ordertargetdate = FormatDate(headerDt, "yyyy-MM-dd"),// ยังไม่เจอ field ใดใน HL7
+                f_ordertargetdate = "",// ยังไม่เจอ field ใดใน HL7 FormatDate(headerDt, "yyyy-MM-dd")
                 f_ordertargettime = (string)null,// ยังไม่เจอ field ใดใน HL7
                 f_doctorcode = d?.Doctor?.ID ?? "",
                 f_doctorname = d?.Doctor?.Name ?? "",
@@ -280,8 +285,8 @@ namespace ConHIS_Service_XPHL7.Services
                                 : hl7?.CommonOrder?.OrderingProvider.Name ?? "",                                              
                 f_orderacceptdate = FormatDate(hl7?.CommonOrder.TransactionDateTime, "yyyy-MM-dd HH:mm:ss"),
                 f_orderacceptfromip = (string)null,// ยังไม่เจอ field ใดใน HL7
-                f_pharmacylocationcode = hl7?.CommonOrder?.EnterersLocation?.ID ?? d?.RXD27 ?? "",
-                f_pharmacylocationdesc = hl7?.CommonOrder?.EnterersLocation?.Name ?? d?.RXD28 ?? "",
+                f_pharmacylocationcode = hl7?.CommonOrder?.EnterersLocation?.ID ?? d?.Departmentcode ?? "",
+                f_pharmacylocationdesc = hl7?.CommonOrder?.EnterersLocation?.Name ?? d?.Departmentname ?? "",
                 f_prioritycode = d?.prioritycode?? "",
                 f_prioritydesc = "",// ยังไม่เจอ field ใดใน HL7
                 f_hn = hl7?.PatientIdentification?.PatientIDExternal ?? "",
@@ -301,11 +306,11 @@ namespace ConHIS_Service_XPHL7.Services
                 f_sex = hl7?.PatientIdentification?.Sex ?? "",
                 f_patientdob = FormatDate(hl7?.PatientIdentification?.DateOfBirth, "yyyy-MM-dd"),
                 f_wardcode = hl7?.PatientVisit?.AssignedPatientLocation?.PointOfCare ?? "",
-                f_warddesc = hl7?.PatientVisit?.AssignedPatientLocation?.Room ?? "",// ยังไม่เจอ field ใดใน HL7
+                f_warddesc = "",// ยังไม่เจอ field ใดใน HL7
                 f_roomcode = "",// ยังไม่เจอ field ใดใน HL7
                 f_roomdesc =  "",// ยังไม่เจอ field ใดใน HL7
                 f_bedcode = "",// ยังไม่เจอ field ใดใน HL7
-                f_beddesc = hl7?.PatientVisit?.AssignedPatientLocation?.Bed ?? "",// ยังไม่เจอ field ใดใน HL7
+                f_beddesc =  "",// ยังไม่เจอ field ใดใน HL7
                 f_right = $"{hl7.PatientVisit?.FinancialClass.ID}  {hl7.PatientVisit?.FinancialClass.Name}" ?? "",
                 f_drugallergy = (string)null,// ยังไม่เจอ field ใดใน HL7
                 f_dianosis = (string)null,// ยังไม่เจอ field ใดใน HL7
@@ -318,7 +323,7 @@ namespace ConHIS_Service_XPHL7.Services
                 f_orderunitdesc = d?.Usageunit?.Name ?? "",
                 f_dosage = d?.Dose ?? 0,
                 f_dosageunit =  "",// ยังไม่เจอ field ใดใน HL7
-                f_dosagetext = d?.dosagetext ??"",
+                f_dosagetext = d?.Strengthunit ?? "",
                 f_drugformcode = d?.Dosageform ?? "",
                 f_drugformdesc =  "",// ยังไม่เจอ field ใดใน HL7
                 f_HAD = "0",// ยังไม่เจอ field ใดใน HL7
@@ -343,12 +348,13 @@ namespace ConHIS_Service_XPHL7.Services
                 f_prn = "0",// ยังไม่เจอ field ใดใน HL7
                 f_stat = "0",// ยังไม่เจอ field ใดใน HL7
                 f_comment = (string)null,// ยังไม่เจอ field ใดใน HL7
-                f_tomachineno = r?.AdministrationDevice??"",
+                f_tomachineno = r?.AdministrationDevice??"0",
                 f_ipd_order_recordno = (string)null,// ยังไม่เจอ field ใดใน HL7
                 f_status = hl7?.CommonOrder?.OrderControl == "NW" ? 0 :
                            hl7?.CommonOrder?.OrderControl == "RP" ? 1 : (int?)null,
-            }))).ToArray();
-
+     };
+     })
+    .ToArray();
             return new { data = prescriptions ?? Array.Empty<object>() };
         }
 
