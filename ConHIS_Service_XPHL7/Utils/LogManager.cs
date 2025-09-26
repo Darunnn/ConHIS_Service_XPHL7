@@ -1,8 +1,9 @@
-﻿using System;
-using System.IO;
-using System.Diagnostics;
+﻿using ConHIS_Service_XPHL7.Configuration;
 using Newtonsoft.Json;
-using ConHIS_Service_XPHL7.Configuration;
+using System;
+using System.Collections.Generic;
+using System.Diagnostics;
+using System.IO;
 
 namespace ConHIS_Service_XPHL7.Utils
 {
@@ -92,6 +93,7 @@ namespace ConHIS_Service_XPHL7.Utils
             }
         }
 
+        
         public void LogError(string message, Exception ex = null)
         {
             var fullMessage = ex != null ? $"{message} - Exception: {ex}" : message;
