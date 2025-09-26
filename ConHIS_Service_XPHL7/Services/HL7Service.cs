@@ -400,8 +400,34 @@ namespace ConHIS_Service_XPHL7.Services
             var usageUnitComponents = GetField(adjustedFieldsArray, 11).Split(COMPONENT_SEPARATOR[0]);
             var DoctorComponents = GetField(adjustedFieldsArray, 14).Split(COMPONENT_SEPARATOR[0]);
             var OrderunitcodeComponents = GetField(adjustedFieldsArray, 29).Split(COMPONENT_SEPARATOR[0]);
-            var UsagecodeComponents = GetField(adjustedFieldsArray, 30).Split(COMPONENT_SEPARATOR[0]);
+            //var UsagecodeComponents = GetField(adjustedFieldsArray, 30).Split(COMPONENT_SEPARATOR[0]);
+            var departmentName = GetField(adjustedFieldsArray, 28);
+            var rxd31 = GetField(adjustedFieldsArray, 31);
 
+            if (departmentName == "Continue")
+            {
+                rxd31 = departmentName;   // ย้ายค่าไป RXD31
+                departmentName = "";    // หรือ "" ถ้าอยากเคลียร์
+            }
+
+            var usagecodeField = GetField(adjustedFieldsArray, 30);
+            string rxd33 = GetField(adjustedFieldsArray, 33);
+            string[] UsagecodeComponents;
+            if (usagecodeField.Contains("^"))
+            {
+                UsagecodeComponents = usagecodeField.Split('^');
+            }
+            else if (usagecodeField.Contains(";"))
+            {
+                UsagecodeComponents = usagecodeField.Split(';');
+            }
+            else
+            {
+                // ถ้าไม่เจอ ^ และ ; → ย้ายไป RXD33
+                rxd33 = usagecodeField;
+                UsagecodeComponents = Array.Empty<string>(); // ป้องกัน null
+                usagecodeField = null;
+            }
             return new RXD
             {
                 QTY = ParseInt(GetField(adjustedFieldsArray, 1)),
@@ -462,7 +488,8 @@ namespace ConHIS_Service_XPHL7.Services
                 RXD25 = GetField(adjustedFieldsArray, 25),
                 Strengthunit = GetField(adjustedFieldsArray, 26),
                 Departmentcode = GetField(adjustedFieldsArray, 27),
-                Departmentname = GetField(adjustedFieldsArray, 28),
+                Departmentname = departmentName,
+
                 Orderunitcode = new Orderunitcode
                 {
                     Nameeng = GetComponent(OrderunitcodeComponents, 0),
@@ -478,6 +505,9 @@ namespace ConHIS_Service_XPHL7.Services
                     RXD3006 = GetComponent(UsagecodeComponents, 5),
                     RXD3007 = GetComponent(UsagecodeComponents, 6)
                 },
+                RXD31 = rxd31,
+                RXD32 = GetField(adjustedFieldsArray, 32),
+                RXD33 = rxd33,
                 IsRXE = true
             };
         }
@@ -535,6 +565,16 @@ namespace ConHIS_Service_XPHL7.Services
             var DoctorComponents = GetField(adjustedFieldsArray, 14).Split(COMPONENT_SEPARATOR[0]);
             var OrderunitcodeComponents = GetField(adjustedFieldsArray, 29).Split(COMPONENT_SEPARATOR[0]);
             var UsagecodeComponents = GetField(adjustedFieldsArray, 30).Split(COMPONENT_SEPARATOR[0]);
+            var departmentName = GetField(adjustedFieldsArray, 28);
+            var rxd31 = GetField(adjustedFieldsArray, 31);
+
+            if (departmentName == "Continue")
+            {
+                rxd31 = departmentName;   // ย้ายค่าไป RXD31
+                departmentName = "";    // หรือ "" ถ้าอยากเคลียร์
+            }
+
+           
 
             return new RXD
             {
@@ -596,7 +636,8 @@ namespace ConHIS_Service_XPHL7.Services
                 RXD25 = GetField(adjustedFieldsArray, 25),
                 Strengthunit = GetField(adjustedFieldsArray, 26),
                 Departmentcode = GetField(adjustedFieldsArray, 27),
-                Departmentname = GetField(adjustedFieldsArray, 28),
+                Departmentname = departmentName,
+                
                 Orderunitcode = new Orderunitcode
                 {
                     Nameeng = GetComponent(OrderunitcodeComponents, 0),
@@ -612,6 +653,9 @@ namespace ConHIS_Service_XPHL7.Services
                     RXD3006 = GetComponent(UsagecodeComponents, 5),
                     RXD3007 = GetComponent(UsagecodeComponents, 6)
                 },
+                RXD31 = rxd31,
+                RXD32 = GetField(adjustedFieldsArray, 32),
+                RXD33 = GetField(adjustedFieldsArray, 33),
                 IsRXE = true
             };
         }

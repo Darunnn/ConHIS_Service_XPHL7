@@ -297,7 +297,7 @@ namespace ConHIS_Service_XPHL7.Services
         ? hl7.CommonOrder.EnterersLocation.Substring(0, Math.Min(hl7.CommonOrder.EnterersLocation.Length, 100))
         : ""),       
          f_prioritycode = !string.IsNullOrEmpty(d?.prioritycode)
-    ? d.prioritycode.Substring(0, Math.Min(d.prioritycode.Length, 10)) : "",   
+    ? d.prioritycode.Substring(0, Math.Min(d.prioritycode.Length, 10)) : d?.RXD31??"",   
          f_prioritydesc = !string.IsNullOrEmpty(d?.prioritycode)
     ? d.prioritycode.Substring(0, Math.Min(d.prioritycode.Length, 50)) : "",
          f_hn = hl7?.PatientIdentification?.PatientIDExternal ?? "",
@@ -355,8 +355,10 @@ namespace ConHIS_Service_XPHL7.Services
          f_frequencytime = (string)null,// ยังไม่เจอ field ใดใน HL7
          f_dosagedispense = (string)null,// ยังไม่เจอ field ใดใน HL7
          f_dayofweek = (string)null,// ยังไม่เจอ field ใดใน HL7
-         f_noteprocessing = d?.Substand?.Noteprocessing ?? "",
-         f_prn = "0",// ยังไม่เจอ field ใดใน HL7
+         f_noteprocessing = !string.IsNullOrWhiteSpace(d?.Substand?.Noteprocessing)
+    ? d.Substand.Noteprocessing
+    : d?.RXD33 ?? "",
+     f_prn = "0",// ยังไม่เจอ field ใดใน HL7
          f_stat = "0",// ยังไม่เจอ field ใดใน HL7
          f_comment = (string)null,// ยังไม่เจอ field ใดใน HL7
          f_tomachineno = r?.AdministrationDevice

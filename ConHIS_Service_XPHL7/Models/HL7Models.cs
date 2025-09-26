@@ -405,6 +405,10 @@ namespace ConHIS_Service_XPHL7.Models
         public string Departmentname  { get; set; }   // RXD-28 f_pharmacylocationdesc (100digit)
         public Orderunitcode Orderunitcode { get; set; } = new Orderunitcode();   // RXD-29
         public Usagecode Usagecode { get; set; } = new Usagecode();   // RXD-30
+        //HL7 2024 เพิ่ม RXD 31-33
+        public string RXD31 { get; set; }  // RXD-31
+        public string RXD32 { get; set; }  // RXD-32
+        public string RXD33 { get; set; }  // RXD-33
     }
     
     public class Dispensegivecode
