@@ -55,7 +55,7 @@ namespace ConHIS_Service_XPHL7.Services
                 logAction($"Error in ProcessPendingOrders: {ex.Message}");
             }
         }
-
+       
         private void ProcessSingleOrder(DrugDispenseipd data, Action<string> logAction)
         {
             // Convert byte array to string
@@ -165,91 +165,22 @@ namespace ConHIS_Service_XPHL7.Services
                
             }
         }
-        // Response model class
+        
         public class ApiResponse
         {
             public string UniqID { get; set; }
             public bool Status { get; set; }
             public string Message { get; set; }
         }
-        //private void ProcessNewOrder(DrugDispenseipd data, HL7Message hl7Message)
-        //{
-        //    _logger.LogInfo($"Processing new order for prescription: {data.PrescId}");
-
-        //    var apiUrl = ConHIS_Service_XPHL7.Configuration.AppConfig.ApiEndpoint;
-        //    var apiMethod = "POST";
-        //    //var bodyObj = CreatePrescriptionBody(hl7Message, data);
-        //    var bodyObj = TestCreatePrescriptionBody(hl7Message, data);
-        //    var bodyJson = JsonConvert.SerializeObject(bodyObj, Formatting.Indented);
-
-        //    // ✅ ตรวจสอบชนิดข้อมูลของแต่ละ field
-        //    //if (bodyObj != null)
-        //    //{
-        //    //    foreach (var prescription in (IEnumerable<object>)bodyObj.GetType().GetProperty("data").GetValue(bodyObj))
-        //    //    {
-        //    //        var props = prescription.GetType().GetProperties();
-        //    //        foreach (var p in props)
-        //    //        {
-        //    //            var val = p.GetValue(prescription);
-        //    //            string typeName = val == null ? "null" : val.GetType().Name;
-        //    //            _logger.LogInfo($"Field: {p.Name}, Value: {val ?? "null"}, Type: {typeName}");
-        //    //        }
-        //    //    }
-        //    //}
-
-        //    var apiRequestData = new
-        //    {
-        //        Url = apiUrl,
-        //        Method = apiMethod,
-        //        Body = bodyObj,
-        //        Timestamp = DateTime.Now
-        //    };
-
-        //    _logger.LogInfo($"API URL: {apiUrl}");
-        //    _logger.LogInfo($"API Method: {apiMethod}");
-        //    _logger.LogInfo($"API Body: {bodyJson}");
-
-        //    // ส่ง API จริงและรับ Response
-        //    try
-        //    {
-        //        var response = _apiService.SendToMiddlewareWithResponse(bodyObj);
-        //        _logger.LogInfo($"API Response: {response}");
-
-        //        // Parse response เพื่อตรวจสอบสถานะ
-        //        if (!string.IsNullOrEmpty(response))
-        //        {
-        //            var responseArray = JsonConvert.DeserializeObject<ApiResponse[]>(response);
-        //            if (responseArray != null && responseArray.Length > 0)
-        //            {
-        //                var firstResponse = responseArray[0];
-        //                _logger.LogInfo($"UniqID: {firstResponse.UniqID}, Status: {firstResponse.Status}, Message: {firstResponse.Message}");
-
-        //                if (firstResponse.Status)
-        //                {
-        //                    _logger.LogInfo($"Successfully processed order: {data.PrescId}, UniqID: {firstResponse.UniqID}");
-        //                }
-        //                else
-        //                {
-        //                    _logger.LogError($"Order processing failed: {data.PrescId}, Message: {firstResponse.Message}");
-        //                    throw new Exception($"Order processing failed: {firstResponse.Message}");
-        //                }
-        //            }
-        //        }
-        //    }
-        //    catch (Exception ex)
-        //    {
-        //        _logger.LogError($"Failed to send data to middleware API for new order: {data.PrescId}", ex);
-        //        throw new Exception($"Failed to send data to middleware API: {ex.Message}");
-        //    }
-        //}
+        
         private void ProcessNewOrder(DrugDispenseipd data, HL7Message hl7Message)
         {
             _logger.LogInfo($"Processing new order for prescription: {data.PrescId}");
 
             var apiUrl = ConHIS_Service_XPHL7.Configuration.AppConfig.ApiEndpoint;
             var apiMethod = "POST";
-            //var bodyObj = CreatePrescriptionBody(hl7Message, data);
-            var bodyObj = TestCreatePrescriptionBody(hl7Message, data);
+            var bodyObj = CreatePrescriptionBody(hl7Message, data);
+            
 
 
 
@@ -334,31 +265,50 @@ namespace ConHIS_Service_XPHL7.Services
             }
         }
 
-      
         private void ProcessReplaceOrder(DrugDispenseipd data, HL7Message hl7Message)
         {
             _logger.LogInfo($"Processing replace order for prescription: {data.PrescId}");
-
             var apiUrl = ConHIS_Service_XPHL7.Configuration.AppConfig.ApiEndpoint;
             var apiMethod = "POST";
-            //var bodyObj = CreatePrescriptionBody(hl7Message, data);
-            var bodyObj = TestCreatePrescriptionBody(hl7Message, data);
+            var bodyObj = CreatePrescriptionBody(hl7Message, data);
+
+
+
+
             var bodyJson = JsonConvert.SerializeObject(bodyObj, Formatting.Indented);
 
             // ✅ ตรวจสอบชนิดข้อมูลของแต่ละ field
-            //if (bodyObj != null)
-            //{
-            //    foreach (var prescription in (IEnumerable<object>)bodyObj.GetType().GetProperty("data").GetValue(bodyObj))
-            //    {
-            //        var props = prescription.GetType().GetProperties();
-            //        foreach (var p in props)
-            //        {
-            //            var val = p.GetValue(prescription);
-            //            string typeName = val == null ? "null" : val.GetType().Name;
-            //            _logger.LogInfo($"Field: {p.Name}, Value: {val ?? "null"}, Type: {typeName}");
-            //        }
-            //    }
-            //}
+            if (bodyObj != null)
+            {
+                _logger.LogInfo("=== Field Type and Length Analysis ===");
+
+                foreach (var prescription in (IEnumerable<object>)bodyObj.GetType().GetProperty("data").GetValue(bodyObj))
+                {
+                    var props = prescription.GetType().GetProperties();
+                    foreach (var p in props)
+                    {
+                        var val = p.GetValue(prescription);
+                        string typeName = val == null ? "null" : val.GetType().Name;
+                        string valueStr = val?.ToString() ?? "null";
+                        int length = val == null ? 0 : valueStr.Length;
+
+                        // เน้นการแสดง field ที่มีความยาวมาก
+                        string lengthIndicator = length > 100 ? " 🔴 LONG" :
+                                               length > 50 ? " 🟡 MEDIUM" :
+                                               length > 0 ? " 🟢 SHORT" : "";
+
+                        _logger.LogInfo($"Field: {p.Name}, Type: {typeName}, Length: {length}{lengthIndicator}, Value: {(length > 100 ? valueStr.Substring(0, 100) + "..." : valueStr)}");
+
+                        // แจ้งเตือนพิเศษสำหรับ field ที่อาจเป็นปัญหา
+                        if (length > 200)
+                        {
+                            _logger.LogWarning($"⚠️ ATTENTION: Field '{p.Name}' is very long ({length} chars) - may cause database issues");
+                        }
+                    }
+                }
+
+                _logger.LogInfo("=== End Field Analysis ===");
+            }
 
             var apiRequestData = new
             {
@@ -405,10 +355,21 @@ namespace ConHIS_Service_XPHL7.Services
                 throw new Exception($"Failed to send data to middleware API: {ex.Message}");
             }
         }
+      
 
-        private object TestCreatePrescriptionBody(HL7Message hl7, DrugDispenseipd data)
+        
+        private object CreatePrescriptionBody(HL7Message hl7, DrugDispenseipd data)
         {
+          
+            string FormatDate(DateTime? dt, string fmt)
+            {
+                return (dt.HasValue && dt.Value != DateTime.MinValue) ? dt.Value.ToString(fmt) : null;
+            }
 
+            DateTime? headerDt = hl7?.MessageHeader != null ? (DateTime?)hl7.MessageHeader.MessageDateTime : null;
+
+
+            // คำนวณจำนวนใบยาทั้งหมด
             int totalPrescriptions = hl7?.PharmacyDispense?.Count() ?? 0;
 
             // ✅ map ทุก PharmacyDispense พร้อม seq numbering
@@ -421,210 +382,115 @@ namespace ConHIS_Service_XPHL7.Services
 
      return new
      {
-         UniqID = $"492681-20250917{index + 1}",
-         f_prescriptionno ="945965",
-         f_seq = (index + 1),
-         f_seqmax = totalPrescriptions, 
-         f_prescriptiondate = "20250917",
-         f_ordercreatedate = "2025-09-17 11:46:20",
-         f_ordertargetdate = "2025-09-17",
-         f_ordertargettime = (string)null,
-         f_doctorcode = "1109",
-         f_doctorname = "นพ.พร ชัชวาลย์",
-         f_useracceptby ="น.ส.นันทยา บุบผาวาส",
-         f_orderacceptdate ="2025-09-17 11:46:20",
-         f_orderacceptfromip = (string)null,
-         f_pharmacylocationcode = "468",
-         f_pharmacylocationdesc="ห้องจ่ายยาผู้ป่วยในตึก 8 ชั้น",
-         f_prioritycode ="C",
-         f_prioritydesc = "Continue",
-         f_hn ="000462776",
-         f_an ="680042693",
-         f_vn ="680042693",
-         f_title = "นาย",
-         f_patientname ="นายบุญเริง อุปฌากิจ",
-         f_sex ="M",
-         f_patientdob ="1948-0615",
-         f_wardcode ="33",
-         f_warddesc = "0206 ศัลยกรรมอุบัติเหตุ",
-         f_roomcode = "test",
-         f_roomdesc = "test",
-         f_bedcode = (string)null,
-         f_beddesc = (string)null,
-         f_right = "พรบ.รถ-ชำระเงิน",
+         UniqID = $"{d?.Dispensegivecode?.UniqID ?? ""}-{FormatDate(d?.Prescriptiondate, "yyyyMMdd") ?? ""}",
+         f_prescriptionno = hl7?.CommonOrder?.PlacerOrderNumber ?? "",
+         f_seq = n?.SetID ?? (index + 1),
+         f_seqmax = totalPrescriptions,  // ยังไม่เจอ field ใดใน HL7
+         f_prescriptiondate = FormatDate(d?.Prescriptiondate, "yyyyMMdd"),
+         f_ordercreatedate = FormatDate(hl7?.CommonOrder.TransactionDateTime, "yyyy-MM-dd HH:mm:ss"),
+         f_ordertargetdate = FormatDate(headerDt, "yyyy-MM-dd"),// ยังไม่เจอ field ใดใน HL7 
+         f_ordertargettime = (string)null,// ยังไม่เจอ field ใดใน HL7
+         f_doctorcode = d?.Doctor?.ID ?? "",
+         f_doctorname = d?.Doctor?.Name ?? "",
+         f_useracceptby = (d?.Modifystaff != null)
+                           ? string.Join(" ", new[]
+                         {
+                            d.Modifystaff.StaffCode,
+                            d.Modifystaff.StaffName
+                         }.Where(x => !string.IsNullOrWhiteSpace(x)))
+                         : hl7?.CommonOrder?.OrderingProvider.Name ?? "",
+         f_orderacceptdate = FormatDate(hl7?.CommonOrder.TransactionDateTime, "yyyy-MM-dd HH:mm:ss"),
+         f_orderacceptfromip = (string)null,// ยังไม่เจอ field ใดใน HL7
+         f_pharmacylocationcode = !string.IsNullOrEmpty(d?.Departmentcode)
+    ? d.Departmentcode.Substring(0, Math.Min(d.Departmentcode.Length, 20))
+    : (!string.IsNullOrEmpty(hl7?.CommonOrder?.EnterersLocation)
+        ? hl7.CommonOrder.EnterersLocation.Substring(0, Math.Min(hl7.CommonOrder.EnterersLocation.Length, 20))
+        : ""),
+         f_pharmacylocationdesc = !string.IsNullOrEmpty(d?.Departmentname)
+    ? d.Departmentname.Substring(0, Math.Min(d.Departmentname.Length, 100))
+    : (!string.IsNullOrEmpty(hl7?.CommonOrder?.EnterersLocation)
+        ? hl7.CommonOrder.EnterersLocation.Substring(0, Math.Min(hl7.CommonOrder.EnterersLocation.Length, 100))
+        : ""),
+         f_prioritycode = !string.IsNullOrEmpty(d?.prioritycode)
+    ? d.prioritycode.Substring(0, Math.Min(d.prioritycode.Length, 10)) : d?.RXD31 ?? "",
+         f_prioritydesc = !string.IsNullOrEmpty(d?.prioritycode)
+    ? d.prioritycode.Substring(0, Math.Min(d.prioritycode.Length, 50)) : "",
+         f_hn = hl7?.PatientIdentification?.PatientIDExternal ?? "",
+         f_an = hl7?.PatientVisit?.VisitNumber ?? "",
+         f_vn = hl7?.PatientVisit?.VisitNumber ?? "",
+         f_title = (hl7?.PatientIdentification?.OfficialName != null)
+             ? $"{hl7.PatientIdentification.OfficialName.Suffix}".Trim()
+             : "",
+         f_patientname = (hl7?.PatientIdentification?.OfficialName != null)
+                         ? string.Join(" ", new[]
+                         {
+                            hl7.PatientIdentification.OfficialName.FirstName,
+                            hl7.PatientIdentification.OfficialName.MiddleName,
+                            hl7.PatientIdentification.OfficialName.LastName
+                         }.Where(x => !string.IsNullOrWhiteSpace(x)))
+                         : hl7?.CommonOrder?.EnteredBy ?? "",
+         f_sex = hl7?.PatientIdentification?.Sex ?? "",
+         f_patientdob = FormatDate(hl7?.PatientIdentification?.DateOfBirth, "yyyy-MM-dd"),
+         f_wardcode = hl7?.PatientVisit?.AssignedPatientLocation?.PointOfCare ?? "",
+         f_warddesc = "",// ยังไม่เจอ field ใดใน HL7
+         f_roomcode = "",// ยังไม่เจอ field ใดใน HL7
+         f_roomdesc = "",// ยังไม่เจอ field ใดใน HL7
+         f_bedcode = (string)null,// ยังไม่เจอ field ใดใน HL7
+         f_beddesc = (string)null,// ยังไม่เจอ field ใดใน HL7
+         f_right = $"{hl7.PatientVisit?.FinancialClass.ID}  {hl7.PatientVisit?.FinancialClass.Name}" ?? null,
          f_drugallergy = (string)null,// ยังไม่เจอ field ใดใน HL7
-         f_dianosis = (string)null,// ยังไม่เจอ field ใดใน HL7
-         f_orderitemcode ="1500006",
-         f_orderitemname ="ASCORBIC ACID INJ (VIT C INJ) * 500 MG./ML. IN 2 ML. AMP.;",
-         f_orderitemnameTH ="วิตามิน ซี",
-         f_orderitemnamegeneric = "ASCORBIC ACID INJ (VIT C INJ)",// ยังไม่เจอ field ใดใน HL7
-         f_orderqty =4,
-         f_orderunitcode ="amp",
-         f_orderunitdesc ="Amp",
-         f_dosage =2,
-         f_dosageunit = "Amp",
-         f_dosagetext ="500 MG./ML. IN 2 ML.",
-         f_drugformcode ="INJECTIONS",
-         f_drugformdesc = "INJECTIONS",
-         f_HAD = "0",
-         f_narcoticFlg = "0",
+         f_diagnosis = (string)null,// ยังไม่เจอ field ใดใน HL7
+         f_orderitemcode = d?.Dispensegivecode?.Identifier ?? "",
+         f_orderitemname = d?.Dispensegivecode?.DrugName ?? "",
+         f_orderitemnameTH = d?.Dispensegivecode?.DrugNameThai ?? "",
+         f_orderitemnamegeneric = "",// ยังไม่เจอ field ใดใน HL7
+         f_orderqty = d?.QTY ?? 0,
+         f_orderunitcode = d?.Usageunit?.ID ?? "",
+         f_orderunitdesc = d?.Usageunit?.Name ?? "",
+         f_dosage = d?.Dose ?? 0,
+         f_dosageunit = d?.Usageunit?.Name ?? "",
+         f_dosagetext = d?.Strengthunit ?? null,
+         f_drugformcode = d?.Dosageform ?? "",
+         f_drugformdesc = "",// ยังไม่เจอ field ใดใน HL7
+         f_HAD = "0",// ยังไม่เจอ field ใดใน HL7
+         f_narcoticFlg = "0",// ยังไม่เจอ field ใดใน HL7
          f_psychotropic = "0",// ยังไม่เจอ field ใดใน HL7
          f_binlocation = (string)null,// ยังไม่เจอ field ใดใน HL7
-         f_itemidentify = "ยาแช่เย็น",//null
+         f_itemidentify = (d?.Substand != null)
+                           ? $"{d.Substand.RXD701} {d.Substand.Medicinalproperties} {d.Substand.Labelhelp}".Trim()
+                           :  null,
          f_itemlotno = (string)null,// ยังไม่เจอ field ใดใน HL7
          f_itemlotexpire = (string)null,// ยังไม่เจอ field ใดใน HL7
-         f_instructioncode = d?.Usagecode?.Instructioncode ?? "IVD",
+         f_instructioncode = d?.Usagecode?.Instructioncode ?? "",
          f_instructiondesc = "",// ยังไม่เจอ field ใดใน HL7
-         f_frequencycode ="",
-         f_frequencydesc ="",
+         f_frequencycode = d?.Usagecode?.Frequencycode ?? "",
+         f_frequencydesc = d?.Usagecode?.Frequencydesc ?? "",
          f_timecode = "",// ยังไม่เจอ field ใดใน HL7
          f_timedesc = "",// ยังไม่เจอ field ใดใน HL7
          f_frequencytime = "",// ยังไม่เจอ field ใดใน HL7
          f_dosagedispense = "",// ยังไม่เจอ field ใดใน HL7
          f_dayofweek = (string)null,// ยังไม่เจอ field ใดใน HL7
-         f_noteprocessing ="2 IVD   IV drip 2 Amp.",
+         f_noteprocessing = !string.IsNullOrWhiteSpace(d?.Substand?.Noteprocessing)
+    ? d.Substand.Noteprocessing
+    : !string.IsNullOrWhiteSpace(d?.RXD33)
+        ? d.RXD33
+        : null,
          f_prn = "0",// ยังไม่เจอ field ใดใน HL7
          f_stat = "0",// ยังไม่เจอ field ใดใน HL7
          f_comment = (string)null,// ยังไม่เจอ field ใดใน HL7
-         f_tomachineno ="1",
+         f_tomachineno = r?.AdministrationDevice
+    ?? (!string.IsNullOrEmpty(d?.Actualdispense) &&
+        d.Actualdispense.IndexOf("proud", StringComparison.OrdinalIgnoreCase) >= 0
+            ? "2"
+            : "0"),
          f_ipd_order_recordno = (string)null,// ยังไม่เจอ field ใดใน HL7
-         f_status =  "0",
+         f_status = hl7?.CommonOrder?.OrderControl == "NW" ? "0" :
+                    hl7?.CommonOrder?.OrderControl == "RP" ? "1" : "0",
      };
  })
  .ToArray();
             return new { data = prescriptions ?? Array.Empty<object>() };
         }
- //       private object CreatePrescriptionBody(HL7Message hl7, DrugDispenseipd data)
- //       {
- //           // Helper for safe DateTime formatting
- //           string FormatDate(DateTime? dt, string fmt)
- //           {
- //               return (dt.HasValue && dt.Value != DateTime.MinValue) ? dt.Value.ToString(fmt) : null;
- //           }
-
- //           DateTime? headerDt = hl7?.MessageHeader != null ? (DateTime?)hl7.MessageHeader.MessageDateTime : null;
-
-           
- //       // คำนวณจำนวนใบยาทั้งหมด
- //       int totalPrescriptions = hl7?.PharmacyDispense?.Count() ?? 0;
-
- //           // ✅ map ทุก PharmacyDispense พร้อม seq numbering
- //           var prescriptions = hl7?.PharmacyDispense?
- //.Select((d, index) =>
- //{
- //    // หา RXR ที่ match กับ drug
- //    var r = hl7?.RouteInfo?.ElementAtOrDefault(index);
- //    var n = hl7?.Notes?.ElementAtOrDefault(index);
-
- //    return new
- //    {
- //        UniqID = $"{d?.Dispensegivecode?.UniqID ?? ""}-{FormatDate(d?.Prescriptiondate, "yyyyMMdd") ?? ""}",
- //        f_prescriptionno = hl7?.CommonOrder?.PlacerOrderNumber ?? "",
- //        f_seq = n?.SetID ?? (index + 1),
- //        f_seqmax = totalPrescriptions,  // ยังไม่เจอ field ใดใน HL7
- //        f_prescriptiondate = FormatDate(d?.Prescriptiondate, "yyyyMMdd"),
- //        f_ordercreatedate = FormatDate(hl7?.CommonOrder.TransactionDateTime, "yyyy-MM-dd HH:mm:ss"),
- //        f_ordertargetdate = "",// ยังไม่เจอ field ใดใน HL7 FormatDate(headerDt, "yyyy-MM-dd")
- //        f_ordertargettime = (string)null,// ยังไม่เจอ field ใดใน HL7
- //        f_doctorcode = d?.Doctor?.ID ?? "",
- //        f_doctorname = d?.Doctor?.Name ?? "",
- //        f_useracceptby = (d?.Modifystaff != null)
- //                          ? string.Join(" ", new[]
- //                        {
- //                           d.Modifystaff.StaffCode,
- //                           d.Modifystaff.StaffName
- //                        }.Where(x => !string.IsNullOrWhiteSpace(x)))
- //                        : hl7?.CommonOrder?.OrderingProvider.Name ?? "",
- //        f_orderacceptdate = FormatDate(hl7?.CommonOrder.TransactionDateTime, "yyyy-MM-dd HH:mm:ss"),
- //        f_orderacceptfromip = (string)null,// ยังไม่เจอ field ใดใน HL7
- //        f_pharmacylocationcode = !string.IsNullOrEmpty(d?.Departmentcode)
- //   ? d.Departmentcode.Substring(0, Math.Min(d.Departmentcode.Length, 20))
- //   : (!string.IsNullOrEmpty(hl7?.CommonOrder?.EnterersLocation)
- //       ? hl7.CommonOrder.EnterersLocation.Substring(0, Math.Min(hl7.CommonOrder.EnterersLocation.Length, 20))
- //       : ""),
- //        f_pharmacylocationdesc = !string.IsNullOrEmpty(d?.Departmentname)
- //   ? d.Departmentname.Substring(0, Math.Min(d.Departmentname.Length, 100))
- //   : (!string.IsNullOrEmpty(hl7?.CommonOrder?.EnterersLocation)
- //       ? hl7.CommonOrder.EnterersLocation.Substring(0, Math.Min(hl7.CommonOrder.EnterersLocation.Length, 100))
- //       : ""),       
- //        f_prioritycode = !string.IsNullOrEmpty(d?.prioritycode)
- //   ? d.prioritycode.Substring(0, Math.Min(d.prioritycode.Length, 10)) : d?.RXD31??"",   
- //        f_prioritydesc = !string.IsNullOrEmpty(d?.prioritycode)
- //   ? d.prioritycode.Substring(0, Math.Min(d.prioritycode.Length, 50)) : "",
- //        f_hn = hl7?.PatientIdentification?.PatientIDExternal ?? "",
- //        f_an = hl7?.PatientVisit?.VisitNumber ?? "",
- //        f_vn = hl7?.PatientVisit?.VisitNumber ?? "",
- //        f_title = (hl7?.PatientIdentification?.OfficialName != null)
- //            ? $"{hl7.PatientIdentification.OfficialName.Suffix}".Trim()
- //            : "",
- //        f_patientname = (hl7?.PatientIdentification?.OfficialName != null)
- //                        ? string.Join(" ", new[]
- //                        {
- //                           hl7.PatientIdentification.OfficialName.FirstName,
- //                           hl7.PatientIdentification.OfficialName.MiddleName,
- //                           hl7.PatientIdentification.OfficialName.LastName
- //                        }.Where(x => !string.IsNullOrWhiteSpace(x)))
- //                        : hl7?.CommonOrder?.EnteredBy ?? "",
- //        f_sex = hl7?.PatientIdentification?.Sex ?? "",
- //        f_patientdob = FormatDate(hl7?.PatientIdentification?.DateOfBirth, "yyyy-MM-dd"),
- //        f_wardcode = hl7?.PatientVisit?.AssignedPatientLocation?.PointOfCare ?? "",
- //        f_warddesc = "",// ยังไม่เจอ field ใดใน HL7
- //        f_roomcode = "",// ยังไม่เจอ field ใดใน HL7
- //        f_roomdesc = "",// ยังไม่เจอ field ใดใน HL7
- //        f_bedcode = "",// ยังไม่เจอ field ใดใน HL7
- //        f_beddesc = "",// ยังไม่เจอ field ใดใน HL7
- //        f_right = $"{hl7.PatientVisit?.FinancialClass.ID}  {hl7.PatientVisit?.FinancialClass.Name}" ?? "",
- //        f_drugallergy = (string)null,// ยังไม่เจอ field ใดใน HL7
- //        f_dianosis = (string)null,// ยังไม่เจอ field ใดใน HL7
- //        f_orderitemcode = d?.Dispensegivecode?.Identifier ?? "",
- //        f_orderitemname = d?.Dispensegivecode?.DrugName ?? "",
- //        f_orderitemnameTH = d?.Dispensegivecode?.DrugNameThai ?? "",
- //        f_orderitemnamegeneric = "",// ยังไม่เจอ field ใดใน HL7
- //        f_orderqty = d?.QTY ?? 0,
- //        f_orderunitcode = d?.Usageunit?.ID ?? "",
- //        f_orderunitdesc = d?.Usageunit?.Name ?? "",
- //        f_dosage = d?.Dose ?? 0,
- //        f_dosageunit = d?.Usageunit?.Name ?? "",
- //        f_dosagetext = d?.Strengthunit ?? "",
- //        f_drugformcode = d?.Dosageform ?? "",
- //        f_drugformdesc = "",// ยังไม่เจอ field ใดใน HL7
- //        f_HAD = "0",// ยังไม่เจอ field ใดใน HL7
- //        f_narcoticFlg = "0",// ยังไม่เจอ field ใดใน HL7
- //        f_psychotropic = "0",// ยังไม่เจอ field ใดใน HL7
- //        f_binlocation = (string)null,// ยังไม่เจอ field ใดใน HL7
- //        f_itemidentify = (d?.Substand != null)
- //                          ? $"{d.Substand.RXD701} {d.Substand.Medicinalproperties} {d.Substand.Labelhelp}".Trim()
- //                          : "",
- //        f_itemlotno = (string)null,// ยังไม่เจอ field ใดใน HL7
- //        f_itemlotexpire = (string)null,// ยังไม่เจอ field ใดใน HL7
- //        f_instructioncode = d?.Usagecode?.Instructioncode ?? "",
- //        f_instructiondesc = "",// ยังไม่เจอ field ใดใน HL7
- //        f_frequencycode = d?.Usagecode?.Frequencycode ?? "",
- //        f_frequencydesc = d?.Usagecode?.Frequencydesc ?? "",
- //        f_timecode = "",// ยังไม่เจอ field ใดใน HL7
- //        f_timedesc = "",// ยังไม่เจอ field ใดใน HL7
- //        f_frequencytime = (string)null,// ยังไม่เจอ field ใดใน HL7
- //        f_dosagedispense = (string)null,// ยังไม่เจอ field ใดใน HL7
- //        f_dayofweek = (string)null,// ยังไม่เจอ field ใดใน HL7
- //        f_noteprocessing = !string.IsNullOrWhiteSpace(d?.Substand?.Noteprocessing)
- //   ? d.Substand.Noteprocessing
- //   : d?.RXD33 ?? "",
- //    f_prn = "0",// ยังไม่เจอ field ใดใน HL7
- //        f_stat = "0",// ยังไม่เจอ field ใดใน HL7
- //        f_comment = (string)null,// ยังไม่เจอ field ใดใน HL7
- //        f_tomachineno = r?.AdministrationDevice
- //   ?? (!string.IsNullOrEmpty(d?.Actualdispense) &&
- //       d.Actualdispense.IndexOf("proud", StringComparison.OrdinalIgnoreCase) >= 0
- //           ? "2"
- //           : "0"),
- //    f_ipd_order_recordno = (string)null,// ยังไม่เจอ field ใดใน HL7
- //        f_status = hl7?.CommonOrder?.OrderControl == "NW" ? 0 :
- //                   hl7?.CommonOrder?.OrderControl == "RP" ? 1 : (int?)null,
- //    };
- //})
- //.ToArray();
- //           return new { data = prescriptions ?? Array.Empty<object>() };
- //       }
 
     }
 }
