@@ -22,30 +22,31 @@
             this.lastCheckLabel = new System.Windows.Forms.Label();
             this.startStopButton = new System.Windows.Forms.Button();
             this.manualCheckButton = new System.Windows.Forms.Button();
+            this.testHL7Button = new System.Windows.Forms.Button();
             this.SuspendLayout();
             // 
-            // _statusLabel
+            // statusLabel
             // 
             this.statusLabel.AutoSize = true;
             this.statusLabel.Location = new System.Drawing.Point(65, 22);
-            this.statusLabel.Name = "_statusLabel";
+            this.statusLabel.Name = "statusLabel";
             this.statusLabel.Size = new System.Drawing.Size(90, 20);
             this.statusLabel.TabIndex = 0;
             this.statusLabel.Text = "Status: ...";
             // 
-            // _lastCheckLabel
+            // lastCheckLabel
             // 
             this.lastCheckLabel.AutoSize = true;
             this.lastCheckLabel.Location = new System.Drawing.Point(68, 57);
-            this.lastCheckLabel.Name = "_lastCheckLabel";
+            this.lastCheckLabel.Name = "lastCheckLabel";
             this.lastCheckLabel.Size = new System.Drawing.Size(120, 20);
             this.lastCheckLabel.TabIndex = 1;
             this.lastCheckLabel.Text = "Last Check: -";
             // 
-            // _startStopButton
+            // startStopButton
             // 
             this.startStopButton.Location = new System.Drawing.Point(42, 132);
-            this.startStopButton.Name = "_startStopButton";
+            this.startStopButton.Name = "startStopButton";
             this.startStopButton.Size = new System.Drawing.Size(100, 40);
             this.startStopButton.TabIndex = 2;
             this.startStopButton.Text = "Start Service";
@@ -62,11 +63,22 @@
             this.manualCheckButton.UseVisualStyleBackColor = true;
             this.manualCheckButton.Click += new System.EventHandler(this.ManualCheckButton_Click);
             // 
+            // testHL7Button
+            // 
+            this.testHL7Button.Location = new System.Drawing.Point(295, 132);
+            this.testHL7Button.Name = "testHL7Button";
+            this.testHL7Button.Size = new System.Drawing.Size(120, 40);
+            this.testHL7Button.TabIndex = 4;
+            this.testHL7Button.Text = "Test HL7 File";
+            this.testHL7Button.UseVisualStyleBackColor = true;
+            this.testHL7Button.Click += new System.EventHandler(this.TestHL7Button_Click);
+            // 
             // Form1
             // 
             this.AutoScaleDimensions = new System.Drawing.SizeF(8F, 16F);
             this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
-            this.ClientSize = new System.Drawing.Size(600, 300);
+            this.ClientSize = new System.Drawing.Size(650, 300);
+            this.Controls.Add(this.testHL7Button);
             this.Controls.Add(this.manualCheckButton);
             this.Controls.Add(this.startStopButton);
             this.Controls.Add(this.lastCheckLabel);
@@ -83,10 +95,11 @@
 
         #endregion
 
-       
+
         private System.Windows.Forms.Label statusLabel;
         private System.Windows.Forms.Label lastCheckLabel;
         private System.Windows.Forms.Button startStopButton;
         private System.Windows.Forms.Button manualCheckButton;
+        private System.Windows.Forms.Button testHL7Button;
     }
 }
