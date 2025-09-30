@@ -1,5 +1,7 @@
 ﻿using ConHIS_Service_XPHL7.Models;
 using ConHIS_Service_XPHL7.Utils;
+using Mysqlx.Session;
+using MySqlX.XDevAPI.Common;
 using Newtonsoft.Json;
 using System;
 using System.Collections.Generic;
@@ -186,38 +188,6 @@ namespace ConHIS_Service_XPHL7.Services
 
             var bodyJson = JsonConvert.SerializeObject(bodyObj, Formatting.Indented);
 
-            // ✅ ตรวจสอบชนิดข้อมูลของแต่ละ field
-            if (bodyObj != null)
-            {
-                _logger.LogInfo("=== Field Type and Length Analysis ===");
-
-                foreach (var prescription in (IEnumerable<object>)bodyObj.GetType().GetProperty("data").GetValue(bodyObj))
-                {
-                    var props = prescription.GetType().GetProperties();
-                    foreach (var p in props)
-                    {
-                        var val = p.GetValue(prescription);
-                        string typeName = val == null ? "null" : val.GetType().Name;
-                        string valueStr = val?.ToString() ?? "null";
-                        int length = val == null ? 0 : valueStr.Length;
-
-                        // เน้นการแสดง field ที่มีความยาวมาก
-                        string lengthIndicator = length > 100 ? " 🔴 LONG" :
-                                               length > 50 ? " 🟡 MEDIUM" :
-                                               length > 0 ? " 🟢 SHORT" : "";
-
-                        _logger.LogInfo($"Field: {p.Name}, Type: {typeName}, Length: {length}{lengthIndicator}, Value: {(length > 100 ? valueStr.Substring(0, 100) + "..." : valueStr)}");
-
-                        // แจ้งเตือนพิเศษสำหรับ field ที่อาจเป็นปัญหา
-                        if (length > 200)
-                        {
-                            _logger.LogWarning($"⚠️ ATTENTION: Field '{p.Name}' is very long ({length} chars) - may cause database issues");
-                        }
-                    }
-                }
-
-                _logger.LogInfo("=== End Field Analysis ===");
-            }
 
             var apiRequestData = new
             {
@@ -277,38 +247,6 @@ namespace ConHIS_Service_XPHL7.Services
 
             var bodyJson = JsonConvert.SerializeObject(bodyObj, Formatting.Indented);
 
-            // ✅ ตรวจสอบชนิดข้อมูลของแต่ละ field
-            if (bodyObj != null)
-            {
-                _logger.LogInfo("=== Field Type and Length Analysis ===");
-
-                foreach (var prescription in (IEnumerable<object>)bodyObj.GetType().GetProperty("data").GetValue(bodyObj))
-                {
-                    var props = prescription.GetType().GetProperties();
-                    foreach (var p in props)
-                    {
-                        var val = p.GetValue(prescription);
-                        string typeName = val == null ? "null" : val.GetType().Name;
-                        string valueStr = val?.ToString() ?? "null";
-                        int length = val == null ? 0 : valueStr.Length;
-
-                        // เน้นการแสดง field ที่มีความยาวมาก
-                        string lengthIndicator = length > 100 ? " 🔴 LONG" :
-                                               length > 50 ? " 🟡 MEDIUM" :
-                                               length > 0 ? " 🟢 SHORT" : "";
-
-                        _logger.LogInfo($"Field: {p.Name}, Type: {typeName}, Length: {length}{lengthIndicator}, Value: {(length > 100 ? valueStr.Substring(0, 100) + "..." : valueStr)}");
-
-                        // แจ้งเตือนพิเศษสำหรับ field ที่อาจเป็นปัญหา
-                        if (length > 200)
-                        {
-                            _logger.LogWarning($"⚠️ ATTENTION: Field '{p.Name}' is very long ({length} chars) - may cause database issues");
-                        }
-                    }
-                }
-
-                _logger.LogInfo("=== End Field Analysis ===");
-            }
 
             var apiRequestData = new
             {
@@ -382,7 +320,7 @@ namespace ConHIS_Service_XPHL7.Services
 
      return new
      {
-         UniqID = $"{d?.Dispensegivecode?.UniqID ?? ""}-{FormatDate(d?.Prescriptiondate, "yyyyMMdd") ?? ""}",
+         UniqID = $"{d?.Dispensegivecode?.UniqID ?? ""}-{FormatDate(d?.Prescriptiondate, "yyyyMMdd") ?? null}",
          f_prescriptionno = hl7?.CommonOrder?.PlacerOrderNumber ?? "",
          f_seq = n?.SetID ?? (index + 1),
          f_seqmax = totalPrescriptions,  // ยังไม่เจอ field ใดใน HL7
@@ -392,20 +330,18 @@ namespace ConHIS_Service_XPHL7.Services
          f_ordertargettime = (string)null,// ยังไม่เจอ field ใดใน HL7
          f_doctorcode = d?.Doctor?.ID ?? null,
          f_doctorname = d?.Doctor?.Name ?? null,
-         f_useracceptby = (d?.Modifystaff != null)
-                           ? string.Join(" ", new[]
-                         {
-                            d.Modifystaff.StaffCode,
-                            d.Modifystaff.StaffName
-                         }.Where(x => !string.IsNullOrWhiteSpace(x)))
-                         : hl7?.CommonOrder?.OrderingProvider.Name ?? "",
+         f_useracceptby = !string.IsNullOrWhiteSpace(d.Modifystaff.StaffName)
+                            ? d.Modifystaff.StaffName
+                            : !string.IsNullOrWhiteSpace(hl7?.CommonOrder?.OrderingProvider?.Name)
+                                ? hl7?.CommonOrder?.OrderingProvider?.Name
+                                : null,
          f_orderacceptdate = FormatDate(hl7?.CommonOrder.TransactionDateTime, "yyyy-MM-dd HH:mm:ss") ?? null,
          f_orderacceptfromip = (string)null,// ยังไม่เจอ field ใดใน HL7
          f_pharmacylocationcode = !string.IsNullOrEmpty(d?.Departmentcode)
-    ? d.Departmentcode.Substring(0, Math.Min(d.Departmentcode.Length, 20))
-    : (!string.IsNullOrEmpty(hl7?.CommonOrder?.EnterersLocation)
-        ? hl7.CommonOrder.EnterersLocation.Substring(0, Math.Min(hl7.CommonOrder.EnterersLocation.Length, 20))
-        : null),
+                                                    ? d.Departmentcode.Split(' ')[0]
+                                                         : (!string.IsNullOrEmpty(hl7?.CommonOrder?.EnterersLocation)
+                                                            ? hl7.CommonOrder.EnterersLocation.Split(' ')[0]
+                                                         : null),
          f_pharmacylocationdesc = !string.IsNullOrEmpty(d?.Departmentname)
     ? d.Departmentname.Substring(0, Math.Min(d.Departmentname.Length, 100))
     : (!string.IsNullOrEmpty(hl7?.CommonOrder?.EnterersLocation)
@@ -456,15 +392,23 @@ namespace ConHIS_Service_XPHL7.Services
          f_narcoticFlg = "0",// ยังไม่เจอ field ใดใน HL7
          f_psychotropic = "0",// ยังไม่เจอ field ใดใน HL7
          f_binlocation = (string)null,// ยังไม่เจอ field ใดใน HL7
-         f_itemidentify = (d?.Substand != null)
-                           ? $"{d.Substand.RXD701} {d.Substand.Medicinalproperties} {d.Substand.Labelhelp}".Trim()
-                           :  null,
+         f_itemidentify =
+    string.IsNullOrWhiteSpace(d?.Substand?.RXD701)
+ && string.IsNullOrWhiteSpace(d?.Substand?.Medicinalproperties)
+ && string.IsNullOrWhiteSpace(d?.Substand?.Labelhelp)
+    ? null
+    : $"{d?.Substand?.RXD701 ?? ""} {d?.Substand?.Medicinalproperties ?? ""} {d?.Substand?.Labelhelp ?? ""}".Trim(),
          f_itemlotno = (string)null,// ยังไม่เจอ field ใดใน HL7
          f_itemlotexpire = (string)null,// ยังไม่เจอ field ใดใน HL7
          f_instructioncode = d?.Usagecode?.Instructioncode ?? "",
          f_instructiondesc = "",// ยังไม่เจอ field ใดใน HL7
-         f_frequencycode = d?.Usagecode?.Frequencycode ?? "",
-         f_frequencydesc = d?.Usagecode?.Frequencydesc ?? "",
+         f_frequencycode = string.IsNullOrWhiteSpace(d?.Usagecode?.Frequencycode)
+                                          ? null
+                                          : d.Usagecode.Frequencycode,
+         f_frequencydesc = string.IsNullOrWhiteSpace(d?.Usagecode?.Frequencydesc)
+                                          ? null
+                                          : d.Usagecode.Frequencydesc,
+          
          f_timecode = "",// ยังไม่เจอ field ใดใน HL7
          f_timedesc = "",// ยังไม่เจอ field ใดใน HL7
          f_frequencytime = "",// ยังไม่เจอ field ใดใน HL7
@@ -478,11 +422,11 @@ namespace ConHIS_Service_XPHL7.Services
          f_prn = "0",// ยังไม่เจอ field ใดใน HL7
          f_stat = "0",// ยังไม่เจอ field ใดใน HL7
          f_comment = (string)null,// ยังไม่เจอ field ใดใน HL7
-         f_tomachineno = r?.AdministrationDevice
-    ?? (!string.IsNullOrEmpty(d?.Actualdispense) &&
-        d.Actualdispense.IndexOf("proud", StringComparison.OrdinalIgnoreCase) >= 0
-            ? "2"
-            : "0"),
+         f_tomachineno = r?.AdministrationDevice ??
+                (!string.IsNullOrEmpty(d?.Actualdispense) &&
+                 d.Actualdispense.IndexOf("proud", StringComparison.OrdinalIgnoreCase) >= 0
+                     ? 2
+                     : 0),
          f_ipd_order_recordno = (string)null,// ยังไม่เจอ field ใดใน HL7
          f_status = hl7?.CommonOrder?.OrderControl == "NW" ? "0" :
                     hl7?.CommonOrder?.OrderControl == "RP" ? "1" : "0",

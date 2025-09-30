@@ -4,6 +4,7 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
+using System.Text;
 
 namespace ConHIS_Service_XPHL7.Utils
 {
@@ -73,8 +74,6 @@ namespace ConHIS_Service_XPHL7.Utils
             }
         }
 
-       
-
         // Method to log HL7 read/parse errors to a separate folder (logreaderror)
         public void LogReadError(string DrugDispenseipdId, string errorMessage, string errorLogFolder = "logreaderror")
         {
@@ -93,7 +92,8 @@ namespace ConHIS_Service_XPHL7.Utils
             }
         }
 
-        
+       
+
         public void LogError(string message, Exception ex = null)
         {
             var fullMessage = ex != null ? $"{message} - Exception: {ex}" : message;

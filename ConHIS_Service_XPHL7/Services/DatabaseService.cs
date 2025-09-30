@@ -17,10 +17,6 @@ namespace ConHIS_Service_XPHL7.Services
             _connectionString = connectionString;
         }
 
-        // Fix for CS8370 and CS1503:
-        // - Replace the raw string literal """recieve_status_datetime""" with a standard string "recieve_status_datetime".
-        // - Use reader.GetOrdinal("recieve_status_datetime") to get the column index for IsDBNull(int).
-
         public List<DrugDispenseipd> GetPendingDispenseData()
         {
             var result = new List<DrugDispenseipd>();

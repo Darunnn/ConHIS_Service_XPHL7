@@ -1,14 +1,15 @@
-﻿using ConHIS_Service_XPHL7.Models;
+﻿using ConHIS_Service_XPHL7.Configuration;
+using ConHIS_Service_XPHL7.Models;
 using ConHIS_Service_XPHL7.Services;
 using ConHIS_Service_XPHL7.Utils;
-using ConHIS_Service_XPHL7.Configuration;
 using Newtonsoft.Json;
 using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text;
-
+using static System.Net.WebRequestMethods;
+using File = System.IO.File;
 namespace ConHIS_Service_XPHL7.Services
 {
     /// <summary>
@@ -40,10 +41,8 @@ namespace ConHIS_Service_XPHL7.Services
         {
             var fileName = Path.GetFileNameWithoutExtension(filePath);
             _logger.LogInfo($"Starting to process HL7 file: {filePath}");
-
             try
             {
-                // ตรวจสอบว่าไฟล์มีอยู่หรือไม่
                 if (!File.Exists(filePath))
                 {
                     var errorMsg = $"HL7 file not found: {filePath}";
@@ -51,24 +50,12 @@ namespace ConHIS_Service_XPHL7.Services
                     _logger.LogReadError(fileName, errorMsg);
                     return null;
                 }
-
-                // อ่านข้อมูลจากไฟล์
                 var hl7RawData = File.ReadAllText(filePath, Encoding.UTF8);
                 _logger.LogInfo($"Successfully read HL7 file: {filePath}, Length: {hl7RawData.Length} characters");
-
-                // บันทึก raw data
-                _logger.LogRawHL7Data(fileName, "FILE_PROCESS", hl7RawData);
-
-                // แปลงข้อมูล HL7
+                _logger.LogRawHL7Data(fileName, "FILE*PROCESS", hl7RawData);
                 var parsedMessage = _hl7Service.ParseHL7Message(hl7RawData);
                 _logger.LogInfo($"Successfully parsed HL7 message for file: {fileName}");
-
-                // บันทึก parsed data
                 _logger.LogParsedHL7Data(fileName, parsedMessage);
-
-                // Log ข้อมูลสำคัญ
-                LogParsedMessageSummary(fileName, parsedMessage);
-
                 return parsedMessage;
             }
             catch (Exception ex)
@@ -81,276 +68,299 @@ namespace ConHIS_Service_XPHL7.Services
         }
 
         /// <summary>
-        /// Log ข้อมูลสำคัญของข้อความที่ประมวลผลแล้ว
+        /// ประมวลผลและส่งไฟล์ HL7 ไปยัง API
         /// </summary>
-        private void LogParsedMessageSummary(string fileName, HL7Message message)
-        {
-            if (message == null) return;
-
-            var summary = new StringBuilder();
-            summary.AppendLine($"=== HL7 Message Summary for {fileName} ===");
-
-            // ข้อมูลผู้ป่วย
-            if (message.PatientIdentification != null)
-            {
-                summary.AppendLine($"Patient HN: {message.PatientIdentification.PatientIDInternal}");
-                summary.AppendLine($"Patient Name: {message.PatientIdentification.OfficialName?.FirstName} {message.PatientIdentification.OfficialName?.LastName}");
-                summary.AppendLine($"DOB: {message.PatientIdentification.DateOfBirth:yyyy-MM-dd}");
-                summary.AppendLine($"Sex: {message.PatientIdentification.Sex}");
-            }
-
-            // ข้อมูลการเยี่ยม
-            if (message.PatientVisit != null)
-            {
-                summary.AppendLine($"Visit Number: {message.PatientVisit.VisitNumber}");
-                summary.AppendLine($"Patient Class: {message.PatientVisit.PatientClass}");
-            }
-
-            // ข้อมูลยา
-            if (message.PharmacyDispense != null && message.PharmacyDispense.Count > 0)
-            {
-                summary.AppendLine($"Total Drugs: {message.PharmacyDispense.Count}");
-                foreach (var drug in message.PharmacyDispense.Take(5)) // แสดงเฉพาะ 5 ตัวแรก
-                {
-                    summary.AppendLine($"  - Drug: {drug.Dispensegivecode?.DrugName} (Qty: {drug.QTY})");
-                }
-            }
-
-            // ข้อมูลแพ้ยา
-            if (message.Allergies != null && message.Allergies.Count > 0)
-            {
-                summary.AppendLine($"Allergies: {message.Allergies.Count}");
-                foreach (var allergy in message.Allergies)
-                {
-                    summary.AppendLine($"  - Allergy: {allergy.AllergyName} (Severity: {allergy.AllergySeverity})");
-                }
-            }
-
-            summary.AppendLine("=== End Summary ===");
-
-            _logger.LogInfo(summary.ToString());
-        }
-
-        /// <summary>
-        /// Log ข้อมูล JSON ที่จะส่งไป API
-        /// </summary>
-        private void LogApiRequestData(string fileName, string jsonData)
-        {
-            try
-            {
-                var appFolder = AppDomain.CurrentDomain.BaseDirectory ?? Environment.CurrentDirectory;
-                var apiLogDir = Path.Combine(appFolder, "api_request");
-                Directory.CreateDirectory(apiLogDir);
-
-                var timestamp = DateTime.Now.ToString("yyyyMMdd_HHmmss");
-                var apiLogPath = Path.Combine(apiLogDir, $"api_request_{fileName}_{timestamp}.json");
-
-                File.WriteAllText(apiLogPath, jsonData, Encoding.UTF8);
-                _logger.LogInfo($"API request JSON saved to: {apiLogPath}");
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError($"Failed to save API request JSON: {ex.Message}", ex);
-            }
-        }
-
-        /// <summary>
-        /// อ่านและแสดงข้อมูล HL7 แบบ Raw
-        /// </summary>
-        /// <param name="filePath">เส้นทางไฟล์</param>
-        /// <returns>ข้อมูล HL7 แบบ Raw</returns>
-        public string ReadHL7RawData(string filePath)
+        public HL7TestResult ProcessAndSendHL7File(string filePath, bool sendToApi)
         {
             var fileName = Path.GetFileNameWithoutExtension(filePath);
-            _logger.LogInfo($"Reading raw HL7 data from: {filePath}");
+            var result = new HL7TestResult
+            {
+                FileName = fileName,
+                FilePath = filePath,
+                SendToApi = sendToApi
+            };
 
             try
             {
-                if (!File.Exists(filePath))
+                _logger.LogInfo($"=== Starting HL7 File Processing ===");
+                _logger.LogInfo($"File: {filePath}");
+                _logger.LogInfo($"Send to API: {sendToApi}");
+
+                // Process HL7 file
+                var parsedMessage = ProcessHL7File(filePath);
+                if (parsedMessage == null)
                 {
-                    var errorMsg = $"File not found: {filePath}";
-                    _logger.LogError(errorMsg);
-                    return null;
+                    result.Success = false;
+                    result.ErrorMessage = "Failed to parse HL7 file";
+                    return result;
                 }
 
-                var rawData = File.ReadAllText(filePath, Encoding.UTF8);
-                _logger.LogInfo($"Successfully read {rawData.Length} characters from {fileName}");
+                result.ParsedMessage = parsedMessage;
+                result.Success = true;
 
-                return rawData;
+                // Create JSON payload
+                var jsonPayload = CreateApiPayload(parsedMessage);
+                result.JsonPayload = jsonPayload;
+
+                // Send to API if requested
+                if (sendToApi)
+                {
+                    var apiUrl = $"{AppConfig.ApiEndpoint}";
+                    var apiMethod = "POST";
+
+                    // Deserialize JSON payload เป็น object
+                    var bodyObj = JsonConvert.DeserializeObject(jsonPayload);
+
+                    // Log แบบเดียวกับ ProcessReplaceOrder
+                    _logger.LogInfo($"API URL: {apiUrl}");
+                    _logger.LogInfo($"API Method: {apiMethod}");
+                    _logger.LogInfo($"API Body: {jsonPayload}");
+
+                    // สร้าง ApiService และส่ง API
+                    var apiService = new ApiService(apiUrl);
+
+                    try
+                    {
+                        var response = apiService.SendToMiddlewareWithResponse(bodyObj);
+                        _logger.LogInfo($"API Response: {response}");
+
+                        result.ApiResponse = response;
+                        result.ApiSent = true;
+
+                        // Parse response เพื่อตรวจสอบสถานะ
+                        if (!string.IsNullOrEmpty(response))
+                        {
+                            var responseArray = JsonConvert.DeserializeObject<ApiResponseItem[]>(response);
+                            if (responseArray != null && responseArray.Length > 0)
+                            {
+                                foreach (var item in responseArray)
+                                {
+                                    _logger.LogInfo($"UniqID: {item.UniqID}, Status: {item.Status}, Message: {item.Message}");
+
+                                    if (item.Status)
+                                    {
+                                        _logger.LogInfo($"Successfully processed order: UniqID: {item.UniqID}");
+                                    }
+                                    else
+                                    {
+                                        _logger.LogError($"Order processing failed: UniqID: {item.UniqID}, Message: {item.Message}");
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogError($"Failed to send data to middleware API for file: {fileName}", ex);
+                        result.Success = false;
+                        result.ErrorMessage = $"Failed to send data to middleware API: {ex.Message}";
+                        result.ApiSent = false;
+                    }
+                }
+                else
+                {
+                    _logger.LogInfo("=== API Send Skipped (Test Mode) ===");
+                    result.ApiSent = false;
+                }
+
+                return result;
             }
             catch (Exception ex)
             {
-                var errorMsg = $"Error reading file {filePath}: {ex.Message}";
-                _logger.LogError(errorMsg, ex);
-                _logger.LogReadError(fileName, errorMsg);
-                return null;
+                _logger.LogError($"Error processing and sending HL7 file: {ex.Message}", ex);
+                result.Success = false;
+                result.ErrorMessage = ex.Message;
+                return result;
             }
         }
 
+
         /// <summary>
-        /// ประมวลผลและส่งไฟล์ HL7 ไปยัง API พร้อมส่งผลลัพธ์กลับ
+        /// สร้าง JSON Payload สำหรับส่งไป API
         /// </summary>
-        /// <param name="filePath">เส้นทางไฟล์</param>
-        /// <param name="sendToApi">ส่งไป API หรือไม่</param>
-        
-        /// <summary>
-        /// สร้าง Summary Message สำหรับแสดงผล
-        /// </summary>
-        public string CreateSummaryMessage(HL7Message result)
+        private string CreateApiPayload(HL7Message result)
         {
             string FormatDate(DateTime? dt, string fmt)
             {
-                return (dt.HasValue && dt.Value != DateTime.MinValue) ? dt.Value.ToString(fmt) : null;
+                if (!dt.HasValue || dt.Value == DateTime.MinValue)
+                    return null;
+
+                var adjustedDate = dt.Value;
+                var year = adjustedDate.Year;
+
+                // Adjust Buddhist calendar to Gregorian (BE to AD)
+                if (year > 2400)
+                {
+                    adjustedDate = adjustedDate.AddYears(-543);
+
+                    // Validate the adjusted date is still valid
+                    if (adjustedDate.Year <= 0)
+                        return null;
+                }
+
+                return adjustedDate.ToString(fmt, System.Globalization.CultureInfo.InvariantCulture);
             }
 
-            DateTime? headerDt = result?.MessageHeader != null
-                ? (DateTime?)result.MessageHeader.MessageDateTime
-                : null;
-
-            // คำนวณจำนวนใบยาทั้งหมด
+            DateTime? headerDt = result?.MessageHeader?.MessageDateTime;
             int totalPrescriptions = result?.PharmacyDispense?.Count() ?? 0;
 
-            // ✅ map ทุก PharmacyDispense พร้อม seq numbering
             var prescriptions = result?.PharmacyDispense?
                 .Select((d, index) =>
                 {
                     var r = result?.RouteInfo?.ElementAtOrDefault(index);
                     var n = result?.Notes?.ElementAtOrDefault(index);
 
+                    string SafeSubstring(string input, int length)
+                    {
+                        if (string.IsNullOrEmpty(input)) return null;
+                        return input.Substring(0, Math.Min(input.Length, length));
+                    }
+
+                    string SafeJoin(params string[] parts)
+                    {
+                        return string.Join(" ", parts.Where(x => !string.IsNullOrWhiteSpace(x)));
+                    }
+
                     return new
                     {
                         UniqID = $"{d?.Dispensegivecode?.UniqID ?? ""}-{FormatDate(d?.Prescriptiondate, "yyyyMMdd") ?? ""}",
-                        f_prescriptionno = result?.CommonOrder?.PlacerOrderNumber ?? "",
-                        f_seq = n?.SetID ?? (index + 1),
+                        f_prescriptionno = result?.CommonOrder?.PlacerOrderNumber,
+                        f_seq = n?.SetID ?? 0,
                         f_seqmax = totalPrescriptions,
                         f_prescriptiondate = FormatDate(d?.Prescriptiondate, "yyyyMMdd"),
-                        f_ordercreatedate = FormatDate(result?.CommonOrder.TransactionDateTime, "yyyy-MM-dd HH:mm:ss"),
+                        f_ordercreatedate = FormatDate(result?.CommonOrder?.TransactionDateTime, "yyyy-MM-dd HH:mm:ss"),
                         f_ordertargetdate = FormatDate(headerDt, "yyyy-MM-dd"),
-                        f_ordertargettime = (string)null,
-                        f_doctorcode = d?.Doctor?.ID ?? "",
-                        f_doctorname = d?.Doctor?.Name ?? "",
-                        f_useracceptby = (d?.Modifystaff != null)
-                            ? string.Join(" ", new[] { d.Modifystaff.StaffCode, d.Modifystaff.StaffName }.Where(x => !string.IsNullOrWhiteSpace(x)))
-                            : result?.CommonOrder?.OrderingProvider.Name ?? "",
-                        f_orderacceptdate = FormatDate(result?.CommonOrder.TransactionDateTime, "yyyy-MM-dd HH:mm:ss"),
-                        f_orderacceptfromip = (string)null,
+                        f_ordertargettime = null as string,
+                        f_doctorcode = d?.Doctor?.ID ?? null as string,
+                        f_doctorname = d?.Doctor?.Name ?? null as string,
+                        f_useracceptby = !string.IsNullOrWhiteSpace(d?.Modifystaff?.StaffName)
+                            ? d.Modifystaff.StaffName
+                            : !string.IsNullOrWhiteSpace(result?.CommonOrder?.OrderingProvider?.Name)
+                                ? result.CommonOrder.OrderingProvider.Name
+                                : null as string,
+                        f_orderacceptdate = FormatDate(result?.CommonOrder?.TransactionDateTime, "yyyy-MM-dd HH:mm:ss"),
+                        f_orderacceptfromip = null as string,
                         f_pharmacylocationcode = !string.IsNullOrEmpty(d?.Departmentcode)
-                            ? d.Departmentcode.Substring(0, Math.Min(d.Departmentcode.Length, 20))
-                            : (!string.IsNullOrEmpty(result?.CommonOrder?.EnterersLocation)
-                                ? result.CommonOrder.EnterersLocation.Substring(0, Math.Min(result.CommonOrder.EnterersLocation.Length, 20))
-                                : ""),
+                            ? d.Departmentcode.Split(' ')[0]
+                            : !string.IsNullOrEmpty(result?.CommonOrder?.EnterersLocation)
+                                ? result.CommonOrder.EnterersLocation.Split(' ')[0]
+                                : null as string,
                         f_pharmacylocationdesc = !string.IsNullOrEmpty(d?.Departmentname)
-                            ? d.Departmentname.Substring(0, Math.Min(d.Departmentname.Length, 100))
-                            : (!string.IsNullOrEmpty(result?.CommonOrder?.EnterersLocation)
-                                ? result.CommonOrder.EnterersLocation.Substring(0, Math.Min(result.CommonOrder.EnterersLocation.Length, 100))
-                                : ""),
+                            ? SafeSubstring(d.Departmentname, 100)
+                            : !string.IsNullOrEmpty(result?.CommonOrder?.EnterersLocation)
+                                ? SafeSubstring(result.CommonOrder.EnterersLocation, 100)
+                                : null as string,
                         f_prioritycode = !string.IsNullOrEmpty(d?.prioritycode)
-                            ? d.prioritycode.Substring(0, Math.Min(d.prioritycode.Length, 10))
-                            : d?.RXD31 ?? "",
+    ? d.prioritycode.Substring(0, Math.Min(d.prioritycode.Length, 10)) : d?.RXD31 ?? null as string,
                         f_prioritydesc = !string.IsNullOrEmpty(d?.prioritycode)
-                            ? d.prioritycode.Substring(0, Math.Min(d.prioritycode.Length, 50))
-                            : "",
-                        f_hn = result?.PatientIdentification?.PatientIDExternal ?? "",
-                        f_an = result?.PatientVisit?.VisitNumber ?? "",
-                        f_vn = result?.PatientVisit?.VisitNumber ?? "",
-                        f_title = result?.PatientIdentification?.OfficialName?.Suffix?.Trim() ?? "",
-                        f_patientname = (result?.PatientIdentification?.OfficialName != null)
-                            ? string.Join(" ", new[] {
-                           result.PatientIdentification.OfficialName.FirstName,
-                           result.PatientIdentification.OfficialName.MiddleName,
-                           result.PatientIdentification.OfficialName.LastName
-                              }.Where(x => !string.IsNullOrWhiteSpace(x)))
-                            : result?.CommonOrder?.EnteredBy ?? "",
-                        f_sex = result?.PatientIdentification?.Sex ?? "",
+                            ? SafeSubstring(d.prioritycode, 50)
+                            : null as string,
+                        f_hn = result?.PatientIdentification?.PatientIDExternal ?? null as string,
+                        f_an = result?.PatientVisit?.VisitNumber ?? null as string,
+                        f_vn = result?.PatientVisit?.VisitNumber ?? null as string,
+                        f_title = result?.PatientIdentification?.OfficialName?.Suffix?.Trim() ?? null as string,
+                        f_patientname = result?.PatientIdentification?.OfficialName != null
+                            ? SafeJoin(
+                                result.PatientIdentification.OfficialName.FirstName,
+                                result.PatientIdentification.OfficialName.MiddleName,
+                                result.PatientIdentification.OfficialName.LastName
+                              )
+                            : result?.CommonOrder?.EnteredBy ?? null as string,
+                        f_sex = result?.PatientIdentification?.Sex ?? null as string,
                         f_patientdob = FormatDate(result?.PatientIdentification?.DateOfBirth, "yyyy-MM-dd"),
-                        f_wardcode = result?.PatientVisit?.AssignedPatientLocation?.PointOfCare ?? "",
-                        f_warddesc = "",
-                        f_roomcode = "",
-                        f_roomdesc = "",
-                        f_bedcode = (string)null,
-                        f_beddesc = (string)null,
+                        f_wardcode = result?.PatientVisit?.AssignedPatientLocation?.PointOfCare ?? null as string,
+                        f_warddesc = null as string,
+                        f_roomcode = null as string,
+                        f_roomdesc = null as string,
+                        f_bedcode = null as string,
+                        f_beddesc = null as string,
                         f_right = result?.PatientVisit?.FinancialClass != null
-                            ? $"{result.PatientVisit.FinancialClass.ID} {result.PatientVisit.FinancialClass.Name}"
-                            : null,
-                        f_drugallergy = (string)null,
-                        f_diagnosis = (string)null,
-                        f_orderitemcode = d?.Dispensegivecode?.Identifier ?? "",
-                        f_orderitemname = d?.Dispensegivecode?.DrugName ?? "",
-                        f_orderitemnameTH = d?.Dispensegivecode?.DrugNameThai ?? "",
-                        f_orderitemnamegeneric = "",
+                            ? SafeJoin(result.PatientVisit.FinancialClass.ID, result.PatientVisit.FinancialClass.Name)
+                            : null as string,
+                        f_drugallergy = null as string,
+                        f_diagnosis = null as string,
+                        f_orderitemcode = d?.Dispensegivecode?.Identifier ?? null as string,
+                        f_orderitemname = d?.Dispensegivecode?.DrugName ?? null as string,
+                        f_orderitemnameTH = d?.Dispensegivecode?.DrugNameThai ?? null as string,
+                        f_orderitemnamegeneric = null as string,
                         f_orderqty = d?.QTY ?? 0,
-                        f_orderunitcode = d?.Usageunit?.ID ?? "",
-                        f_orderunitdesc = d?.Usageunit?.Name ?? "",
+                        f_orderunitcode = d?.Usageunit?.ID ?? null as string,
+                        f_orderunitdesc = d?.Usageunit?.Name ?? null as string,
                         f_dosage = d?.Dose ?? 0,
-                        f_dosageunit = d?.Usageunit?.Name ?? "",
-                        f_dosagetext = d?.Strengthunit ?? null,
-                        f_drugformcode = d?.Dosageform ?? "",
-                        f_drugformdesc = "",
+                        f_dosageunit = d?.Usageunit?.Name ?? null as string,
+                        f_dosagetext = d?.Strengthunit ?? null as string,
+                        f_drugformcode = d?.Dosageform ?? null as string,
+                        f_drugformdesc = null as string,
                         f_HAD = "0",
                         f_narcoticFlg = "0",
                         f_psychotropic = "0",
-                        f_binlocation = (string)null,
-                        f_itemidentify = (d?.Substand != null)
-                            ? $"{d.Substand.RXD701} {d.Substand.Medicinalproperties} {d.Substand.Labelhelp}".Trim()
-                            : null,
-                        f_itemlotno = (string)null,
-                        f_itemlotexpire = (string)null,
-                        f_instructioncode = d?.Usagecode?.Instructioncode ?? "",
-                        f_instructiondesc = "",
-                        f_frequencycode = d?.Usagecode?.Frequencycode ?? "",
-                        f_frequencydesc = d?.Usagecode?.Frequencydesc ?? "",
-                        f_timecode = "",
-                        f_timedesc = "",
-                        f_frequencytime = "",
-                        f_dosagedispense = "",
-                        f_dayofweek = (string)null,
+                        f_binlocation = null as string,
+                        f_itemidentify = string.IsNullOrWhiteSpace(d?.Substand?.RXD701) &&
+                                         string.IsNullOrWhiteSpace(d?.Substand?.Medicinalproperties) &&
+                                         string.IsNullOrWhiteSpace(d?.Substand?.Labelhelp)
+                            ? null as string
+                            : SafeJoin(d?.Substand?.RXD701, d?.Substand?.Medicinalproperties, d?.Substand?.Labelhelp),
+                        f_itemlotno = null as string,
+                        f_itemlotexpire = null as string,
+                        f_instructioncode = d?.Usagecode?.Instructioncode ?? null as string,
+                        f_instructiondesc = null as string,
+                        f_frequencycode = string.IsNullOrWhiteSpace(d?.Usagecode?.Frequencycode)
+                             ? null as string
+                            : d.Usagecode.Frequencycode,
+                        f_frequencydesc = string.IsNullOrWhiteSpace(d?.Usagecode?.Frequencydesc)
+                            ? null as string
+                            : d.Usagecode.Frequencydesc,
+                        f_timecode = null as string,
+                        f_timedesc = null as string,
+                        f_frequencytime = null as string,
+                        f_dosagedispense = null as string,
+                        f_dayofweek = null as string,
                         f_noteprocessing = !string.IsNullOrWhiteSpace(d?.Substand?.Noteprocessing)
                             ? d.Substand.Noteprocessing
                             : !string.IsNullOrWhiteSpace(d?.RXD33)
                                 ? d.RXD33
-                                : null,
+                                : null as string,
                         f_prn = "0",
                         f_stat = "0",
-                        f_comment = (string)null,
-                        f_tomachineno = r?.AdministrationDevice
-                            ?? (!string.IsNullOrEmpty(d?.Actualdispense) &&
-                                d.Actualdispense.IndexOf("proud", StringComparison.OrdinalIgnoreCase) >= 0
-                                    ? "2"
-                                    : "0"),
-                        f_ipd_order_recordno = (string)null,
+                        f_comment = null as string,
+                        f_tomachineno = r?.AdministrationDevice ??
+                                (!string.IsNullOrEmpty(d?.Actualdispense) &&
+                                 d.Actualdispense.IndexOf("proud", StringComparison.OrdinalIgnoreCase) >= 0
+                                     ? 2
+                                     : 0),
+                        f_ipd_order_recordno = null as string,
                         f_status = result?.CommonOrder?.OrderControl == "NW" ? "0" :
                                    result?.CommonOrder?.OrderControl == "RP" ? "1" : "0",
                     };
                 })
                 .ToArray();
 
-            // 👉 ถ้า prescriptions ไม่มีข้อมูล → ไปอ่านจากไฟล์ txt
-            if (prescriptions == null || prescriptions.Length == 0)
-            {
-                string txtPath = "prescriptions.txt";
-                if (File.Exists(txtPath))
-                {
-                    return File.ReadAllText(txtPath);
-                }
-                else
-                {
-                    return "{\"data\": []}";
-                }
-            }
-
-            // ✅ ถ้ามี prescriptions ให้ serialize เป็น JSON
-            var payload = new { data = prescriptions };
+            var payload = new { data = prescriptions ?? new object[0] };
             return JsonConvert.SerializeObject(payload, Formatting.Indented);
         }
 
-        public void Dispose()
+        
+        
+        /// <summary>
+        /// คลาสสำหรับเก็บผลลัพธ์การทดสอบไฟล์ HL7 พร้อมข้อมูล API
+        /// </summary>
+        public class HL7TestResult
         {
-            _apiService?.Dispose();
+            public string FileName { get; set; }
+            public string FilePath { get; set; }
+            public bool Success { get; set; }
+            public string ErrorMessage { get; set; }
+            public HL7Message ParsedMessage { get; set; }
+            public bool SendToApi { get; set; }
+            public bool ApiSent { get; set; }
+            public string JsonPayload { get; set; }
+            public string ApiResponse { get; set; }
+        }
+        public class ApiResponseItem
+        {
+            public string UniqID { get; set; }
+            public bool Status { get; set; }
+            public string Message { get; set; }
         }
     }
-
-    /// <summary>
-    /// คลาสสำหรับเก็บผลลัพธ์การทดสอบไฟล์ HL7 พร้อมข้อมูล API
-    /// </summary>
-   
 }

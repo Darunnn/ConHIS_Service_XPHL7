@@ -20,38 +20,8 @@ namespace ConHIS_Service_XPHL7.Services
             _httpClient.Timeout = TimeSpan.FromSeconds(30);
         }
 
-        // เมธอดเดิมที่ return boolean
-        public bool SendToMiddleware(object data)
-        {
-            _logger.LogInfo($"SendToMiddleware: Start, Endpoint = {_apiEndpoint}");
-            try
-            {
-                var json = JsonConvert.SerializeObject(data, Formatting.Indented);
-                _logger.LogInfo($"SendToMiddleware: JSON = {json}");
-
-                var content = new StringContent(json, Encoding.UTF8, "application/json");
-                var response = _httpClient.PostAsync(_apiEndpoint, content).Result;
-
-                _logger.LogInfo($"SendToMiddleware: Response status = {response.StatusCode}");
-
-                if (response.IsSuccessStatusCode)
-                {
-                    _logger.LogInfo("SendToMiddleware: Success");
-                    return true;
-                }
-                else
-                {
-                    var errorContent = response.Content.ReadAsStringAsync().Result;
-                    _logger.LogError($"API call failed: {response.StatusCode}, Content: {errorContent}");
-                    throw new Exception($"API call failed: {response.StatusCode}, Content: {errorContent}");
-                }
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError("Error calling API", ex);
-                throw new Exception($"Error calling API: {ex.Message}", ex);
-            }
-        }
+        
+      
 
         // เมธอดใหม่ที่ return response content
         public string SendToMiddlewareWithResponse(object data)

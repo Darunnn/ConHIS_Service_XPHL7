@@ -6,6 +6,7 @@ using System.Windows.Forms;
 using ConHIS_Service_XPHL7.Configuration;
 using ConHIS_Service_XPHL7.Services;
 using ConHIS_Service_XPHL7.Utils;
+using static ConHIS_Service_XPHL7.Services.SimpleHL7FileProcessor;
 using Timer = System.Threading.Timer;
 
 namespace ConHIS_Service_XPHL7
@@ -69,10 +70,14 @@ namespace ConHIS_Service_XPHL7
             if (_backgroundTimer == null)
             {
                 StartBackgroundService();
+                testHL7Button.Enabled = false;
+                manualCheckButton.Enabled = false;
             }
             else
             {
                 StopBackgroundService();
+                testHL7Button.Enabled = true;
+                manualCheckButton.Enabled = true;
             }
         }
 
@@ -97,10 +102,10 @@ namespace ConHIS_Service_XPHL7
                     // หาโฟลเดอร์เริ่มต้น
                     var searchFolders = new[]
                     {
-                        Path.Combine(Application.StartupPath, "Test_HL7_Files"),
-                        Application.StartupPath,
-                        Environment.GetFolderPath(Environment.SpecialFolder.Desktop)
-                    };
+                Path.Combine(Application.StartupPath, "TestData"),
+                Application.StartupPath,
+                Environment.GetFolderPath(Environment.SpecialFolder.Desktop)
+            };
 
                     string initialDirectory = Application.StartupPath;
                     foreach (var folder in searchFolders)
@@ -118,20 +123,21 @@ namespace ConHIS_Service_XPHL7
                         var filePath = openFileDialog.FileName;
                         var fileName = Path.GetFileName(filePath);
 
-                        // ถามว่าต้องการส่ง API หรือไม่
-                        var sendToApi = MessageBox.Show(
-                            "Do you want to send this HL7 data to API?\n\n" +
-                            $"API Endpoint: {AppConfig.ApiEndpoint}\n\n" +
-                            "Yes = Process and Send to API\n" +
-                            "No = Process only (Log only)",
-                            "Send to API?",
-                            MessageBoxButtons.YesNo,
-                            MessageBoxIcon.Question
-                        ) == DialogResult.Yes;
+                        // ตรวจสอบว่ามี API Endpoint หรือไม่
+                        if (string.IsNullOrEmpty(AppConfig.ApiEndpoint))
+                        {
+                            _logger.LogError("API Endpoint is not configured!");
+                            UpdateStatus("Error: API Endpoint not configured");
+                            return;
+                        }
 
-                        UpdateStatus($"Testing HL7 file: {fileName}...");
+                        // ส่ง API เสมอ
+                        var sendToApi = true;
+
+                        UpdateStatus($"Check Testing HL7 file: {fileName}...");
                         testHL7Button.Enabled = false;
-
+                        manualCheckButton.Enabled = false;
+                        startStopButton.Enabled = false;
                         // ประมวลผลในพื้นหลัง
                         HL7TestResult result = null;
                         await Task.Run(() =>
@@ -139,29 +145,35 @@ namespace ConHIS_Service_XPHL7
                             result = _hl7FileProcessor.ProcessAndSendHL7File(filePath, sendToApi);
                         });
 
-                        // แสดงผลลัพธ์
+                        // Log ผลลัพธ์
                         if (result != null)
                         {
-                            var summaryMessage = _hl7FileProcessor.CreateSummaryMessage(result);
-
-                            var icon = result.Success
-                                ? (result.SendToApi && !result.ApiSent ? MessageBoxIcon.Warning : MessageBoxIcon.Information)
-                                : MessageBoxIcon.Error;
-
-                            MessageBox.Show(summaryMessage, "HL7 Test Result", MessageBoxButtons.OK, icon);
+                            if (result.Success)
+                            {                      
+                                UpdateStatus($"HL7 test completed - {fileName} (Check log for details)");
+                            }
+                            else
+                            {
+                                UpdateStatus($"HL7 test failed - {fileName} (Check log for details)");
+                            }
                         }
-
-                        UpdateStatus("HL7 file test completed");
-                        testHL7Button.Enabled = true;
+                        else
+                        {
+                            UpdateStatus("HL7 test failed - Check log for details");
+                        }
                     }
                 }
             }
             catch (Exception ex)
             {
                 _logger.LogError("HL7 file test error", ex);
-                UpdateStatus($"HL7 test error: {ex.Message}");
-                MessageBox.Show($"Error testing HL7 file: {ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                UpdateStatus($"HL7 test error: {ex.Message} (Check log for details)");
+            }
+            finally
+            {
                 testHL7Button.Enabled = true;
+                manualCheckButton.Enabled = true;
+                startStopButton.Enabled = true;
             }
         }
 
@@ -198,6 +210,8 @@ namespace ConHIS_Service_XPHL7
             if (_isProcessing) return;
 
             _isProcessing = true;
+            testHL7Button.Enabled = false;
+            startStopButton.Enabled = false;
 
             try
             {
@@ -267,6 +281,8 @@ namespace ConHIS_Service_XPHL7
             finally
             {
                 _isProcessing = false;
+                testHL7Button.Enabled = true;
+                startStopButton.Enabled = true;
             }
         }
 

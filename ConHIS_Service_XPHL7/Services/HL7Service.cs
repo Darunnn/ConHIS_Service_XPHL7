@@ -350,6 +350,16 @@ namespace ConHIS_Service_XPHL7.Services
         private RXD ParseRXE(string[] fields)
         {
             var drugComponents = GetField(fields, 2).Split(COMPONENT_SEPARATOR[0]);
+            var rawDrugName = GetComponent(drugComponents, 4) ?? "";
+            var drugParts = rawDrugName.Split(new[] { ';' }, StringSplitOptions.RemoveEmptyEntries)
+                           .Select(p => p.Trim())
+                           .ToArray();
+
+            // เตรียมค่า
+            string drugName = drugParts.Length > 0 ? drugParts[0] + ";" : "";
+            string drugNamePrint = drugParts.Length > 1 ? drugParts[1] + ";" : "";
+            string drugNameThai = drugParts.Length > 2 ? drugParts[2] + ";" : "";
+
             var staffComponents = GetField(fields, 5).Split(COMPONENT_SEPARATOR[0]);
 
             // **การแก้ไขหลัก: รวม field 7 ที่ถูกแยกโดย pipe**
@@ -437,12 +447,12 @@ namespace ConHIS_Service_XPHL7.Services
                     UniqID = GetComponent(drugComponents, 1),
                     RXD203 = GetComponent(drugComponents, 2),
                     Identifier = GetComponent(drugComponents, 3),
-                    DrugName = GetComponent(drugComponents, 4),
-                    DrugNamePrint = GetComponent(drugComponents, 5),
-                    DrugNameThai = GetComponent(drugComponents, 6)
+                    DrugName = drugName,
+                    DrugNamePrint = drugNamePrint,
+                    DrugNameThai = drugNameThai
                 },
                 DateTimeDispensed = ParseDateTime(GetField(adjustedFieldsArray, 3)),
-                ActualDispense = ParseInt(GetField(adjustedFieldsArray, 4)),
+                RXD4 = ParseInt(GetField(adjustedFieldsArray, 4)),
                 Modifystaff = new Modifystaff
                 {
                     StaffCode = GetComponent(staffComponents, 0),
@@ -452,7 +462,7 @@ namespace ConHIS_Service_XPHL7.Services
                 Substand = new Substand
                 {
                     RXD701 = GetComponent(SubstandComponents, 0),
-                    Medicinalproperties = GetComponent(SubstandComponents, 1), // ตอนนี้จะได้ "รีชมพูแผงทึบ"
+                    Medicinalproperties = GetComponent(SubstandComponents, 1), 
                     Labelhelp = GetComponent(SubstandComponents, 2),
                     RXD704 = GetComponent(SubstandComponents, 3),
                     Usageline1 = usageParts.Length > 0 ? usageParts[0] : "",
@@ -514,6 +524,16 @@ namespace ConHIS_Service_XPHL7.Services
         private RXD ParseRXD(string[] fields)
         {
             var drugComponents = GetField(fields, 2).Split(COMPONENT_SEPARATOR[0]);
+            var rawDrugName = GetComponent(drugComponents, 4) ?? "";
+            var drugParts = rawDrugName.Split(new[] { ';' }, StringSplitOptions.RemoveEmptyEntries)
+                           .Select(p => p.Trim())
+                           .ToArray();
+
+            // เตรียมค่า
+            string drugName = drugParts.Length > 0 ? drugParts[0] + ";" : "";
+            string drugNamePrint = drugParts.Length > 1 ? drugParts[1] + ";" : "";
+            string drugNameThai = drugParts.Length > 2 ? drugParts[2] + ";" : "";
+
             var staffComponents = GetField(fields, 5).Split(COMPONENT_SEPARATOR[0]);
 
             // **การแก้ไขหลัก: รวม field 7 ที่ถูกแยกโดย pipe**
@@ -601,12 +621,12 @@ namespace ConHIS_Service_XPHL7.Services
                     UniqID = GetComponent(drugComponents, 1),
                     RXD203 = GetComponent(drugComponents, 2),
                     Identifier = GetComponent(drugComponents, 3),
-                    DrugName = GetComponent(drugComponents, 4),
-                    DrugNamePrint = GetComponent(drugComponents, 5),
-                    DrugNameThai = GetComponent(drugComponents, 6)
+                    DrugName = drugName,
+                    DrugNamePrint = drugNamePrint,
+                    DrugNameThai = drugNameThai
                 },
                 DateTimeDispensed = ParseDateTime(GetField(adjustedFieldsArray, 3)),
-                ActualDispense = ParseInt(GetField(adjustedFieldsArray, 4)),
+                RXD4 = ParseInt(GetField(adjustedFieldsArray, 4)),
                 Modifystaff = new Modifystaff
                 {
                     StaffCode = GetComponent(staffComponents, 0),
@@ -616,7 +636,7 @@ namespace ConHIS_Service_XPHL7.Services
                 Substand = new Substand
                 {
                     RXD701 = GetComponent(SubstandComponents, 0),
-                    Medicinalproperties = GetComponent(SubstandComponents, 1), // ตอนนี้จะได้ "รีชมพูแผงทึบ"
+                    Medicinalproperties = GetComponent(SubstandComponents, 1),
                     Labelhelp = GetComponent(SubstandComponents, 2),
                     RXD704 = GetComponent(SubstandComponents, 3),
                     Usageline1 = usageParts.Length > 0 ? usageParts[0] : "",
@@ -708,7 +728,7 @@ namespace ConHIS_Service_XPHL7.Services
             {
                 Route = GetField(fields, 1),                  // RXR-1
                 site = GetField(fields, 2),                   // RXR-2
-                AdministrationDevice = GetField(fields, 3),   // RXR-3
+                AdministrationDevice = ParseInt(GetField(fields, 3)),// RXR-3
                 AdministrationMethod = GetField(fields, 4),   // RXR-4
                 RoutingInstruction = GetField(fields, 5)      // RXR-5
             };

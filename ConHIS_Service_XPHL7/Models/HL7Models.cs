@@ -375,7 +375,7 @@ namespace ConHIS_Service_XPHL7.Models
         public Dispensegivecode Dispensegivecode { get; set; } = new Dispensegivecode(); // RXD-2: Drug ID / Dispense Give Code
 
         public DateTime? DateTimeDispensed { get; set; }      // RXD-3: Date/Time Dispensed
-        public int ActualDispense { get; set; }              // RXD-4: Actual Dispense
+        public int RXD4 { get; set; }              // RXD-4: Actual Dispense
         public Modifystaff Modifystaff { get; set; } = new Modifystaff(); // RXD-5: Modified Staff
         public string Dosageform  { get; set; }                          // RXD-6: Quantity Dispensed
         public Substand Substand { get; set; } = new Substand();   // RXD-7
@@ -469,7 +469,7 @@ namespace ConHIS_Service_XPHL7.Models
     {
         public string Route { get; set; }                     // RXR-1 Drug ID
         public string site { get; set; }                      // RXR-2 Site
-        public string AdministrationDevice { get; set; }      // RXR-3 Status Device
+        public int AdministrationDevice { get; set; }      // RXR-3 Status Device
         public string AdministrationMethod { get; set; }      // RXR-4 Method
         public string RoutingInstruction { get; set; }        // RXR-5 Instruction
     }
