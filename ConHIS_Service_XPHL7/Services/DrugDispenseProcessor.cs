@@ -386,12 +386,12 @@ namespace ConHIS_Service_XPHL7.Services
          f_prescriptionno = hl7?.CommonOrder?.PlacerOrderNumber ?? "",
          f_seq = n?.SetID ?? (index + 1),
          f_seqmax = totalPrescriptions,  // ยังไม่เจอ field ใดใน HL7
-         f_prescriptiondate = FormatDate(d?.Prescriptiondate, "yyyyMMdd"),
-         f_ordercreatedate = FormatDate(hl7?.CommonOrder.TransactionDateTime, "yyyy-MM-dd HH:mm:ss"),
-         f_ordertargetdate = FormatDate(headerDt, "yyyy-MM-dd"),// ยังไม่เจอ field ใดใน HL7 
+         f_prescriptiondate = FormatDate(d?.Prescriptiondate, "yyyyMMdd" ?? null),
+         f_ordercreatedate = FormatDate(hl7?.CommonOrder.TransactionDateTime, "yyyy-MM-dd HH:mm:ss" ?? null),
+         f_ordertargetdate = FormatDate(headerDt, "yyyy-MM-dd") ?? null,// ยังไม่เจอ field ใดใน HL7 
          f_ordertargettime = (string)null,// ยังไม่เจอ field ใดใน HL7
-         f_doctorcode = d?.Doctor?.ID ?? "",
-         f_doctorname = d?.Doctor?.Name ?? "",
+         f_doctorcode = d?.Doctor?.ID ?? null,
+         f_doctorname = d?.Doctor?.Name ?? null,
          f_useracceptby = (d?.Modifystaff != null)
                            ? string.Join(" ", new[]
                          {
@@ -399,28 +399,28 @@ namespace ConHIS_Service_XPHL7.Services
                             d.Modifystaff.StaffName
                          }.Where(x => !string.IsNullOrWhiteSpace(x)))
                          : hl7?.CommonOrder?.OrderingProvider.Name ?? "",
-         f_orderacceptdate = FormatDate(hl7?.CommonOrder.TransactionDateTime, "yyyy-MM-dd HH:mm:ss"),
+         f_orderacceptdate = FormatDate(hl7?.CommonOrder.TransactionDateTime, "yyyy-MM-dd HH:mm:ss") ?? null,
          f_orderacceptfromip = (string)null,// ยังไม่เจอ field ใดใน HL7
          f_pharmacylocationcode = !string.IsNullOrEmpty(d?.Departmentcode)
     ? d.Departmentcode.Substring(0, Math.Min(d.Departmentcode.Length, 20))
     : (!string.IsNullOrEmpty(hl7?.CommonOrder?.EnterersLocation)
         ? hl7.CommonOrder.EnterersLocation.Substring(0, Math.Min(hl7.CommonOrder.EnterersLocation.Length, 20))
-        : ""),
+        : null),
          f_pharmacylocationdesc = !string.IsNullOrEmpty(d?.Departmentname)
     ? d.Departmentname.Substring(0, Math.Min(d.Departmentname.Length, 100))
     : (!string.IsNullOrEmpty(hl7?.CommonOrder?.EnterersLocation)
         ? hl7.CommonOrder.EnterersLocation.Substring(0, Math.Min(hl7.CommonOrder.EnterersLocation.Length, 100))
-        : ""),
+        : null),
          f_prioritycode = !string.IsNullOrEmpty(d?.prioritycode)
-    ? d.prioritycode.Substring(0, Math.Min(d.prioritycode.Length, 10)) : d?.RXD31 ?? "",
+    ? d.prioritycode.Substring(0, Math.Min(d.prioritycode.Length, 10)) : d?.RXD31 ?? null,
          f_prioritydesc = !string.IsNullOrEmpty(d?.prioritycode)
-    ? d.prioritycode.Substring(0, Math.Min(d.prioritycode.Length, 50)) : "",
-         f_hn = hl7?.PatientIdentification?.PatientIDExternal ?? "",
-         f_an = hl7?.PatientVisit?.VisitNumber ?? "",
-         f_vn = hl7?.PatientVisit?.VisitNumber ?? "",
+    ? d.prioritycode.Substring(0, Math.Min(d.prioritycode.Length, 50)) : null,
+         f_hn = hl7?.PatientIdentification?.PatientIDExternal ?? null,
+         f_an = hl7?.PatientVisit?.VisitNumber ?? null,
+         f_vn = hl7?.PatientVisit?.VisitNumber ?? null,
          f_title = (hl7?.PatientIdentification?.OfficialName != null)
              ? $"{hl7.PatientIdentification.OfficialName.Suffix}".Trim()
-             : "",
+             : null,
          f_patientname = (hl7?.PatientIdentification?.OfficialName != null)
                          ? string.Join(" ", new[]
                          {
@@ -428,10 +428,10 @@ namespace ConHIS_Service_XPHL7.Services
                             hl7.PatientIdentification.OfficialName.MiddleName,
                             hl7.PatientIdentification.OfficialName.LastName
                          }.Where(x => !string.IsNullOrWhiteSpace(x)))
-                         : hl7?.CommonOrder?.EnteredBy ?? "",
+                         : hl7?.CommonOrder?.EnteredBy ?? null,
          f_sex = hl7?.PatientIdentification?.Sex ?? "",
-         f_patientdob = FormatDate(hl7?.PatientIdentification?.DateOfBirth, "yyyy-MM-dd"),
-         f_wardcode = hl7?.PatientVisit?.AssignedPatientLocation?.PointOfCare ?? "",
+         f_patientdob = FormatDate(hl7?.PatientIdentification?.DateOfBirth, "yyyy-MM-dd") ?? null,
+         f_wardcode = hl7?.PatientVisit?.AssignedPatientLocation?.PointOfCare ?? null,
          f_warddesc = "",// ยังไม่เจอ field ใดใน HL7
          f_roomcode = "",// ยังไม่เจอ field ใดใน HL7
          f_roomdesc = "",// ยังไม่เจอ field ใดใน HL7
@@ -468,7 +468,7 @@ namespace ConHIS_Service_XPHL7.Services
          f_timecode = "",// ยังไม่เจอ field ใดใน HL7
          f_timedesc = "",// ยังไม่เจอ field ใดใน HL7
          f_frequencytime = "",// ยังไม่เจอ field ใดใน HL7
-         f_dosagedispense = "",// ยังไม่เจอ field ใดใน HL7
+         f_dosagedispense = (string)null,// ยังไม่เจอ field ใดใน HL7
          f_dayofweek = (string)null,// ยังไม่เจอ field ใดใน HL7
          f_noteprocessing = !string.IsNullOrWhiteSpace(d?.Substand?.Noteprocessing)
     ? d.Substand.Noteprocessing

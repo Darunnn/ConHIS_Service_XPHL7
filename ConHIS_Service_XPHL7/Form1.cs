@@ -93,69 +93,63 @@ namespace ConHIS_Service_XPHL7
                 {
                     openFileDialog.Title = "Select HL7 File to Test";
                     openFileDialog.Filter = "Text files (*.txt)|*.txt|All files (*.*)|*.*";
-                    openFileDialog.InitialDirectory = Application.StartupPath;
+
+                    // หาโฟลเดอร์เริ่มต้น
+                    var searchFolders = new[]
+                    {
+                        Path.Combine(Application.StartupPath, "Test_HL7_Files"),
+                        Application.StartupPath,
+                        Environment.GetFolderPath(Environment.SpecialFolder.Desktop)
+                    };
+
+                    string initialDirectory = Application.StartupPath;
+                    foreach (var folder in searchFolders)
+                    {
+                        if (Directory.Exists(folder))
+                        {
+                            initialDirectory = folder;
+                            break;
+                        }
+                    }
+                    openFileDialog.InitialDirectory = initialDirectory;
 
                     if (openFileDialog.ShowDialog() == DialogResult.OK)
                     {
                         var filePath = openFileDialog.FileName;
                         var fileName = Path.GetFileName(filePath);
 
+                        // ถามว่าต้องการส่ง API หรือไม่
+                        var sendToApi = MessageBox.Show(
+                            "Do you want to send this HL7 data to API?\n\n" +
+                            $"API Endpoint: {AppConfig.ApiEndpoint}\n\n" +
+                            "Yes = Process and Send to API\n" +
+                            "No = Process only (Log only)",
+                            "Send to API?",
+                            MessageBoxButtons.YesNo,
+                            MessageBoxIcon.Question
+                        ) == DialogResult.Yes;
+
                         UpdateStatus($"Testing HL7 file: {fileName}...");
                         testHL7Button.Enabled = false;
 
-                        // ประมวลผลไฟล์ในพื้นหลัง
+                        // ประมวลผลในพื้นหลัง
+                        HL7TestResult result = null;
                         await Task.Run(() =>
                         {
-                            _logger.LogInfo($"Starting HL7 file test: {filePath}");
-
-                            // ประมวลผลไฟล์
-                            var message = _hl7FileProcessor.ProcessHL7File(filePath);
-
-                            if (message != null)
-                            {
-                                _logger.LogInfo($"HL7 file test successful: {fileName}");
-
-                                this.Invoke(new Action(() =>
-                                {
-                                    try
-                                    {
-                                        // แสดงข้อมูลสำคัญใน MessageBox
-                                        var patientInfo = message.PatientIdentification;
-                                        var drugCount = message.PharmacyDispense?.Count ?? 0;
-                                        var allergyCount = message.Allergies?.Count ?? 0;
-
-                                        var summary = $"HL7 File Test Result:\n\n" +
-                                                    $"File: {fileName}\n" +
-                                                    $"Patient HN: {patientInfo?.PatientIDInternal ?? "N/A"}\n" +
-                                                    $"Patient Name: {patientInfo?.OfficialName?.FirstName ?? ""} {patientInfo?.OfficialName?.LastName ?? ""}\n" +
-                                                    $"DOB: {patientInfo?.DateOfBirth?.ToString("yyyy-MM-dd") ?? "N/A"}\n" +
-                                                    $"Sex: {patientInfo?.Sex ?? "N/A"}\n" +
-                                                    $"Total Drugs: {drugCount}\n" +
-                                                    $"Total Allergies: {allergyCount}\n\n" +
-                                                    $"✅ Processing successful!\n" +
-                                                    $"Check log files for detailed information.";
-
-                                        MessageBox.Show(summary, "HL7 Test Result", MessageBoxButtons.OK, MessageBoxIcon.Information);
-                                    }
-                                    catch (Exception displayEx)
-                                    {
-                                        _logger.LogError($"Error displaying results: {displayEx.Message}", displayEx);
-                                        MessageBox.Show($"✅ HL7 file processed successfully: {fileName}\n\nCheck log files for details.",
-                                                      "HL7 Test Result", MessageBoxButtons.OK, MessageBoxIcon.Information);
-                                    }
-                                }));
-                            }
-                            else
-                            {
-                                _logger.LogError($"HL7 file test failed: {fileName}");
-
-                                this.Invoke(new Action(() =>
-                                {
-                                    MessageBox.Show($"❌ Failed to process HL7 file: {fileName}\n\nCheck error logs for details.",
-                                                  "HL7 Test Result", MessageBoxButtons.OK, MessageBoxIcon.Error);
-                                }));
-                            }
+                            result = _hl7FileProcessor.ProcessAndSendHL7File(filePath, sendToApi);
                         });
+
+                        // แสดงผลลัพธ์
+                        if (result != null)
+                        {
+                            var summaryMessage = _hl7FileProcessor.CreateSummaryMessage(result);
+
+                            var icon = result.Success
+                                ? (result.SendToApi && !result.ApiSent ? MessageBoxIcon.Warning : MessageBoxIcon.Information)
+                                : MessageBoxIcon.Error;
+
+                            MessageBox.Show(summaryMessage, "HL7 Test Result", MessageBoxButtons.OK, icon);
+                        }
 
                         UpdateStatus("HL7 file test completed");
                         testHL7Button.Enabled = true;

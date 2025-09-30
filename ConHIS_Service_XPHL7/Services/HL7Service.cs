@@ -345,7 +345,7 @@ namespace ConHIS_Service_XPHL7.Services
             };
         }
 
-        // แก้ไขเฉพาะจุดที่มีปัญหา - ใน ParseRXE และ ParseRXD methods
+        
 
         private RXD ParseRXE(string[] fields)
         {
@@ -701,10 +701,7 @@ namespace ConHIS_Service_XPHL7.Services
         }
 
         // ใช้ method เดียวกันสำหรับ ParseRXD โดยเปลี่ยน IsRXE = false
-        
-
-
-
+      
         private RXR ParseRXR(string[] fields)
         {
             return new RXR
@@ -729,8 +726,6 @@ namespace ConHIS_Service_XPHL7.Services
         }
 
         #endregion
-
-        
 
         #region Helper Methods
         private string GetField(string[] fields, int index)
