@@ -180,7 +180,7 @@ namespace ConHIS_Service_XPHL7.Services
         /// </summary>
         private string CreateApiPayload(HL7Message result)
         {
-            string FormatDate(DateTime? dt, string fmt)
+            string FormatDate(DateTime? dt, string fmt, bool forceBuddhistEra = false)
             {
                 if (!dt.HasValue || dt.Value == DateTime.MinValue)
                     return null;
@@ -188,12 +188,13 @@ namespace ConHIS_Service_XPHL7.Services
                 var adjustedDate = dt.Value;
                 var year = adjustedDate.Year;
 
-                // Adjust Buddhist calendar to Gregorian (BE to AD)
-                if (year > 2400)
+                var currentCulture = System.Globalization.CultureInfo.CurrentCulture;
+                bool isBuddhistCalendar = currentCulture.Calendar is System.Globalization.ThaiBuddhistCalendar;
+
+                // แปลงเฉพาะเมื่อไม่ต้องการ BE และปีอยู่ในรูปแบบ BE
+                if (year > 2400 && !isBuddhistCalendar && !forceBuddhistEra)
                 {
                     adjustedDate = adjustedDate.AddYears(-543);
-
-                    // Validate the adjusted date is still valid
                     if (adjustedDate.Year <= 0)
                         return null;
                 }
@@ -201,7 +202,8 @@ namespace ConHIS_Service_XPHL7.Services
                 return adjustedDate.ToString(fmt, System.Globalization.CultureInfo.InvariantCulture);
             }
 
-            DateTime? headerDt = result?.MessageHeader?.MessageDateTime;
+
+            DateTime? headerDt = result?.MessageHeader != null ? (DateTime?)result.MessageHeader.MessageDateTime : null;
             int totalPrescriptions = result?.PharmacyDispense?.Count() ?? 0;
 
             var prescriptions = result?.PharmacyDispense?
