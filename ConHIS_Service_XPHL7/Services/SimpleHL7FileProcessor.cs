@@ -47,7 +47,7 @@ namespace ConHIS_Service_XPHL7.Services
                 {
                     var errorMsg = $"HL7 file not found: {filePath}";
                     _logger.LogError(errorMsg);
-                    _logger.LogReadError(fileName, errorMsg);
+                    
                     return null;
                 }
                 var hl7RawData = File.ReadAllText(filePath, Encoding.UTF8);
@@ -62,7 +62,7 @@ namespace ConHIS_Service_XPHL7.Services
             {
                 var errorMsg = $"Error processing HL7 file {filePath}: {ex.Message}";
                 _logger.LogError(errorMsg, ex);
-                _logger.LogReadError(fileName, errorMsg);
+                
                 return null;
             }
         }
@@ -90,8 +90,12 @@ namespace ConHIS_Service_XPHL7.Services
                 var parsedMessage = ProcessHL7File(filePath);
                 if (parsedMessage == null)
                 {
+                    var err = "Failed to parse HL7 file";
+                    _logger.LogError(err);
+                    
+
                     result.Success = false;
-                    result.ErrorMessage = "Failed to parse HL7 file";
+                    result.ErrorMessage = err;
                     return result;
                 }
 
@@ -107,16 +111,12 @@ namespace ConHIS_Service_XPHL7.Services
                 {
                     var apiUrl = $"{AppConfig.ApiEndpoint}";
                     var apiMethod = "POST";
-
-                    // Deserialize JSON payload เป็น object
                     var bodyObj = JsonConvert.DeserializeObject(jsonPayload);
 
-                    // Log แบบเดียวกับ ProcessReplaceOrder
                     _logger.LogInfo($"API URL: {apiUrl}");
                     _logger.LogInfo($"API Method: {apiMethod}");
                     _logger.LogInfo($"API Body: {jsonPayload}");
 
-                    // สร้าง ApiService และส่ง API
                     var apiService = new ApiService(apiUrl);
 
                     try
@@ -127,7 +127,6 @@ namespace ConHIS_Service_XPHL7.Services
                         result.ApiResponse = response;
                         result.ApiSent = true;
 
-                        // Parse response เพื่อตรวจสอบสถานะ
                         if (!string.IsNullOrEmpty(response))
                         {
                             var responseArray = JsonConvert.DeserializeObject<ApiResponseItem[]>(response);
@@ -143,7 +142,9 @@ namespace ConHIS_Service_XPHL7.Services
                                     }
                                     else
                                     {
-                                        _logger.LogError($"Order processing failed: UniqID: {item.UniqID}, Message: {item.Message}");
+                                        var err = $"Order processing failed: UniqID: {item.UniqID}, Message: {item.Message}";
+                                        _logger.LogError(err);
+                                       
                                     }
                                 }
                             }
@@ -151,9 +152,12 @@ namespace ConHIS_Service_XPHL7.Services
                     }
                     catch (Exception ex)
                     {
+                        var err = $"Failed to send data to middleware API: {ex.Message}";
                         _logger.LogError($"Failed to send data to middleware API for file: {fileName}", ex);
+                     
+
                         result.Success = false;
-                        result.ErrorMessage = $"Failed to send data to middleware API: {ex.Message}";
+                        result.ErrorMessage = err;
                         result.ApiSent = false;
                     }
                 }
@@ -167,12 +171,16 @@ namespace ConHIS_Service_XPHL7.Services
             }
             catch (Exception ex)
             {
-                _logger.LogError($"Error processing and sending HL7 file: {ex.Message}", ex);
+                var err = $"Error processing and sending HL7 file: {ex.Message}";
+                _logger.LogError(err, ex);
+                
+
                 result.Success = false;
                 result.ErrorMessage = ex.Message;
                 return result;
             }
         }
+
 
 
         /// <summary>

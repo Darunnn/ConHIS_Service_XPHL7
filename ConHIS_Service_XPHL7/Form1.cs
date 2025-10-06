@@ -1,11 +1,14 @@
 ﻿using System;
+using System.Data;
 using System.IO;
+using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Forms;
 using ConHIS_Service_XPHL7.Configuration;
 using ConHIS_Service_XPHL7.Services;
 using ConHIS_Service_XPHL7.Utils;
+using ConHIS_Service_XPHL7.Models;
 using static ConHIS_Service_XPHL7.Services.SimpleHL7FileProcessor;
 using Timer = System.Threading.Timer;
 
@@ -17,12 +20,18 @@ namespace ConHIS_Service_XPHL7
         private DatabaseService _databaseService;
         private LogManager _logger;
         private DrugDispenseProcessor _processor;
-        private SimpleHL7FileProcessor _hl7FileProcessor; // เพิ่มบรรทัดนี้
+        private SimpleHL7FileProcessor _hl7FileProcessor;
 
         // Background service components
         private Timer _backgroundTimer;
         private bool _isProcessing = false;
-        private readonly int _intervalSeconds = 60; // ฟิกทุก 60 วินาที
+        private readonly int _intervalSeconds = 60;
+
+        // DataTable for DataGridView
+        private DataTable _processedDataTable;
+
+        // เก็บ HL7Message ที่เชื่อมกับแต่ละแถว
+        private System.Collections.Generic.Dictionary<int, HL7Message> _rowHL7Data = new System.Collections.Generic.Dictionary<int, HL7Message>();
 
         public Form1()
         {
@@ -30,13 +39,62 @@ namespace ConHIS_Service_XPHL7
             this.Load += Form1_Load;
             this.FormClosing += Form1_FormClosing;
             _logger = new LogManager();
-            _hl7FileProcessor = new SimpleHL7FileProcessor(); // เพิ่มบรรทัดนี้
+            _hl7FileProcessor = new SimpleHL7FileProcessor();
+        }
+
+        private void InitializeDataTable()
+        {
+            _processedDataTable = new DataTable();
+            _processedDataTable.Columns.Add("Time", typeof(string));
+            _processedDataTable.Columns.Add("Order No", typeof(string));
+            _processedDataTable.Columns.Add("HN", typeof(string));
+            _processedDataTable.Columns.Add("Patient Name", typeof(string));
+            _processedDataTable.Columns.Add("Drug Code", typeof(string));
+            _processedDataTable.Columns.Add("Drug Name", typeof(string));
+            _processedDataTable.Columns.Add("Quantity", typeof(string));
+            _processedDataTable.Columns.Add("Status", typeof(string));
+            _processedDataTable.Columns.Add("API Response", typeof(string));
+
+            dataGridView.DataSource = _processedDataTable;
+
+            // เพิ่ม event handler สำหรับดับเบิลคลิก
+            dataGridView.CellDoubleClick += DataGridView_CellDoubleClick;
+
+            // ปรับความกว้างคอลัมน์ (รอให้ DataGridView โหลดเสร็จก่อน)
+            dataGridView.AutoGenerateColumns = true;
+            dataGridView.Refresh();
+
+            // ตั้งค่าความกว้างคอลัมน์
+            try
+            {
+                if (dataGridView.Columns.Count >= 9)
+                {
+                    dataGridView.Columns["Time"].Width = 80;
+                    dataGridView.Columns["Order No"].Width = 90;
+                    dataGridView.Columns["HN"].Width = 70;
+                    dataGridView.Columns["Patient Name"].Width = 120;
+                    dataGridView.Columns["Drug Code"].Width = 80;
+                    dataGridView.Columns["Drug Name"].Width = 150;
+                    dataGridView.Columns["Quantity"].Width = 60;
+                    dataGridView.Columns["Status"].Width = 70;
+                    dataGridView.Columns["API Response"].AutoSizeMode = DataGridViewAutoSizeColumnMode.Fill;
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogError("Error setting column widths", ex);
+            }
+
+            UpdateRecordCount();
         }
 
         private void Form1_Load(object sender, EventArgs e)
         {
             _logger.LogInfo("Start Interface");
             UpdateStatus("Initializing...");
+
+            // Initialize DataTable first
+            InitializeDataTable();
 
             try
             {
@@ -55,7 +113,10 @@ namespace ConHIS_Service_XPHL7
 
                 UpdateStatus("Ready - Service Stopped");
                 startStopButton.Enabled = true;
-                testHL7Button.Enabled = true; // เพิ่มบรรทัดนี้
+                testHL7Button.Enabled = true;
+                manualCheckButton.Enabled = true;
+                clearButton.Enabled = true;
+                exportButton.Enabled = true;
             }
             catch (Exception ex)
             {
@@ -72,12 +133,16 @@ namespace ConHIS_Service_XPHL7
                 StartBackgroundService();
                 testHL7Button.Enabled = false;
                 manualCheckButton.Enabled = false;
+                clearButton.Enabled = false;
+                exportButton.Enabled = false;
             }
             else
             {
                 StopBackgroundService();
                 testHL7Button.Enabled = true;
                 manualCheckButton.Enabled = true;
+                clearButton.Enabled = true;
+                exportButton.Enabled = true;
             }
         }
 
@@ -85,101 +150,175 @@ namespace ConHIS_Service_XPHL7
         {
             if (!_isProcessing)
             {
-                await CheckPendingOrders();
+                await CheckPendingOrdersManual();
             }
         }
 
-        // เพิ่มฟังก์ชันใหม่ทั้งหมดนี้
-        private async void TestHL7Button_Click(object sender, EventArgs e)
+        private void ClearButton_Click(object sender, EventArgs e)
         {
+            if (_processedDataTable.Rows.Count > 0)
+            {
+                var result = MessageBox.Show(
+                    $"Are you sure you want to clear all {_processedDataTable.Rows.Count} records?",
+                    "Confirm Clear",
+                    MessageBoxButtons.YesNo,
+                    MessageBoxIcon.Question);
+
+                if (result == DialogResult.Yes)
+                {
+                    _processedDataTable.Clear();
+                    _rowHL7Data.Clear();  // ล้าง dictionary ด้วย
+                    UpdateRecordCount();
+                    _logger.LogInfo("DataGrid cleared by user");
+                }
+            }
+        }
+
+        private void ExportButton_Click(object sender, EventArgs e)
+        {
+            if (_processedDataTable.Rows.Count == 0)
+            {
+                MessageBox.Show("No data to export.", "Export", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
+
             try
             {
-                using (var openFileDialog = new OpenFileDialog())
+                using (var saveFileDialog = new SaveFileDialog())
                 {
-                    openFileDialog.Title = "Select HL7 File to Test";
-                    openFileDialog.Filter = "Text files (*.txt)|*.txt|All files (*.*)|*.*";
+                    saveFileDialog.Filter = "CSV files (*.csv)|*.csv|All files (*.*)|*.*";
+                    saveFileDialog.FileName = $"DrugDispense_{DateTime.Now:yyyyMMdd_HHmmss}.csv";
+                    saveFileDialog.InitialDirectory = Environment.GetFolderPath(Environment.SpecialFolder.Desktop);
 
-                    // หาโฟลเดอร์เริ่มต้น
-                    var searchFolders = new[]
+                    if (saveFileDialog.ShowDialog() == DialogResult.OK)
                     {
-                Path.Combine(Application.StartupPath, "TestData"),
-                Application.StartupPath,
-                Environment.GetFolderPath(Environment.SpecialFolder.Desktop)
-            };
-
-                    string initialDirectory = Application.StartupPath;
-                    foreach (var folder in searchFolders)
-                    {
-                        if (Directory.Exists(folder))
-                        {
-                            initialDirectory = folder;
-                            break;
-                        }
-                    }
-                    openFileDialog.InitialDirectory = initialDirectory;
-
-                    if (openFileDialog.ShowDialog() == DialogResult.OK)
-                    {
-                        var filePath = openFileDialog.FileName;
-                        var fileName = Path.GetFileName(filePath);
-
-                        // ตรวจสอบว่ามี API Endpoint หรือไม่
-                        if (string.IsNullOrEmpty(AppConfig.ApiEndpoint))
-                        {
-                            _logger.LogError("API Endpoint is not configured!");
-                            UpdateStatus("Error: API Endpoint not configured");
-                            return;
-                        }
-
-                        // ส่ง API เสมอ
-                        var sendToApi = true;
-
-                        UpdateStatus($"Check Testing HL7 file: {fileName}...");
-                        testHL7Button.Enabled = false;
-                        manualCheckButton.Enabled = false;
-                        startStopButton.Enabled = false;
-                        // ประมวลผลในพื้นหลัง
-                        HL7TestResult result = null;
-                        await Task.Run(() =>
-                        {
-                            result = _hl7FileProcessor.ProcessAndSendHL7File(filePath, sendToApi);
-                        });
-
-                        // Log ผลลัพธ์
-                        if (result != null)
-                        {
-                            if (result.Success)
-                            {                      
-                                UpdateStatus($"HL7 test completed - {fileName} (Check log for details)");
-                            }
-                            else
-                            {
-                                UpdateStatus($"HL7 test failed - {fileName} (Check log for details)");
-                            }
-                        }
-                        else
-                        {
-                            UpdateStatus("HL7 test failed - Check log for details");
-                        }
+                        ExportToCSV(saveFileDialog.FileName);
+                        MessageBox.Show($"Data exported successfully to:\n{saveFileDialog.FileName}",
+                            "Export Complete", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                        _logger.LogInfo($"Data exported to: {saveFileDialog.FileName}");
                     }
                 }
             }
             catch (Exception ex)
             {
-                _logger.LogError("HL7 file test error", ex);
-                UpdateStatus($"HL7 test error: {ex.Message} (Check log for details)");
+                _logger.LogError("Export error", ex);
+                MessageBox.Show($"Export failed: {ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
-            finally
+        }
+
+        private void ExportToCSV(string filePath)
+        {
+            var csv = new StringBuilder();
+
+            // Headers
+            var headers = new string[_processedDataTable.Columns.Count];
+            for (int i = 0; i < _processedDataTable.Columns.Count; i++)
             {
-                testHL7Button.Enabled = true;
-                manualCheckButton.Enabled = true;
-                startStopButton.Enabled = true;
+                headers[i] = _processedDataTable.Columns[i].ColumnName;
             }
+            csv.AppendLine(string.Join(",", headers));
+
+            // Data rows
+            foreach (DataRow row in _processedDataTable.Rows)
+            {
+                var fields = new string[_processedDataTable.Columns.Count];
+                for (int i = 0; i < _processedDataTable.Columns.Count; i++)
+                {
+                    var value = row[i].ToString();
+                    // Escape commas and quotes in CSV
+                    if (value.Contains(",") || value.Contains("\"") || value.Contains("\n"))
+                    {
+                        value = $"\"{value.Replace("\"", "\"\"")}\"";
+                    }
+                    fields[i] = value;
+                }
+                csv.AppendLine(string.Join(",", fields));
+            }
+
+            File.WriteAllText(filePath, csv.ToString(), Encoding.UTF8);
+        }
+
+
+        private void AddRowToGrid(string time, string orderNo, string hn, string patientName,
+            string drugCode, string drugName, string quantity, string status, string apiResponse, HL7Message hl7Data)
+        {
+            if (dataGridView.InvokeRequired)
+            {
+                dataGridView.Invoke(new Action(() =>
+                {
+                    int rowIndex = _processedDataTable.Rows.Count;
+                    _processedDataTable.Rows.Add(time, orderNo, hn, patientName, drugCode, drugName, quantity, status, apiResponse);
+
+                    // เก็บ HL7Message ที่เชื่อมกับแถวนี้
+                    if (hl7Data != null)
+                    {
+                        _rowHL7Data[rowIndex] = hl7Data;
+                    }
+
+                    UpdateRecordCount();
+
+                    // Scroll ไปแถวล่างสุด
+                    if (dataGridView.Rows.Count > 0)
+                    {
+                        dataGridView.FirstDisplayedScrollingRowIndex = dataGridView.Rows.Count - 1;
+                    }
+
+                    // สีตามสถานะ
+                    var lastRow = dataGridView.Rows[dataGridView.Rows.Count - 1];
+                    if (status == "Success")
+                    {
+                        lastRow.DefaultCellStyle.BackColor = System.Drawing.Color.LightGreen;
+                    }
+                    else if (status == "Failed")
+                    {
+                        lastRow.DefaultCellStyle.BackColor = System.Drawing.Color.LightCoral;
+                    }
+                }));
+            }
+            else
+            {
+                int rowIndex = _processedDataTable.Rows.Count;
+                _processedDataTable.Rows.Add(time, orderNo, hn, patientName, drugCode, drugName, quantity, status, apiResponse);
+
+                // เก็บ HL7Message ที่เชื่อมกับแถวนี้
+                if (hl7Data != null)
+                {
+                    _rowHL7Data[rowIndex] = hl7Data;
+                }
+
+                UpdateRecordCount();
+
+                if (dataGridView.Rows.Count > 0)
+                {
+                    dataGridView.FirstDisplayedScrollingRowIndex = dataGridView.Rows.Count - 1;
+                }
+
+                var lastRow = dataGridView.Rows[dataGridView.Rows.Count - 1];
+                if (status == "Success")
+                {
+                    lastRow.DefaultCellStyle.BackColor = System.Drawing.Color.LightGreen;
+                }
+                else if (status == "Failed")
+                {
+                    lastRow.DefaultCellStyle.BackColor = System.Drawing.Color.LightCoral;
+                }
+            }
+        }
+
+        private void UpdateRecordCount()
+        {
+            if (recordCountLabel.InvokeRequired)
+            {
+                recordCountLabel.Invoke(new Action(UpdateRecordCount));
+                return;
+            }
+
+            recordCountLabel.Text = $"Total Records: {_processedDataTable.Rows.Count}";
         }
 
         private void StartBackgroundService()
         {
-            var intervalMs = _intervalSeconds * 1000; // 60 วินาที
+            var intervalMs = _intervalSeconds * 1000;
             _backgroundTimer = new Timer(BackgroundTimerCallback, null, 0, intervalMs);
 
             startStopButton.Text = "Stop Service";
@@ -201,17 +340,15 @@ namespace ConHIS_Service_XPHL7
         {
             if (!_isProcessing)
             {
-                await CheckPendingOrders();
+                await CheckPendingOrdersauto();
             }
         }
-
-        private async Task CheckPendingOrders()
+        private async Task CheckPendingOrdersauto()
         {
             if (_isProcessing) return;
 
             _isProcessing = true;
-            testHL7Button.Enabled = false;
-            startStopButton.Enabled = false;
+          
 
             try
             {
@@ -234,10 +371,183 @@ namespace ConHIS_Service_XPHL7
                 {
                     await Task.Run(() =>
                     {
-                        _processor.ProcessPendingOrders(msg =>
+                        _processor.ProcessPendingOrders(
+                            msg =>
+                            {
+                                _logger.LogInfo($"Background processing: {msg}");
+                            },
+                            result =>
+                            {
+                                // แสดงผลบนตาราง
+
+                                var hl7Message = result.ParsedMessage;
+
+                                string orderNo = hl7Message?.CommonOrder?.PlacerOrderNumber ?? "N/A";
+                                string hn = hl7Message?.PatientIdentification?.PatientIDExternal ??
+                                           hl7Message?.PatientIdentification?.PatientIDInternal ?? "N/A";
+
+                                string patientName = "N/A";
+                                if (hl7Message?.PatientIdentification?.OfficialName != null)
+                                {
+                                    var name = hl7Message.PatientIdentification.OfficialName;
+                                    patientName = $"{name.Prefix ?? ""} {name.FirstName ?? ""} {name.LastName ?? ""}".Trim();
+                                }
+
+                                string drugCode = "N/A";
+                                string drugName = "N/A";
+                                string quantity = "N/A";
+
+                                if (hl7Message?.PharmacyDispense != null && hl7Message.PharmacyDispense.Count > 0)
+                                {
+                                    var rxd = hl7Message.PharmacyDispense[0];
+                                    drugCode = rxd.Dispensegivecode?.Dispense ?? "N/A";
+                                    drugName = rxd.Dispensegivecode?.DrugName ??
+                                              rxd.Dispensegivecode?.DrugNamePrint ?? "N/A";
+                                    quantity = rxd.QTY > 0 ? rxd.QTY.ToString() : "N/A";
+                                }
+
+
+                                AddRowToGrid(
+                                    DateTime.Now.ToString("HH:mm:ss"),
+                                    orderNo,
+                                    hn,
+                                    patientName,
+                                    drugCode,
+                                    drugName,
+                                    quantity,
+                                    result.Success ? "Success" : "Failed",
+                                    result.ApiResponse ?? result.Message ?? "N/A",
+                                    hl7Message
+                                );
+                            }
+                        );
+                    });
+
+                    _logger.LogInfo("Background check: Completed processing pending orders");
+
+                    this.Invoke(new Action(() =>
+                    {
+                        if (_backgroundTimer != null)
                         {
-                            _logger.LogInfo($"Background processing: {msg}");
-                        });
+                            UpdateStatus($"Service Running - Last processed {pending.Count} orders");
+                        }
+                        else
+                        {
+                            UpdateStatus($"Manual check completed - Processed {pending.Count} orders");
+                        }
+                    }));
+                }
+                else
+                {
+                    this.Invoke(new Action(() =>
+                    {
+                        if (_backgroundTimer != null)
+                        {
+                            UpdateStatus("Service Running - No pending orders");
+                        }
+                        else
+                        {
+                            UpdateStatus("Manual check completed - No pending orders");
+                        }
+                    }));
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError("Background check error", ex);
+
+                this.Invoke(new Action(() =>
+                {
+                    UpdateStatus($"Error: {ex.Message}");
+                }));
+            }
+            finally
+            {
+                _isProcessing = false;
+              
+            }
+        }
+        private async Task CheckPendingOrdersManual()
+        {
+            if (_isProcessing) return;
+
+            _isProcessing = true;
+            testHL7Button.Enabled = false;
+            startStopButton.Enabled = false;
+            clearButton.Enabled = false;
+            exportButton.Enabled = false;
+
+            try
+            {
+                UpdateLastCheck();
+                _logger.LogInfo("Background check: Starting pending orders check");
+
+                var pending = await Task.Run(() => _databaseService.GetPendingDispenseData());
+                _logger.LogInfo($"Background check: Found {pending.Count} pending orders");
+
+                this.Invoke(new Action(() =>
+                {
+                    this.Text = $"ConHIS Service - Pending: {pending.Count}";
+                    if (pending.Count > 0)
+                    {
+                        UpdateStatus($"Processing {pending.Count} pending orders...");
+                    }
+                }));
+
+                if (pending.Count > 0)
+                {
+                    await Task.Run(() =>
+                    {
+                        _processor.ProcessPendingOrders(
+                            msg =>
+                            {
+                                _logger.LogInfo($"Background processing: {msg}");
+                            },
+                            result =>
+                            {
+                                // แสดงผลบนตาราง
+                             
+                                var hl7Message = result.ParsedMessage;
+
+                                string orderNo = hl7Message?.CommonOrder?.PlacerOrderNumber  ?? "N/A";
+                                string hn = hl7Message?.PatientIdentification?.PatientIDExternal ??
+                                           hl7Message?.PatientIdentification?.PatientIDInternal ??"N/A";
+
+                                string patientName = "N/A";
+                                if (hl7Message?.PatientIdentification?.OfficialName != null)
+                                {
+                                    var name = hl7Message.PatientIdentification.OfficialName;
+                                    patientName = $"{name.Prefix ?? ""} {name.FirstName ?? ""} {name.LastName ?? ""}".Trim();
+                                }
+                               
+                                string drugCode = "N/A";
+                                string drugName = "N/A";
+                                string quantity = "N/A";
+
+                                if (hl7Message?.PharmacyDispense != null && hl7Message.PharmacyDispense.Count > 0)
+                                {
+                                    var rxd = hl7Message.PharmacyDispense[0];
+                                    drugCode = rxd.Dispensegivecode?.Dispense ??  "N/A";
+                                    drugName = rxd.Dispensegivecode?.DrugName ??
+                                              rxd.Dispensegivecode?.DrugNamePrint ?? "N/A";
+                                    quantity = rxd.QTY > 0 ? rxd.QTY.ToString() : "N/A";
+                                }
+                               
+
+                                AddRowToGrid(
+                                    DateTime.Now.ToString("HH:mm:ss"),
+                                    orderNo,
+                                    hn,
+                                    patientName,
+                                    drugCode,
+                                    drugName,
+                                    quantity,
+                                    result.Success ? "Success" : "Failed",
+                                    result.ApiResponse ?? result.Message ?? "N/A",
+                                    hl7Message
+                                );
+                            }
+                        );
                     });
 
                     _logger.LogInfo("Background check: Completed processing pending orders");
@@ -283,6 +593,8 @@ namespace ConHIS_Service_XPHL7
                 _isProcessing = false;
                 testHL7Button.Enabled = true;
                 startStopButton.Enabled = true;
+                clearButton.Enabled = true;
+                exportButton.Enabled = true;
             }
         }
 
@@ -318,6 +630,39 @@ namespace ConHIS_Service_XPHL7
         {
             StopBackgroundService();
             _logger.LogInfo("Application closing - Background service stopped");
+        }
+
+        private void DataGridView_CellDoubleClick(object sender, DataGridViewCellEventArgs e)
+        {
+            if (e.RowIndex >= 0 && e.RowIndex < dataGridView.Rows.Count)
+            {
+                try
+                {
+                    // ดึง Order Number จากคอลัมน์
+                    string orderNo = dataGridView.Rows[e.RowIndex].Cells["Order No"].Value?.ToString() ?? "N/A";
+
+                    // ตรวจสอบว่ามี HL7Message สำหรับแถวนี้หรือไม่
+                    if (_rowHL7Data.ContainsKey(e.RowIndex))
+                    {
+                        var hl7Message = _rowHL7Data[e.RowIndex];
+
+                        // เปิดฟอร์มแสดงรายละเอียด
+                        var detailForm = new HL7DetailForm(hl7Message, orderNo);
+                        detailForm.ShowDialog();
+                    }
+                    else
+                    {
+                        MessageBox.Show("No HL7 data available for this record.", "Information",
+                            MessageBoxButtons.OK, MessageBoxIcon.Information);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError("Error showing HL7 detail", ex);
+                    MessageBox.Show($"Error displaying details: {ex.Message}", "Error",
+                        MessageBoxButtons.OK, MessageBoxIcon.Error);
+                }
+            }
         }
     }
 }

@@ -99,6 +99,7 @@ namespace ConHIS_Service_XPHL7.Services
             catch (Exception ex)
             {
                 _logger.LogError($"Error updating receive status for ID {drugDispenseipdId}", ex);
+               
                 throw new Exception($"Error updating receive status: {ex.Message}", ex);
             }
         }

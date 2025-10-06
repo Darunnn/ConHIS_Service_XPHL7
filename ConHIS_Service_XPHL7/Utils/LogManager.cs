@@ -1,8 +1,6 @@
 ﻿using ConHIS_Service_XPHL7.Configuration;
 using Newtonsoft.Json;
 using System;
-using System.Collections.Generic;
-using System.Diagnostics;
 using System.IO;
 using System.Text;
 
@@ -11,8 +9,6 @@ namespace ConHIS_Service_XPHL7.Utils
     public class LogManager
     {
         private string _logFolder;
-        
-
         public string LogFolder => _logFolder;
 
         public LogManager(string logFolder = "log")
@@ -39,7 +35,7 @@ namespace ConHIS_Service_XPHL7.Utils
             }
         }
 
-        // Method to log raw HL7 data to a separate folder (hl7_raw)
+        // 🧾 Raw HL7
         public void LogRawHL7Data(string DrugDispenseipdId, string RecieveOrderType, string hl7Data, string rawLogFolder = "hl7_raw")
         {
             var appFolder = AppDomain.CurrentDomain.BaseDirectory ?? Environment.CurrentDirectory;
@@ -56,8 +52,8 @@ namespace ConHIS_Service_XPHL7.Utils
             }
         }
 
-        // Method to log parsed HL7 data to a separate folder (hl7_parsed)
-        public void LogParsedHL7Data(string DrugDispenseipdId,  object parsedData, string parsedLogFolder = "hl7_parsed")
+        // 🧩 Parsed HL7
+        public void LogParsedHL7Data(string DrugDispenseipdId, object parsedData, string parsedLogFolder = "hl7_parsed")
         {
             var appFolder = AppDomain.CurrentDomain.BaseDirectory ?? Environment.CurrentDirectory;
             var parsedLogDir = Path.Combine(appFolder, parsedLogFolder);
@@ -74,13 +70,13 @@ namespace ConHIS_Service_XPHL7.Utils
             }
         }
 
-        // Method to log HL7 read/parse errors to a separate folder (logreaderror)
+
         public void LogReadError(string DrugDispenseipdId, string errorMessage, string errorLogFolder = "logreaderror")
         {
             var appFolder = AppDomain.CurrentDomain.BaseDirectory ?? Environment.CurrentDirectory;
             var errorLogDir = Path.Combine(appFolder, errorLogFolder);
             Directory.CreateDirectory(errorLogDir);
-            var errorLogPath = Path.Combine(errorLogDir, $"hl7_read_error_{DrugDispenseipdId}.txt");
+            var errorLogPath = Path.Combine(errorLogDir, $"hl7_error_{DrugDispenseipdId}.txt");
             var logEntry = $"[{DateTime.Now:yyyy-MM-dd HH:mm:ss}] {errorMessage}{Environment.NewLine}";
             try
             {
@@ -92,13 +88,18 @@ namespace ConHIS_Service_XPHL7.Utils
             }
         }
 
-       
-
+        // ⚙️ LogError ทุกอันจะเขียนเข้า logreaderror โดยใช้ชื่อไฟล์เป็นวันที่
         public void LogError(string message, Exception ex = null)
         {
-            var fullMessage = ex != null ? $"{message} - Exception: {ex}" : message;
-            LogToFile(fullMessage, "ERROR");
+            var fullMessage = ex != null
+                ? $"{message} - Exception: {ex.Message}{Environment.NewLine}{ex.StackTrace}"
+                : message;
+
+            
+            var dateFileName = DateTime.Now.ToString("yyyy-MM-dd");
+            LogReadError(dateFileName, fullMessage);
         }
+
 
         public void LogInfo(string message)
         {
@@ -109,6 +110,5 @@ namespace ConHIS_Service_XPHL7.Utils
         {
             LogToFile(message, "WARNING");
         }
-
     }
 }
