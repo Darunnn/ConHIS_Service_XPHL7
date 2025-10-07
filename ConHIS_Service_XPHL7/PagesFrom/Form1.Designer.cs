@@ -17,14 +17,12 @@
 
         private void InitializeComponent()
         {
-            this.components = new System.ComponentModel.Container();
             this.statusLabel = new System.Windows.Forms.Label();
             this.lastCheckLabel = new System.Windows.Forms.Label();
             this.recordCountLabel = new System.Windows.Forms.Label();
             this.startStopButton = new System.Windows.Forms.Button();
             this.manualCheckButton = new System.Windows.Forms.Button();
             this.testHL7Button = new System.Windows.Forms.Button();
-            this.clearButton = new System.Windows.Forms.Button();
             this.exportButton = new System.Windows.Forms.Button();
             this.dataGridView = new System.Windows.Forms.DataGridView();
             this.groupBox1 = new System.Windows.Forms.GroupBox();
@@ -58,7 +56,7 @@
             this.recordCountLabel.Location = new System.Drawing.Point(15, 52);
             this.recordCountLabel.Margin = new System.Windows.Forms.Padding(2, 0, 2, 0);
             this.recordCountLabel.Name = "recordCountLabel";
-            this.recordCountLabel.Size = new System.Drawing.Size(84, 13);
+            this.recordCountLabel.Size = new System.Drawing.Size(86, 13);
             this.recordCountLabel.TabIndex = 2;
             this.recordCountLabel.Text = "Total Records: 0";
             // 
@@ -95,20 +93,9 @@
             this.testHL7Button.UseVisualStyleBackColor = true;
             this.testHL7Button.Click += new System.EventHandler(this.TestHL7Button_Click);
             // 
-            // clearButton
-            // 
-            this.clearButton.Location = new System.Drawing.Point(300, 18);
-            this.clearButton.Margin = new System.Windows.Forms.Padding(2);
-            this.clearButton.Name = "clearButton";
-            this.clearButton.Size = new System.Drawing.Size(90, 32);
-            this.clearButton.TabIndex = 6;
-            this.clearButton.Text = "Clear Grid";
-            this.clearButton.UseVisualStyleBackColor = true;
-            this.clearButton.Click += new System.EventHandler(this.ClearButton_Click);
-            // 
             // exportButton
             // 
-            this.exportButton.Location = new System.Drawing.Point(395, 18);
+            this.exportButton.Location = new System.Drawing.Point(299, 18);
             this.exportButton.Margin = new System.Windows.Forms.Padding(2);
             this.exportButton.Name = "exportButton";
             this.exportButton.Size = new System.Drawing.Size(90, 32);
@@ -117,28 +104,12 @@
             this.exportButton.UseVisualStyleBackColor = true;
             this.exportButton.Click += new System.EventHandler(this.ExportButton_Click);
             // 
-            // groupBox1
-            // 
-            this.groupBox1.Anchor = ((System.Windows.Forms.AnchorStyles)(((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Left)
-            | System.Windows.Forms.AnchorStyles.Right)));
-            this.groupBox1.Controls.Add(this.startStopButton);
-            this.groupBox1.Controls.Add(this.exportButton);
-            this.groupBox1.Controls.Add(this.manualCheckButton);
-            this.groupBox1.Controls.Add(this.clearButton);
-            this.groupBox1.Controls.Add(this.testHL7Button);
-            this.groupBox1.Location = new System.Drawing.Point(15, 75);
-            this.groupBox1.Name = "groupBox1";
-            this.groupBox1.Size = new System.Drawing.Size(855, 62);
-            this.groupBox1.TabIndex = 8;
-            this.groupBox1.TabStop = false;
-            this.groupBox1.Text = "Controls";
-            // 
             // dataGridView
             // 
             this.dataGridView.AllowUserToAddRows = false;
             this.dataGridView.AllowUserToDeleteRows = false;
-            this.dataGridView.Anchor = ((System.Windows.Forms.AnchorStyles)((((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Bottom)
-            | System.Windows.Forms.AnchorStyles.Left)
+            this.dataGridView.Anchor = ((System.Windows.Forms.AnchorStyles)((((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Bottom) 
+            | System.Windows.Forms.AnchorStyles.Left) 
             | System.Windows.Forms.AnchorStyles.Right)));
             this.dataGridView.AutoSizeColumnsMode = System.Windows.Forms.DataGridViewAutoSizeColumnsMode.Fill;
             this.dataGridView.ColumnHeadersHeightSizeMode = System.Windows.Forms.DataGridViewColumnHeadersHeightSizeMode.AutoSize;
@@ -150,6 +121,21 @@
             this.dataGridView.SelectionMode = System.Windows.Forms.DataGridViewSelectionMode.FullRowSelect;
             this.dataGridView.Size = new System.Drawing.Size(855, 365);
             this.dataGridView.TabIndex = 9;
+            // 
+            // groupBox1
+            // 
+            this.groupBox1.Anchor = ((System.Windows.Forms.AnchorStyles)(((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Left) 
+            | System.Windows.Forms.AnchorStyles.Right)));
+            this.groupBox1.Controls.Add(this.startStopButton);
+            this.groupBox1.Controls.Add(this.exportButton);
+            this.groupBox1.Controls.Add(this.manualCheckButton);
+            this.groupBox1.Controls.Add(this.testHL7Button);
+            this.groupBox1.Location = new System.Drawing.Point(15, 75);
+            this.groupBox1.Name = "groupBox1";
+            this.groupBox1.Size = new System.Drawing.Size(855, 62);
+            this.groupBox1.TabIndex = 8;
+            this.groupBox1.TabStop = false;
+            this.groupBox1.Text = "Controls";
             // 
             // Form1
             // 
@@ -169,6 +155,7 @@
             this.groupBox1.ResumeLayout(false);
             this.ResumeLayout(false);
             this.PerformLayout();
+
         }
 
         #endregion
@@ -179,7 +166,6 @@
         private System.Windows.Forms.Button startStopButton;
         private System.Windows.Forms.Button manualCheckButton;
         private System.Windows.Forms.Button testHL7Button;
-        private System.Windows.Forms.Button clearButton;
         private System.Windows.Forms.Button exportButton;
         private System.Windows.Forms.DataGridView dataGridView;
         private System.Windows.Forms.GroupBox groupBox1;

@@ -115,7 +115,6 @@ namespace ConHIS_Service_XPHL7
                 startStopButton.Enabled = true;
                 testHL7Button.Enabled = true;
                 manualCheckButton.Enabled = true;
-                clearButton.Enabled = true;
                 exportButton.Enabled = true;
             }
             catch (Exception ex)
@@ -126,54 +125,142 @@ namespace ConHIS_Service_XPHL7
             }
         }
 
-        private void StartStopButton_Click(object sender, EventArgs e)
+        #region Test HL7 File
+        private async void TestHL7Button_Click(object sender, EventArgs e)
         {
-            if (_backgroundTimer == null)
+            try
             {
-                StartBackgroundService();
-                testHL7Button.Enabled = false;
-                manualCheckButton.Enabled = false;
-                clearButton.Enabled = false;
-                exportButton.Enabled = false;
+                using (var openFileDialog = new OpenFileDialog())
+                {
+                    openFileDialog.Title = "Select HL7 File to Test";
+                    openFileDialog.Filter = "Text files (*.txt)|*.txt|All files (*.*)|*.*";
+
+                    var searchFolders = new[]
+                    {
+                        Path.Combine(Application.StartupPath, "TestData"),
+                        Application.StartupPath,
+                        Environment.GetFolderPath(Environment.SpecialFolder.Desktop)
+                    };
+
+                    string initialDirectory = Application.StartupPath;
+                    foreach (var folder in searchFolders)
+                    {
+                        if (Directory.Exists(folder))
+                        {
+                            initialDirectory = folder;
+                            break;
+                        }
+                    }
+                    openFileDialog.InitialDirectory = initialDirectory;
+
+                    if (openFileDialog.ShowDialog() == DialogResult.OK)
+                    {
+                        var filePath = openFileDialog.FileName;
+                        var fileName = Path.GetFileName(filePath);
+
+                        if (string.IsNullOrEmpty(AppConfig.ApiEndpoint))
+                        {
+                            _logger.LogError("API Endpoint is not configured!");
+                            UpdateStatus("Error: API Endpoint not configured");
+                            return;
+                        }
+
+                        var sendToApi = true;
+
+                        UpdateStatus($"Testing HL7 file: {fileName}...");
+                        testHL7Button.Enabled = false;
+                        manualCheckButton.Enabled = false;
+                        startStopButton.Enabled = false;
+                        exportButton.Enabled = false;
+
+                        HL7TestResult result = null;
+                        await Task.Run(() =>
+                        {
+                            result = _hl7FileProcessor.ProcessAndSendHL7File(filePath, sendToApi);
+                        });
+
+                        if (result != null)
+                        {
+                            // ดึงข้อมูลจาก HL7Message
+                            string TransactionDateTime = result.ParsedMessage?.CommonOrder?.TransactionDateTime != null
+                                    ? ((DateTime)result.ParsedMessage?.CommonOrder?.TransactionDateTime)
+                                        .ToString("yyyy-MM-dd HH:mm:ss")
+                                    : null;
+                            string orderNo = result.ParsedMessage?.CommonOrder?.PlacerOrderNumber ?? "N/A";
+                            string hn = result.ParsedMessage?.PatientIdentification?.PatientIDExternal ??
+                                       result.ParsedMessage?.PatientIdentification?.PatientIDInternal ?? "N/A";
+
+                            // สร้างชื่อผู้ป่วย
+                            string patientName = "N/A";
+                            if (result.ParsedMessage?.PatientIdentification?.OfficialName != null)
+                            {
+                                var name = result.ParsedMessage.PatientIdentification.OfficialName;
+                                patientName = $"{name.Prefix ?? ""} {name.FirstName ?? ""} {name.LastName ?? ""}".Trim();
+                                if (string.IsNullOrWhiteSpace(patientName)) patientName = "N/A";
+                            }
+
+                            // ดึงข้อมูลยาจาก RXD แรก (ถ้ามี)
+                            string drugCode = "N/A";
+                            string drugName = "N/A";
+                            string quantity = "N/A";
+
+                            if (result.ParsedMessage?.PharmacyDispense != null && result.ParsedMessage.PharmacyDispense.Count > 0)
+                            {
+                                var rxd = result.ParsedMessage.PharmacyDispense[0];
+                                drugCode = rxd.Dispensegivecode?.Dispense ?? "N/A";
+                                drugName = rxd.Dispensegivecode?.DrugName ??
+                                           rxd.Dispensegivecode?.DrugNamePrint ??
+                                           rxd.Dispensegivecode?.DrugNameThai ?? "N/A";
+                                quantity = rxd.QTY > 0 ? rxd.QTY.ToString() : "N/A";
+                            }
+
+                            // เพิ่มข้อมูลลงตาราง
+                            AddRowToGrid(
+                                DateTime.Now.ToString("HH:mm:ss"),
+                                TransactionDateTime,
+                                orderNo,
+                                hn,
+                                patientName,
+                                drugCode,
+                                drugName,
+                                quantity,
+                                result.Success ? "Success" : "Failed",
+                                result.ApiResponse ?? result.ErrorMessage ?? "N/A",
+                                result.ParsedMessage  // ส่ง HL7Message ไปด้วย
+                            );
+
+                            if (result.Success)
+                            {
+                                UpdateStatus($"HL7 test completed - {fileName}");
+                            }
+                            else
+                            {
+                                UpdateStatus($"HL7 test failed - {fileName}");
+                            }
+                        }
+                        else
+                        {
+                            UpdateStatus("HL7 test failed - Check log for details");
+                        }
+                    }
+                }
             }
-            else
+            catch (Exception ex)
             {
-                StopBackgroundService();
+                _logger.LogError("HL7 file test error", ex);
+                UpdateStatus($"HL7 test error: {ex.Message}");
+            }
+            finally
+            {
                 testHL7Button.Enabled = true;
                 manualCheckButton.Enabled = true;
-                clearButton.Enabled = true;
+                startStopButton.Enabled = true;
                 exportButton.Enabled = true;
             }
         }
+        #endregion
 
-        private async void ManualCheckButton_Click(object sender, EventArgs e)
-        {
-            if (!_isProcessing)
-            {
-                await CheckPendingOrdersManual();
-            }
-        }
-
-        private void ClearButton_Click(object sender, EventArgs e)
-        {
-            if (_processedDataTable.Rows.Count > 0)
-            {
-                var result = MessageBox.Show(
-                    $"Are you sure you want to clear all {_processedDataTable.Rows.Count} records?",
-                    "Confirm Clear",
-                    MessageBoxButtons.YesNo,
-                    MessageBoxIcon.Question);
-
-                if (result == DialogResult.Yes)
-                {
-                    _processedDataTable.Clear();
-                    _rowHL7Data.Clear();  // ล้าง dictionary ด้วย
-                    UpdateRecordCount();
-                    _logger.LogInfo("DataGrid cleared by user");
-                }
-            }
-        }
-
+        #region Export
         private void ExportButton_Click(object sender, EventArgs e)
         {
             if (_processedDataTable.Rows.Count == 0)
@@ -237,9 +324,10 @@ namespace ConHIS_Service_XPHL7
 
             File.WriteAllText(filePath, csv.ToString(), Encoding.UTF8);
         }
+        #endregion
 
-
-        private void AddRowToGrid(string time, string orderNo, string hn, string patientName,
+        #region GridView
+        private void AddRowToGrid(string time, string orderNo, string hn, string patientName, string TransactionDateTime,
             string drugCode, string drugName, string quantity, string status, string apiResponse, HL7Message hl7Data)
         {
             if (dataGridView.InvokeRequired)
@@ -304,328 +392,7 @@ namespace ConHIS_Service_XPHL7
                 }
             }
         }
-
-        private void UpdateRecordCount()
-        {
-            if (recordCountLabel.InvokeRequired)
-            {
-                recordCountLabel.Invoke(new Action(UpdateRecordCount));
-                return;
-            }
-
-            recordCountLabel.Text = $"Total Records: {_processedDataTable.Rows.Count}";
-        }
-
-        private void StartBackgroundService()
-        {
-            var intervalMs = _intervalSeconds * 1000;
-            _backgroundTimer = new Timer(BackgroundTimerCallback, null, 0, intervalMs);
-
-            startStopButton.Text = "Stop Service";
-            UpdateStatus($"Service Running - Checking every {_intervalSeconds} seconds");
-            _logger.LogInfo($"Background service started with {_intervalSeconds}s interval");
-        }
-
-        private void StopBackgroundService()
-        {
-            _backgroundTimer?.Dispose();
-            _backgroundTimer = null;
-
-            startStopButton.Text = "Start Service";
-            UpdateStatus("Service Stopped");
-            _logger.LogInfo("Background service stopped");
-        }
-
-        private async void BackgroundTimerCallback(object state)
-        {
-            if (!_isProcessing)
-            {
-                await CheckPendingOrdersauto();
-            }
-        }
-        private async Task CheckPendingOrdersauto()
-        {
-            if (_isProcessing) return;
-
-            _isProcessing = true;
-          
-
-            try
-            {
-                UpdateLastCheck();
-                _logger.LogInfo("Background check: Starting pending orders check");
-
-                var pending = await Task.Run(() => _databaseService.GetPendingDispenseData());
-                _logger.LogInfo($"Background check: Found {pending.Count} pending orders");
-
-                this.Invoke(new Action(() =>
-                {
-                    this.Text = $"ConHIS Service - Pending: {pending.Count}";
-                    if (pending.Count > 0)
-                    {
-                        UpdateStatus($"Processing {pending.Count} pending orders...");
-                    }
-                }));
-
-                if (pending.Count > 0)
-                {
-                    await Task.Run(() =>
-                    {
-                        _processor.ProcessPendingOrders(
-                            msg =>
-                            {
-                                _logger.LogInfo($"Background processing: {msg}");
-                            },
-                            result =>
-                            {
-                                // แสดงผลบนตาราง
-
-                                var hl7Message = result.ParsedMessage;
-
-                                string orderNo = hl7Message?.CommonOrder?.PlacerOrderNumber ?? "N/A";
-                                string hn = hl7Message?.PatientIdentification?.PatientIDExternal ??
-                                           hl7Message?.PatientIdentification?.PatientIDInternal ?? "N/A";
-
-                                string patientName = "N/A";
-                                if (hl7Message?.PatientIdentification?.OfficialName != null)
-                                {
-                                    var name = hl7Message.PatientIdentification.OfficialName;
-                                    patientName = $"{name.Prefix ?? ""} {name.FirstName ?? ""} {name.LastName ?? ""}".Trim();
-                                }
-
-                                string drugCode = "N/A";
-                                string drugName = "N/A";
-                                string quantity = "N/A";
-
-                                if (hl7Message?.PharmacyDispense != null && hl7Message.PharmacyDispense.Count > 0)
-                                {
-                                    var rxd = hl7Message.PharmacyDispense[0];
-                                    drugCode = rxd.Dispensegivecode?.Dispense ?? "N/A";
-                                    drugName = rxd.Dispensegivecode?.DrugName ??
-                                              rxd.Dispensegivecode?.DrugNamePrint ?? "N/A";
-                                    quantity = rxd.QTY > 0 ? rxd.QTY.ToString() : "N/A";
-                                }
-
-
-                                AddRowToGrid(
-                                    DateTime.Now.ToString("HH:mm:ss"),
-                                    orderNo,
-                                    hn,
-                                    patientName,
-                                    drugCode,
-                                    drugName,
-                                    quantity,
-                                    result.Success ? "Success" : "Failed",
-                                    result.ApiResponse ?? result.Message ?? "N/A",
-                                    hl7Message
-                                );
-                            }
-                        );
-                    });
-
-                    _logger.LogInfo("Background check: Completed processing pending orders");
-
-                    this.Invoke(new Action(() =>
-                    {
-                        if (_backgroundTimer != null)
-                        {
-                            UpdateStatus($"Service Running - Last processed {pending.Count} orders");
-                        }
-                        else
-                        {
-                            UpdateStatus($"Manual check completed - Processed {pending.Count} orders");
-                        }
-                    }));
-                }
-                else
-                {
-                    this.Invoke(new Action(() =>
-                    {
-                        if (_backgroundTimer != null)
-                        {
-                            UpdateStatus("Service Running - No pending orders");
-                        }
-                        else
-                        {
-                            UpdateStatus("Manual check completed - No pending orders");
-                        }
-                    }));
-                }
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError("Background check error", ex);
-
-                this.Invoke(new Action(() =>
-                {
-                    UpdateStatus($"Error: {ex.Message}");
-                }));
-            }
-            finally
-            {
-                _isProcessing = false;
-              
-            }
-        }
-        private async Task CheckPendingOrdersManual()
-        {
-            if (_isProcessing) return;
-
-            _isProcessing = true;
-            testHL7Button.Enabled = false;
-            startStopButton.Enabled = false;
-            clearButton.Enabled = false;
-            exportButton.Enabled = false;
-
-            try
-            {
-                UpdateLastCheck();
-                _logger.LogInfo("Background check: Starting pending orders check");
-
-                var pending = await Task.Run(() => _databaseService.GetPendingDispenseData());
-                _logger.LogInfo($"Background check: Found {pending.Count} pending orders");
-
-                this.Invoke(new Action(() =>
-                {
-                    this.Text = $"ConHIS Service - Pending: {pending.Count}";
-                    if (pending.Count > 0)
-                    {
-                        UpdateStatus($"Processing {pending.Count} pending orders...");
-                    }
-                }));
-
-                if (pending.Count > 0)
-                {
-                    await Task.Run(() =>
-                    {
-                        _processor.ProcessPendingOrders(
-                            msg =>
-                            {
-                                _logger.LogInfo($"Background processing: {msg}");
-                            },
-                            result =>
-                            {
-                                // แสดงผลบนตาราง
-                             
-                                var hl7Message = result.ParsedMessage;
-
-                                string orderNo = hl7Message?.CommonOrder?.PlacerOrderNumber  ?? "N/A";
-                                string hn = hl7Message?.PatientIdentification?.PatientIDExternal ??
-                                           hl7Message?.PatientIdentification?.PatientIDInternal ??"N/A";
-
-                                string patientName = "N/A";
-                                if (hl7Message?.PatientIdentification?.OfficialName != null)
-                                {
-                                    var name = hl7Message.PatientIdentification.OfficialName;
-                                    patientName = $"{name.Prefix ?? ""} {name.FirstName ?? ""} {name.LastName ?? ""}".Trim();
-                                }
-                               
-                                string drugCode = "N/A";
-                                string drugName = "N/A";
-                                string quantity = "N/A";
-
-                                if (hl7Message?.PharmacyDispense != null && hl7Message.PharmacyDispense.Count > 0)
-                                {
-                                    var rxd = hl7Message.PharmacyDispense[0];
-                                    drugCode = rxd.Dispensegivecode?.Dispense ??  "N/A";
-                                    drugName = rxd.Dispensegivecode?.DrugName ??
-                                              rxd.Dispensegivecode?.DrugNamePrint ?? "N/A";
-                                    quantity = rxd.QTY > 0 ? rxd.QTY.ToString() : "N/A";
-                                }
-                               
-
-                                AddRowToGrid(
-                                    DateTime.Now.ToString("HH:mm:ss"),
-                                    orderNo,
-                                    hn,
-                                    patientName,
-                                    drugCode,
-                                    drugName,
-                                    quantity,
-                                    result.Success ? "Success" : "Failed",
-                                    result.ApiResponse ?? result.Message ?? "N/A",
-                                    hl7Message
-                                );
-                            }
-                        );
-                    });
-
-                    _logger.LogInfo("Background check: Completed processing pending orders");
-
-                    this.Invoke(new Action(() =>
-                    {
-                        if (_backgroundTimer != null)
-                        {
-                            UpdateStatus($"Service Running - Last processed {pending.Count} orders");
-                        }
-                        else
-                        {
-                            UpdateStatus($"Manual check completed - Processed {pending.Count} orders");
-                        }
-                    }));
-                }
-                else
-                {
-                    this.Invoke(new Action(() =>
-                    {
-                        if (_backgroundTimer != null)
-                        {
-                            UpdateStatus("Service Running - No pending orders");
-                        }
-                        else
-                        {
-                            UpdateStatus("Manual check completed - No pending orders");
-                        }
-                    }));
-                }
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError("Background check error", ex);
-
-                this.Invoke(new Action(() =>
-                {
-                    UpdateStatus($"Error: {ex.Message}");
-                }));
-            }
-            finally
-            {
-                _isProcessing = false;
-                testHL7Button.Enabled = true;
-                startStopButton.Enabled = true;
-                clearButton.Enabled = true;
-                exportButton.Enabled = true;
-            }
-        }
-
-        private void UpdateStatus(string status)
-        {
-            if (statusLabel.InvokeRequired)
-            {
-                statusLabel.Invoke(new Action<string>(UpdateStatus), status);
-                return;
-            }
-
-            statusLabel.Text = $"Status: {status}";
-            _logger.LogInfo($"Status: {status}");
-        }
-
-        private void UpdateLastCheck()
-        {
-            var now = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss");
-
-            if (lastCheckLabel.InvokeRequired)
-            {
-                lastCheckLabel.Invoke(new Action(() =>
-                {
-                    lastCheckLabel.Text = $"Last Check: {now}";
-                }));
-                return;
-            }
-
-            lastCheckLabel.Text = $"Last Check: {now}";
-        }
-
+        
         private void Form1_FormClosing(object sender, FormClosingEventArgs e)
         {
             StopBackgroundService();
@@ -664,5 +431,249 @@ namespace ConHIS_Service_XPHL7
                 }
             }
         }
+        #endregion
+
+        #region Start/Stop Service Manual and Auto
+        private void StartStopButton_Click(object sender, EventArgs e)
+        {
+            if (_backgroundTimer == null)
+            {
+                StartBackgroundService();
+                testHL7Button.Enabled = false;
+                manualCheckButton.Enabled = false;
+                exportButton.Enabled = false;
+            }
+            else
+            {
+                StopBackgroundService();
+                testHL7Button.Enabled = true;
+                manualCheckButton.Enabled = true;
+                exportButton.Enabled = true;
+            }
+        }
+
+        private async void ManualCheckButton_Click(object sender, EventArgs e)
+        {
+            if (!_isProcessing)
+            {
+                await CheckPendingOrders(isManual: true);
+            }
+        }
+
+        private void StartBackgroundService()
+        {
+            var intervalMs = _intervalSeconds * 1000;
+            _backgroundTimer = new Timer(BackgroundTimerCallback, null, 0, intervalMs);
+
+            startStopButton.Text = "Stop Service";
+            UpdateStatus($"Service Running - Checking every {_intervalSeconds} seconds");
+            _logger.LogInfo($"Background service started with {_intervalSeconds}s interval");
+        }
+
+        private void StopBackgroundService()
+        {
+            _backgroundTimer?.Dispose();
+            _backgroundTimer = null;
+
+            startStopButton.Text = "Start Service";
+            UpdateStatus("Service Stopped");
+            _logger.LogInfo("Background service stopped");
+        }
+
+        private async Task CheckPendingOrders(bool isManual)
+        {
+            if (_isProcessing) return;
+
+            _isProcessing = true;
+
+            try
+            {
+
+                if (isManual)
+                {
+                    testHL7Button.Enabled = false;
+                    startStopButton.Enabled = false;
+                    exportButton.Enabled = false;
+                }
+
+                UpdateLastCheck();
+                _logger.LogInfo("Background check: Starting pending orders check");
+
+                var pending = await Task.Run(() => _databaseService.GetPendingDispenseData());
+                _logger.LogInfo($"Background check: Found {pending.Count} pending orders");
+
+                this.Invoke(new Action(() =>
+                {
+                    this.Text = $"ConHIS Service - Pending: {pending.Count}";
+                    if (pending.Count > 0)
+                    {
+                        UpdateStatus($"Processing {pending.Count} pending orders...");
+                    }
+                }));
+
+                if (pending.Count > 0)
+                {
+                    await Task.Run(() =>
+                    {
+                        _processor.ProcessPendingOrders(
+                            msg =>
+                            {
+                                _logger.LogInfo($"Background processing: {msg}");
+                            },
+                            result =>
+                            {
+                                var hl7Message = result.ParsedMessage;
+
+                                string orderNo = hl7Message?.CommonOrder?.PlacerOrderNumber ?? "N/A";
+                                string hn = hl7Message?.PatientIdentification?.PatientIDExternal ??
+                                           hl7Message?.PatientIdentification?.PatientIDInternal ?? "N/A";
+
+                                string TransactionDateTime = hl7Message?.CommonOrder?.TransactionDateTime != null
+                                    ? ((DateTime)hl7Message.CommonOrder.TransactionDateTime)
+                                        .ToString("yyyy-MM-dd HH:mm:ss")
+                                    : null;
+
+                                string patientName = "N/A";
+                                if (hl7Message?.PatientIdentification?.OfficialName != null)
+                                {
+                                    var name = hl7Message.PatientIdentification.OfficialName;
+                                    patientName = $"{name.Prefix ?? ""} {name.FirstName ?? ""} {name.LastName ?? ""}".Trim();
+                                }
+
+                                string drugCode = "N/A";
+                                string drugName = "N/A";
+                                string quantity = "N/A";
+
+                                if (hl7Message?.PharmacyDispense != null && hl7Message.PharmacyDispense.Count > 0)
+                                {
+                                    var rxd = hl7Message.PharmacyDispense[0];
+                                    drugCode = rxd.Dispensegivecode?.Dispense ?? "N/A";
+                                    drugName = rxd.Dispensegivecode?.DrugName ??
+                                              rxd.Dispensegivecode?.DrugNamePrint ?? "N/A";
+                                    quantity = rxd.QTY > 0 ? rxd.QTY.ToString() : "N/A";
+                                }
+
+                                AddRowToGrid(
+                                    DateTime.Now.ToString("HH:mm:ss"),
+                                    TransactionDateTime,
+                                    orderNo,
+                                    hn,
+                                    patientName,
+                                    drugCode,
+                                    drugName,
+                                    quantity,
+                                    result.Success ? "Success" : "Failed",
+                                    result.ApiResponse ?? result.Message ?? "N/A",
+                                    hl7Message
+                                );
+                            }
+                        );
+                    });
+
+                    _logger.LogInfo("Background check: Completed processing pending orders");
+
+                    this.Invoke(new Action(() =>
+                    {
+                        if (_backgroundTimer != null)
+                        {
+                            UpdateStatus($"Service Running - Last processed {pending.Count} orders");
+                        }
+                        else
+                        {
+                            UpdateStatus($"Manual check completed - Processed {pending.Count} orders");
+                        }
+                    }));
+                }
+                else
+                {
+                    this.Invoke(new Action(() =>
+                    {
+                        if (_backgroundTimer != null)
+                        {
+                            UpdateStatus("Service Running - No pending orders");
+                        }
+                        else
+                        {
+                            UpdateStatus("Manual check completed - No pending orders");
+                        }
+                    }));
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError("Background check error", ex);
+
+                this.Invoke(new Action(() =>
+                {
+                    UpdateStatus($"Error: {ex.Message}");
+                }));
+            }
+            finally
+            {
+                _isProcessing = false;
+
+                // ✅ เปิดปุ่มกลับเมื่อทำงานเสร็จ (เฉพาะ manual)
+                if (isManual)
+                {
+                    this.Invoke(new Action(() =>
+                    {
+                        testHL7Button.Enabled = true;
+                        startStopButton.Enabled = true;
+                        exportButton.Enabled = true;
+                    }));
+                }
+            }
+        }
+
+        private async void BackgroundTimerCallback(object state)
+        {
+            if (!_isProcessing)
+            {
+                await CheckPendingOrders(isManual: false);
+            }
+        }
+        #endregion
+       
+        #region update
+        private void UpdateRecordCount()
+        {
+            if (recordCountLabel.InvokeRequired)
+            {
+                recordCountLabel.Invoke(new Action(UpdateRecordCount));
+                return;
+            }
+
+            recordCountLabel.Text = $"Total Records: {_processedDataTable.Rows.Count}";
+        }
+
+        private void UpdateStatus(string status)
+        {
+            if (statusLabel.InvokeRequired)
+            {
+                statusLabel.Invoke(new Action<string>(UpdateStatus), status);
+                return;
+            }
+
+            statusLabel.Text = $"Status: {status}";
+            _logger.LogInfo($"Status: {status}");
+        }
+
+        private void UpdateLastCheck()
+        {
+            var now = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss");
+
+            if (lastCheckLabel.InvokeRequired)
+            {
+                lastCheckLabel.Invoke(new Action(() =>
+                {
+                    lastCheckLabel.Text = $"Last Check: {now}";
+                }));
+                return;
+            }
+
+            lastCheckLabel.Text = $"Last Check: {now}";
+        }
+        #endregion
+
     }
 }
