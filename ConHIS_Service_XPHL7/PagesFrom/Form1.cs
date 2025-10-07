@@ -1,14 +1,15 @@
-﻿using System;
+﻿using ConHIS_Service_XPHL7.Configuration;
+using ConHIS_Service_XPHL7.Models;
+using ConHIS_Service_XPHL7.Services;
+using ConHIS_Service_XPHL7.Utils;
+using Org.BouncyCastle.Utilities.Encoders;
+using System;
 using System.Data;
 using System.IO;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Forms;
-using ConHIS_Service_XPHL7.Configuration;
-using ConHIS_Service_XPHL7.Services;
-using ConHIS_Service_XPHL7.Utils;
-using ConHIS_Service_XPHL7.Models;
 using static ConHIS_Service_XPHL7.Services.SimpleHL7FileProcessor;
 using Timer = System.Threading.Timer;
 
@@ -41,7 +42,7 @@ namespace ConHIS_Service_XPHL7
             _logger = new LogManager();
             _hl7FileProcessor = new SimpleHL7FileProcessor();
         }
-
+    
         private void InitializeDataTable()
         {
             _processedDataTable = new DataTable();
@@ -50,9 +51,10 @@ namespace ConHIS_Service_XPHL7
             _processedDataTable.Columns.Add("Order No", typeof(string));
             _processedDataTable.Columns.Add("HN", typeof(string));
             _processedDataTable.Columns.Add("Patient Name", typeof(string));
-            _processedDataTable.Columns.Add("Drug Code", typeof(string));
-            _processedDataTable.Columns.Add("Drug Name", typeof(string));
-            _processedDataTable.Columns.Add("Quantity", typeof(string));
+            _processedDataTable.Columns.Add("Sex", typeof(string));
+            _processedDataTable.Columns.Add("DateOfBirth", typeof(string));
+            _processedDataTable.Columns.Add("FinancialClass", typeof(string));
+            _processedDataTable.Columns.Add("OrderControl", typeof(string));
             _processedDataTable.Columns.Add("Status", typeof(string));
             _processedDataTable.Columns.Add("API Response", typeof(string));
 
@@ -72,9 +74,10 @@ namespace ConHIS_Service_XPHL7
                     dataGridView.Columns["Order No"].Width = 100;
                     dataGridView.Columns["HN"].Width = 80;
                     dataGridView.Columns["Patient Name"].Width = 150;
-                    dataGridView.Columns["Drug Code"].Width = 100;
-                    dataGridView.Columns["Drug Name"].Width = 200;
-                    dataGridView.Columns["Quantity"].Width = 80;
+                    dataGridView.Columns["Sex"].Width = 100;
+                    dataGridView.Columns["DateOfBirth"].Width = 200;
+                    dataGridView.Columns["FinancialClass"].Width = 150;
+                    dataGridView.Columns["OrderControl"].Width = 80;
                     dataGridView.Columns["Status"].Width = 100;
                     dataGridView.Columns["API Response"].Width = 300; // แค่กำหนด Width เท่านั้น
                 }
@@ -199,34 +202,39 @@ namespace ConHIS_Service_XPHL7
                             }
 
                             // ดึงข้อมูลยาจาก RXD แรก (ถ้ามี)
-                            string drugCode = "N/A";
-                            string drugName = "N/A";
-                            string quantity = "N/A";
-
-                            if (result.ParsedMessage?.PharmacyDispense != null && result.ParsedMessage.PharmacyDispense.Count > 0)
+                            string sex = result.ParsedMessage?.PatientIdentification?.Sex ?? "N/A";
+                            string DateOfBirth = result.ParsedMessage?.PatientIdentification?.DateOfBirth != null
+                                ? ((DateTime)result.ParsedMessage.PatientIdentification.DateOfBirth)
+                                    .ToString("yyyy-MM-dd")
+                                : null;
+                            string FinancialClass = "N/A";
+                            if (result.ParsedMessage?.PatientVisit?.FinancialClass != null)
                             {
-                                var rxd = result.ParsedMessage.PharmacyDispense[0];
-                                drugCode = rxd.Dispensegivecode?.Dispense ?? "N/A";
-                                drugName = rxd.Dispensegivecode?.DrugName ??
-                                           rxd.Dispensegivecode?.DrugNamePrint ??
-                                           rxd.Dispensegivecode?.DrugNameThai ?? "N/A";
-                                quantity = rxd.QTY > 0 ? rxd.QTY.ToString() : "N/A";
+                                var financialclass = result.ParsedMessage.PatientVisit.FinancialClass;
+                                FinancialClass = $"{financialclass.ID ?? ""} {financialclass.Name ?? ""}".Trim();
+                                if (string.IsNullOrWhiteSpace(FinancialClass)) FinancialClass = "N/A";
                             }
+                            
+                            string OrderControl = result.ParsedMessage?.CommonOrder?.OrderControl ?? "N/A";
 
                             // เพิ่มข้อมูลลงตาราง
                             AddRowToGrid(
-                                DateTime.Now.ToString("HH:mm:ss"),
+                                DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss"),
                                 TransactionDateTime,
                                 orderNo,
                                 hn,
                                 patientName,
-                                drugCode,
-                                drugName,
-                                quantity,
+                                sex,
+                                DateOfBirth,
+                                FinancialClass,
+                                OrderControl,
                                 result.Success ? "Success" : "Failed",
                                 result.ApiResponse ?? result.ErrorMessage ?? "N/A",
                                 result.ParsedMessage  // ส่ง HL7Message ไปด้วย
                             );
+                           
+
+
 
                             if (result.Success)
                             {
@@ -327,14 +335,14 @@ namespace ConHIS_Service_XPHL7
 
         #region GridView
         private void AddRowToGrid(string time, string TransactionDateTime, string orderNo, string hn, string patientName,
-            string drugCode, string drugName, string quantity, string status, string apiResponse, HL7Message hl7Data)
+            string sex, string DateOfBirth,string FinancialClass, string OrderControl, string status, string apiResponse, HL7Message hl7Data)
         {
             if (dataGridView.InvokeRequired)
             {
                 dataGridView.Invoke(new Action(() =>
                 {
                     int rowIndex = _processedDataTable.Rows.Count;
-                    _processedDataTable.Rows.Add(time, TransactionDateTime, orderNo, hn, patientName, drugCode, drugName, quantity, status, apiResponse);
+                    _processedDataTable.Rows.Add(time, TransactionDateTime, orderNo, hn, patientName, sex, DateOfBirth, FinancialClass, OrderControl, status, apiResponse);
 
                     // เก็บ HL7Message ที่เชื่อมกับแถวนี้
                     if (hl7Data != null)
@@ -365,7 +373,7 @@ namespace ConHIS_Service_XPHL7
             else
             {
                 int rowIndex = _processedDataTable.Rows.Count;
-                _processedDataTable.Rows.Add(time, TransactionDateTime, orderNo, hn, patientName, drugCode, drugName, quantity, status, apiResponse);
+                _processedDataTable.Rows.Add(time, TransactionDateTime, orderNo, hn, patientName, sex, DateOfBirth, FinancialClass, OrderControl, status, apiResponse);
 
                 // เก็บ HL7Message ที่เชื่อมกับแถวนี้
                 if (hl7Data != null)
@@ -522,7 +530,7 @@ namespace ConHIS_Service_XPHL7
                             result =>
                             {
                                 var hl7Message = result.ParsedMessage;
-
+                                
                                 string orderNo = hl7Message?.CommonOrder?.PlacerOrderNumber ?? "N/A";
                                 string hn = hl7Message?.PatientIdentification?.PatientIDExternal ??
                                            hl7Message?.PatientIdentification?.PatientIDInternal ?? "N/A";
@@ -539,28 +547,32 @@ namespace ConHIS_Service_XPHL7
                                     patientName = $"{name.Prefix ?? ""} {name.FirstName ?? ""} {name.LastName ?? ""}".Trim();
                                 }
 
-                                string drugCode = "N/A";
-                                string drugName = "N/A";
-                                string quantity = "N/A";
-
-                                if (hl7Message?.PharmacyDispense != null && hl7Message.PharmacyDispense.Count > 0)
+                                string sex = hl7Message?.PatientIdentification?.Sex ?? "N/A";
+                                string DateOfBirth = hl7Message?.PatientIdentification?.DateOfBirth != null
+                                    ? ((DateTime)hl7Message.PatientIdentification.DateOfBirth)
+                                        .ToString("yyyy-MM-dd")
+                                    : null;
+                                string FinancialClass = "N/A";
+                                if (hl7Message?.PatientVisit?.FinancialClass != null)
                                 {
-                                    var rxd = hl7Message.PharmacyDispense[0];
-                                    drugCode = rxd.Dispensegivecode?.Dispense ?? "N/A";
-                                    drugName = rxd.Dispensegivecode?.DrugName ??
-                                              rxd.Dispensegivecode?.DrugNamePrint ?? "N/A";
-                                    quantity = rxd.QTY > 0 ? rxd.QTY.ToString() : "N/A";
+                                    var financialclass = hl7Message.PatientVisit.FinancialClass;
+                                    FinancialClass = $"{financialclass.ID ?? ""} {financialclass.Name ?? ""}".Trim();
+                                    if (string.IsNullOrWhiteSpace(FinancialClass)) FinancialClass = "N/A";
                                 }
+                                string OrderControl = hl7Message?.CommonOrder?.OrderControl ?? "N/A";
+
+
 
                                 AddRowToGrid(
-                                    DateTime.Now.ToString("HH:mm:ss"),
+                                    DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss"),
                                     TransactionDateTime,
                                     orderNo,
                                     hn,
                                     patientName,
-                                    drugCode,
-                                    drugName,
-                                    quantity,
+                                    sex,
+                                    DateOfBirth,
+                                    FinancialClass,
+                                    OrderControl,
                                     result.Success ? "Success" : "Failed",
                                     result.ApiResponse ?? result.Message ?? "N/A",
                                     hl7Message

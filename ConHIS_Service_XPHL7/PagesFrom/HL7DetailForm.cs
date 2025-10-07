@@ -11,10 +11,12 @@ namespace ConHIS_Service_XPHL7
     public partial class HL7DetailForm : Form
     {
         private HL7Message _hl7Message;
+        private Utils.LogManager _logManager;
 
         public HL7DetailForm(HL7Message hl7Message, string orderNo)
         {
             _hl7Message = hl7Message;
+            _logManager = new Utils.LogManager();
             InitializeComponent();
 
             this.Text = $"HL7 Message Details - Order: {orderNo}";
@@ -131,9 +133,10 @@ namespace ConHIS_Service_XPHL7
                         LoadObjectProperties(table, value, fieldName);
                     }
                 }
-                catch
+                catch (Exception ex)
                 {
-                    // Skip properties that can't be accessed
+                    // Log error and skip properties that can't be accessed
+                    _logManager.LogError($"Error accessing property '{prop.Name}' in LoadObjectProperties", ex);
                 }
             }
         }
@@ -173,9 +176,10 @@ namespace ConHIS_Service_XPHL7
                         }
                     }
                 }
-                catch
+                catch (Exception ex)
                 {
-                    // Skip properties that can't be accessed
+                    // Log error and skip properties that can't be accessed
+                    _logManager.LogError($"Error creating column for property '{prop.Name}' in LoadCollection", ex);
                 }
             }
 
@@ -225,16 +229,18 @@ namespace ConHIS_Service_XPHL7
                                         }
                                     }
                                 }
-                                catch
+                                catch (Exception ex)
                                 {
-                                    // Skip sub-properties that can't be accessed
+                                    // Log error and skip sub-properties that can't be accessed
+                                    _logManager.LogError($"Error accessing sub-property '{subProp.Name}' of property '{prop.Name}' in LoadCollection", ex);
                                 }
                             }
                         }
                     }
-                    catch
+                    catch (Exception ex)
                     {
-                        // Skip properties that can't be accessed
+                        // Log error and skip properties that can't be accessed
+                        _logManager.LogError($"Error accessing property '{prop.Name}' in LoadCollection", ex);
                     }
                 }
 
