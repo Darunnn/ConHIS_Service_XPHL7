@@ -357,33 +357,81 @@ namespace ConHIS_Service_XPHL7
             try
             {
                 string searchText = searchTextBox.Text.Trim();
+                DateTime selectedDate = dateTimePicker.Value.Date;
 
-                if (string.IsNullOrEmpty(searchText))
+                // สร้าง filter expression
+                var filterParts = new System.Collections.Generic.List<string>();
+
+                // กรณีค้นหา Order No หรือ HN
+                if (!string.IsNullOrEmpty(searchText))
                 {
-                    MessageBox.Show("Please enter Order No or HN to search.", "Search",
+                    filterParts.Add($"([Order No] LIKE '%{searchText}%' OR [HN] LIKE '%{searchText}%')");
+                }
+
+                // กรณีค้นหาวันที่ - ค้นหาทั้ง Time Check และ Transaction DateTime
+                // สร้างรูปแบบวันที่สำหรับการค้นหา
+                string datePattern = selectedDate.ToString("yyyy-MM-dd");
+
+                // เพิ่ม filter สำหรับวันที่ (ค้นหาได้ทั้ง 2 คอลัมน์)
+                filterParts.Add($"([Time Check] LIKE '{datePattern}%' OR [Transaction DateTime] LIKE '{datePattern}%')");
+
+                // รวม filter ทั้งหมด
+                string filterExpression = string.Empty;
+                if (filterParts.Count > 0)
+                {
+                    if (!string.IsNullOrEmpty(searchText))
+                    {
+                        // ถ้ามีทั้ง text และ date ให้ใช้ AND
+                        filterExpression = string.Join(" AND ", filterParts);
+                    }
+                    else
+                    {
+                        // ถ้ามีแค่ date
+                        filterExpression = filterParts[filterParts.Count - 1];
+                    }
+                }
+
+                // ถ้าไม่มีเงื่อนไขใดๆ แจ้งเตือน
+                if (string.IsNullOrEmpty(filterExpression))
+                {
+                    MessageBox.Show("Please enter Order No/HN or select a date to search.", "Search",
                         MessageBoxButtons.OK, MessageBoxIcon.Information);
                     return;
                 }
 
-                // สร้าง filter expression สำหรับการค้นหาใน Order No หรือ HN
-                string filterExpression = $"[Order No] LIKE '%{searchText}%' OR [HN] LIKE '%{searchText}%'";
                 _filteredDataView.RowFilter = filterExpression;
 
                 // อัปเดตจำนวนผลลัพธ์
                 int resultCount = _filteredDataView.Count;
+
+                // สร้างข้อความแสดงผลการค้นหา
+                string searchInfo = string.Empty;
+                if (!string.IsNullOrEmpty(searchText))
+                {
+                    searchInfo += $"'{searchText}'";
+                }
+                if (!string.IsNullOrEmpty(searchText) && filterParts.Count > 1)
+                {
+                    searchInfo += " and ";
+                }
+                if (filterParts.Count > 0)
+                {
+                    searchInfo += $"date '{datePattern}'";
+                }
+
                 if (resultCount > 0)
                 {
-                    UpdateStatus($"Found {resultCount} record(s) matching '{searchText}'");
+                    UpdateStatus($"Found {resultCount} record(s) matching {searchInfo}");
                 }
                 else
                 {
-                    UpdateStatus($"No records found matching '{searchText}'");
-                    MessageBox.Show($"No records found matching '{searchText}'", "Search Result",
+                    UpdateStatus($"No records found matching {searchInfo}");
+                    MessageBox.Show($"No records found matching {searchInfo}", "Search Result",
                         MessageBoxButtons.OK, MessageBoxIcon.Information);
                 }
 
                 UpdateRecordCount();
-                _logger.LogInfo($"Search applied: '{searchText}' - Found {resultCount} record(s)");
+                _logger.LogInfo($"Search applied: {searchInfo} - Found {resultCount} record(s)");
             }
             catch (Exception ex)
             {
@@ -398,6 +446,7 @@ namespace ConHIS_Service_XPHL7
             try
             {
                 searchTextBox.Text = string.Empty;
+                dateTimePicker.Value = DateTime.Today;
                 _filteredDataView.RowFilter = string.Empty;
                 UpdateRecordCount();
                 UpdateStatus("Filter cleared - Showing all records");

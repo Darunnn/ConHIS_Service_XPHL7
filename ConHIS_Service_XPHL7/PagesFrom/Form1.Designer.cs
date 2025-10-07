@@ -31,6 +31,8 @@
             this.searchButton = new System.Windows.Forms.Button();
             this.refreshButton = new System.Windows.Forms.Button();
             this.searchLabel = new System.Windows.Forms.Label();
+            this.dateTimePicker = new System.Windows.Forms.DateTimePicker();
+            this.dateLabel = new System.Windows.Forms.Label();
             ((System.ComponentModel.ISupportInitialize)(this.dataGridView)).BeginInit();
             this.groupBox1.SuspendLayout();
             this.groupBox2.SuspendLayout();
@@ -114,6 +116,8 @@
             // 
             this.groupBox2.Anchor = ((System.Windows.Forms.AnchorStyles)(((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Left)
             | System.Windows.Forms.AnchorStyles.Right)));
+            this.groupBox2.Controls.Add(this.dateLabel);
+            this.groupBox2.Controls.Add(this.dateTimePicker);
             this.groupBox2.Controls.Add(this.searchLabel);
             this.groupBox2.Controls.Add(this.searchTextBox);
             this.groupBox2.Controls.Add(this.searchButton);
@@ -138,13 +142,30 @@
             // 
             this.searchTextBox.Location = new System.Drawing.Point(120, 21);
             this.searchTextBox.Name = "searchTextBox";
-            this.searchTextBox.Size = new System.Drawing.Size(200, 20);
+            this.searchTextBox.Size = new System.Drawing.Size(150, 20);
             this.searchTextBox.TabIndex = 1;
             this.searchTextBox.KeyDown += new System.Windows.Forms.KeyEventHandler(this.SearchTextBox_KeyDown);
             // 
+            // dateLabel
+            // 
+            this.dateLabel.AutoSize = true;
+            this.dateLabel.Location = new System.Drawing.Point(285, 24);
+            this.dateLabel.Name = "dateLabel";
+            this.dateLabel.Size = new System.Drawing.Size(33, 13);
+            this.dateLabel.TabIndex = 4;
+            this.dateLabel.Text = "Date:";
+            // 
+            // dateTimePicker
+            // 
+            this.dateTimePicker.Format = System.Windows.Forms.DateTimePickerFormat.Short;
+            this.dateTimePicker.Location = new System.Drawing.Point(325, 21);
+            this.dateTimePicker.Name = "dateTimePicker";
+            this.dateTimePicker.Size = new System.Drawing.Size(120, 20);
+            this.dateTimePicker.TabIndex = 5;
+            // 
             // searchButton
             // 
-            this.searchButton.Location = new System.Drawing.Point(330, 18);
+            this.searchButton.Location = new System.Drawing.Point(460, 18);
             this.searchButton.Name = "searchButton";
             this.searchButton.Size = new System.Drawing.Size(75, 25);
             this.searchButton.TabIndex = 2;
@@ -154,7 +175,7 @@
             // 
             // refreshButton
             // 
-            this.refreshButton.Location = new System.Drawing.Point(410, 18);
+            this.refreshButton.Location = new System.Drawing.Point(540, 18);
             this.refreshButton.Name = "refreshButton";
             this.refreshButton.Size = new System.Drawing.Size(75, 25);
             this.refreshButton.TabIndex = 3;
@@ -237,5 +258,7 @@
         private System.Windows.Forms.Button searchButton;
         private System.Windows.Forms.Button refreshButton;
         private System.Windows.Forms.Label searchLabel;
+        private System.Windows.Forms.DateTimePicker dateTimePicker;
+        private System.Windows.Forms.Label dateLabel;
     }
 }
