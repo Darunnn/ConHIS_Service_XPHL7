@@ -30,6 +30,7 @@ namespace ConHIS_Service_XPHL7
 
         // DataTable for DataGridView
         private DataTable _processedDataTable;
+        private DataView _filteredDataView;
 
         // เก็บ HL7Message ที่เชื่อมกับแต่ละแถว
         private System.Collections.Generic.Dictionary<int, HL7Message> _rowHL7Data = new System.Collections.Generic.Dictionary<int, HL7Message>();
@@ -42,7 +43,7 @@ namespace ConHIS_Service_XPHL7
             _logger = new LogManager();
             _hl7FileProcessor = new SimpleHL7FileProcessor();
         }
-    
+
         private void InitializeDataTable()
         {
             _processedDataTable = new DataTable();
@@ -58,10 +59,10 @@ namespace ConHIS_Service_XPHL7
             _processedDataTable.Columns.Add("Status", typeof(string));
             _processedDataTable.Columns.Add("API Response", typeof(string));
 
-            dataGridView.DataSource = _processedDataTable;
+            // สร้าง DataView สำหรับการกรอง
+            _filteredDataView = new DataView(_processedDataTable);
+            dataGridView.DataSource = _filteredDataView;
             dataGridView.CellDoubleClick += DataGridView_CellDoubleClick;
-
-           
 
             dataGridView.Refresh();
 
@@ -79,7 +80,7 @@ namespace ConHIS_Service_XPHL7
                     dataGridView.Columns["FinancialClass"].Width = 150;
                     dataGridView.Columns["OrderControl"].Width = 80;
                     dataGridView.Columns["Status"].Width = 100;
-                    dataGridView.Columns["API Response"].Width = 300; // แค่กำหนด Width เท่านั้น
+                    dataGridView.Columns["API Response"].Width = 300;
                 }
             }
             catch (Exception ex)
@@ -214,7 +215,7 @@ namespace ConHIS_Service_XPHL7
                                 FinancialClass = $"{financialclass.ID ?? ""} {financialclass.Name ?? ""}".Trim();
                                 if (string.IsNullOrWhiteSpace(FinancialClass)) FinancialClass = "N/A";
                             }
-                            
+
                             string OrderControl = result.ParsedMessage?.CommonOrder?.OrderControl ?? "N/A";
 
                             // เพิ่มข้อมูลลงตาราง
@@ -232,9 +233,6 @@ namespace ConHIS_Service_XPHL7
                                 result.ApiResponse ?? result.ErrorMessage ?? "N/A",
                                 result.ParsedMessage  // ส่ง HL7Message ไปด้วย
                             );
-                           
-
-
 
                             if (result.Success)
                             {
@@ -333,9 +331,90 @@ namespace ConHIS_Service_XPHL7
         }
         #endregion
 
+        #region Search and Filter
+        private void SearchButton_Click(object sender, EventArgs e)
+        {
+            ApplyFilter();
+        }
+
+        private void RefreshButton_Click(object sender, EventArgs e)
+        {
+            ClearFilter();
+        }
+
+        private void SearchTextBox_KeyDown(object sender, KeyEventArgs e)
+        {
+            if (e.KeyCode == Keys.Enter)
+            {
+                ApplyFilter();
+                e.Handled = true;
+                e.SuppressKeyPress = true;
+            }
+        }
+
+        private void ApplyFilter()
+        {
+            try
+            {
+                string searchText = searchTextBox.Text.Trim();
+
+                if (string.IsNullOrEmpty(searchText))
+                {
+                    MessageBox.Show("Please enter Order No or HN to search.", "Search",
+                        MessageBoxButtons.OK, MessageBoxIcon.Information);
+                    return;
+                }
+
+                // สร้าง filter expression สำหรับการค้นหาใน Order No หรือ HN
+                string filterExpression = $"[Order No] LIKE '%{searchText}%' OR [HN] LIKE '%{searchText}%'";
+                _filteredDataView.RowFilter = filterExpression;
+
+                // อัปเดตจำนวนผลลัพธ์
+                int resultCount = _filteredDataView.Count;
+                if (resultCount > 0)
+                {
+                    UpdateStatus($"Found {resultCount} record(s) matching '{searchText}'");
+                }
+                else
+                {
+                    UpdateStatus($"No records found matching '{searchText}'");
+                    MessageBox.Show($"No records found matching '{searchText}'", "Search Result",
+                        MessageBoxButtons.OK, MessageBoxIcon.Information);
+                }
+
+                UpdateRecordCount();
+                _logger.LogInfo($"Search applied: '{searchText}' - Found {resultCount} record(s)");
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError("Error applying filter", ex);
+                MessageBox.Show($"Search error: {ex.Message}", "Error",
+                    MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+        }
+
+        private void ClearFilter()
+        {
+            try
+            {
+                searchTextBox.Text = string.Empty;
+                _filteredDataView.RowFilter = string.Empty;
+                UpdateRecordCount();
+                UpdateStatus("Filter cleared - Showing all records");
+                _logger.LogInfo("Search filter cleared");
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError("Error clearing filter", ex);
+                MessageBox.Show($"Error clearing filter: {ex.Message}", "Error",
+                    MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+        }
+        #endregion
+
         #region GridView
         private void AddRowToGrid(string time, string TransactionDateTime, string orderNo, string hn, string patientName,
-            string sex, string DateOfBirth,string FinancialClass, string OrderControl, string status, string apiResponse, HL7Message hl7Data)
+            string sex, string DateOfBirth, string FinancialClass, string OrderControl, string status, string apiResponse, HL7Message hl7Data)
         {
             if (dataGridView.InvokeRequired)
             {
@@ -399,7 +478,7 @@ namespace ConHIS_Service_XPHL7
                 }
             }
         }
-        
+
         private void Form1_FormClosing(object sender, FormClosingEventArgs e)
         {
             StopBackgroundService();
@@ -415,10 +494,18 @@ namespace ConHIS_Service_XPHL7
                     // ดึง Order Number จากคอลัมน์
                     string orderNo = dataGridView.Rows[e.RowIndex].Cells["Order No"].Value?.ToString() ?? "N/A";
 
-                    // ตรวจสอบว่ามี HL7Message สำหรับแถวนี้หรือไม่
-                    if (_rowHL7Data.ContainsKey(e.RowIndex))
+                    // หา row index ที่แท้จริงใน DataTable (เพราะอาจมีการกรอง)
+                    int actualRowIndex = -1;
+                    if (_filteredDataView.Count > 0 && e.RowIndex < _filteredDataView.Count)
                     {
-                        var hl7Message = _rowHL7Data[e.RowIndex];
+                        DataRowView rowView = _filteredDataView[e.RowIndex];
+                        actualRowIndex = _processedDataTable.Rows.IndexOf(rowView.Row);
+                    }
+
+                    // ตรวจสอบว่ามี HL7Message สำหรับแถวนี้หรือไม่
+                    if (actualRowIndex >= 0 && _rowHL7Data.ContainsKey(actualRowIndex))
+                    {
+                        var hl7Message = _rowHL7Data[actualRowIndex];
 
                         // เปิดฟอร์มแสดงรายละเอียด
                         var detailForm = new HL7DetailForm(hl7Message, orderNo);
@@ -530,7 +617,7 @@ namespace ConHIS_Service_XPHL7
                             result =>
                             {
                                 var hl7Message = result.ParsedMessage;
-                                
+
                                 string orderNo = hl7Message?.CommonOrder?.PlacerOrderNumber ?? "N/A";
                                 string hn = hl7Message?.PatientIdentification?.PatientIDExternal ??
                                            hl7Message?.PatientIdentification?.PatientIDInternal ?? "N/A";
@@ -560,8 +647,6 @@ namespace ConHIS_Service_XPHL7
                                     if (string.IsNullOrWhiteSpace(FinancialClass)) FinancialClass = "N/A";
                                 }
                                 string OrderControl = hl7Message?.CommonOrder?.OrderControl ?? "N/A";
-
-
 
                                 AddRowToGrid(
                                     DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss"),
@@ -623,7 +708,7 @@ namespace ConHIS_Service_XPHL7
             {
                 _isProcessing = false;
 
-                // ✅ เปิดปุ่มกลับเมื่อทำงานเสร็จ (เฉพาะ manual)
+                // เปิดปุ่มกลับเมื่อทำงานเสร็จ (เฉพาะ manual)
                 if (isManual)
                 {
                     this.Invoke(new Action(() =>
@@ -644,7 +729,7 @@ namespace ConHIS_Service_XPHL7
             }
         }
         #endregion
-       
+
         #region update
         private void UpdateRecordCount()
         {
@@ -654,7 +739,17 @@ namespace ConHIS_Service_XPHL7
                 return;
             }
 
-            recordCountLabel.Text = $"Total Records: {_processedDataTable.Rows.Count}";
+            int totalRecords = _processedDataTable.Rows.Count;
+            int displayedRecords = _filteredDataView.Count;
+
+            if (displayedRecords < totalRecords)
+            {
+                recordCountLabel.Text = $"Total Records: {displayedRecords} / {totalRecords} (filtered)";
+            }
+            else
+            {
+                recordCountLabel.Text = $"Total Records: {totalRecords}";
+            }
         }
 
         private void UpdateStatus(string status)
