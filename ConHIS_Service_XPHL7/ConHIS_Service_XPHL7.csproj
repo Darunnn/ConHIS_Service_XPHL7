@@ -102,17 +102,17 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="Configuration\AppConfig.cs" />
-    <Compile Include="Form1.cs">
+    <Compile Include="PagesFrom\Form1.cs">
       <SubType>Form</SubType>
     </Compile>
-    <Compile Include="Form1.Designer.cs">
+    <Compile Include="PagesFrom\Form1.Designer.cs">
       <DependentUpon>Form1.cs</DependentUpon>
     </Compile>
-    <Compile Include="FunctionFrom\Form1.TestHL7.cs">
+    <Compile Include="PagesFrom\HL7DetailForm.cs">
       <SubType>Form</SubType>
     </Compile>
-    <Compile Include="FunctionFrom\HL7DetailForm.cs">
-      <SubType>Form</SubType>
+    <Compile Include="PagesFrom\HL7DetailForm.Designer.cs">
+      <DependentUpon>HL7DetailForm.cs</DependentUpon>
     </Compile>
     <Compile Include="Models\DatabaseModels.cs" />
     <Compile Include="Models\HL7Models.cs" />
@@ -124,7 +124,7 @@
     <Compile Include="Services\HL7Service.cs" />
     <Compile Include="Services\SimpleHL7FileProcessor.cs" />
     <Compile Include="Utils\LogManager.cs" />
-    <EmbeddedResource Include="Form1.resx">
+    <EmbeddedResource Include="PagesFrom\Form1.resx">
       <DependentUpon>Form1.cs</DependentUpon>
     </EmbeddedResource>
     <EmbeddedResource Include="Properties\Resources.resx">

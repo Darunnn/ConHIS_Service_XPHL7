@@ -45,7 +45,8 @@ namespace ConHIS_Service_XPHL7
         private void InitializeDataTable()
         {
             _processedDataTable = new DataTable();
-            _processedDataTable.Columns.Add("Time", typeof(string));
+            _processedDataTable.Columns.Add("Time Check", typeof(string));
+            _processedDataTable.Columns.Add("Transaction DateTime", typeof(string));
             _processedDataTable.Columns.Add("Order No", typeof(string));
             _processedDataTable.Columns.Add("HN", typeof(string));
             _processedDataTable.Columns.Add("Patient Name", typeof(string));
@@ -56,28 +57,26 @@ namespace ConHIS_Service_XPHL7
             _processedDataTable.Columns.Add("API Response", typeof(string));
 
             dataGridView.DataSource = _processedDataTable;
-
-            // เพิ่ม event handler สำหรับดับเบิลคลิก
             dataGridView.CellDoubleClick += DataGridView_CellDoubleClick;
 
-            // ปรับความกว้างคอลัมน์ (รอให้ DataGridView โหลดเสร็จก่อน)
-            dataGridView.AutoGenerateColumns = true;
+           
+
             dataGridView.Refresh();
 
-            // ตั้งค่าความกว้างคอลัมน์
             try
             {
                 if (dataGridView.Columns.Count >= 9)
                 {
-                    dataGridView.Columns["Time"].Width = 80;
-                    dataGridView.Columns["Order No"].Width = 90;
-                    dataGridView.Columns["HN"].Width = 70;
-                    dataGridView.Columns["Patient Name"].Width = 120;
-                    dataGridView.Columns["Drug Code"].Width = 80;
-                    dataGridView.Columns["Drug Name"].Width = 150;
-                    dataGridView.Columns["Quantity"].Width = 60;
-                    dataGridView.Columns["Status"].Width = 70;
-                    dataGridView.Columns["API Response"].AutoSizeMode = DataGridViewAutoSizeColumnMode.Fill;
+                    dataGridView.Columns["Time Check"].Width = 80;
+                    dataGridView.Columns["Transaction DateTime"].Width = 150;
+                    dataGridView.Columns["Order No"].Width = 100;
+                    dataGridView.Columns["HN"].Width = 80;
+                    dataGridView.Columns["Patient Name"].Width = 150;
+                    dataGridView.Columns["Drug Code"].Width = 100;
+                    dataGridView.Columns["Drug Name"].Width = 200;
+                    dataGridView.Columns["Quantity"].Width = 80;
+                    dataGridView.Columns["Status"].Width = 100;
+                    dataGridView.Columns["API Response"].Width = 300; // แค่กำหนด Width เท่านั้น
                 }
             }
             catch (Exception ex)
@@ -327,7 +326,7 @@ namespace ConHIS_Service_XPHL7
         #endregion
 
         #region GridView
-        private void AddRowToGrid(string time, string orderNo, string hn, string patientName, string TransactionDateTime,
+        private void AddRowToGrid(string time, string TransactionDateTime, string orderNo, string hn, string patientName,
             string drugCode, string drugName, string quantity, string status, string apiResponse, HL7Message hl7Data)
         {
             if (dataGridView.InvokeRequired)
@@ -335,7 +334,7 @@ namespace ConHIS_Service_XPHL7
                 dataGridView.Invoke(new Action(() =>
                 {
                     int rowIndex = _processedDataTable.Rows.Count;
-                    _processedDataTable.Rows.Add(time, orderNo, hn, patientName, drugCode, drugName, quantity, status, apiResponse);
+                    _processedDataTable.Rows.Add(time, TransactionDateTime, orderNo, hn, patientName, drugCode, drugName, quantity, status, apiResponse);
 
                     // เก็บ HL7Message ที่เชื่อมกับแถวนี้
                     if (hl7Data != null)
@@ -366,7 +365,7 @@ namespace ConHIS_Service_XPHL7
             else
             {
                 int rowIndex = _processedDataTable.Rows.Count;
-                _processedDataTable.Rows.Add(time, orderNo, hn, patientName, drugCode, drugName, quantity, status, apiResponse);
+                _processedDataTable.Rows.Add(time, TransactionDateTime, orderNo, hn, patientName, drugCode, drugName, quantity, status, apiResponse);
 
                 // เก็บ HL7Message ที่เชื่อมกับแถวนี้
                 if (hl7Data != null)
