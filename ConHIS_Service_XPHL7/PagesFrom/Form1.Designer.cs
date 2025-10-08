@@ -33,9 +33,15 @@
             this.searchLabel = new System.Windows.Forms.Label();
             this.dateTimePicker = new System.Windows.Forms.DateTimePicker();
             this.dateLabel = new System.Windows.Forms.Label();
+            this.groupBox3 = new System.Windows.Forms.GroupBox();
+            this.statusSummaryLabel = new System.Windows.Forms.Label();
+            this.showAllButton = new System.Windows.Forms.Button();
+            this.showSuccessButton = new System.Windows.Forms.Button();
+            this.showFailedButton = new System.Windows.Forms.Button();
             ((System.ComponentModel.ISupportInitialize)(this.dataGridView)).BeginInit();
             this.groupBox1.SuspendLayout();
             this.groupBox2.SuspendLayout();
+            this.groupBox3.SuspendLayout();
             this.SuspendLayout();
             // 
             // statusLabel
@@ -111,6 +117,21 @@
             this.exportButton.Text = "Export to CSV";
             this.exportButton.UseVisualStyleBackColor = true;
             this.exportButton.Click += new System.EventHandler(this.ExportButton_Click);
+            //
+            // groupBox1
+            // 
+            this.groupBox1.Anchor = ((System.Windows.Forms.AnchorStyles)(((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Left)
+            | System.Windows.Forms.AnchorStyles.Right)));
+            this.groupBox1.Controls.Add(this.startStopButton);
+            this.groupBox1.Controls.Add(this.exportButton);
+            this.groupBox1.Controls.Add(this.manualCheckButton);
+            this.groupBox1.Controls.Add(this.testHL7Button);
+            this.groupBox1.Location = new System.Drawing.Point(15, 75);
+            this.groupBox1.Name = "groupBox1";
+            this.groupBox1.Size = new System.Drawing.Size(855, 62);
+            this.groupBox1.TabIndex = 8;
+            this.groupBox1.TabStop = false;
+            this.groupBox1.Text = "Controls";
             // 
             // groupBox2
             // 
@@ -162,6 +183,7 @@
             this.dateTimePicker.Name = "dateTimePicker";
             this.dateTimePicker.Size = new System.Drawing.Size(120, 20);
             this.dateTimePicker.TabIndex = 5;
+            this.dateTimePicker.ValueChanged += new System.EventHandler(this.DateTimePicker_ValueChanged);
             // 
             // searchButton
             // 
@@ -182,6 +204,63 @@
             this.refreshButton.Text = "Refresh";
             this.refreshButton.UseVisualStyleBackColor = true;
             this.refreshButton.Click += new System.EventHandler(this.RefreshButton_Click);
+            // 
+            // groupBox3
+            // 
+            this.groupBox3.Anchor = ((System.Windows.Forms.AnchorStyles)(((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Left)
+            | System.Windows.Forms.AnchorStyles.Right)));
+            this.groupBox3.Controls.Add(this.statusSummaryLabel);
+            this.groupBox3.Controls.Add(this.showAllButton);
+            this.groupBox3.Controls.Add(this.showSuccessButton);
+            this.groupBox3.Controls.Add(this.showFailedButton);
+            this.groupBox3.Location = new System.Drawing.Point(15, 210);
+            this.groupBox3.Name = "groupBox3";
+            this.groupBox3.Size = new System.Drawing.Size(855, 55);
+            this.groupBox3.TabIndex = 11;
+            this.groupBox3.TabStop = false;
+            this.groupBox3.Text = "Status Summary";
+            // 
+            // statusSummaryLabel
+            // 
+            this.statusSummaryLabel.AutoSize = true;
+            this.statusSummaryLabel.Font = new System.Drawing.Font("Microsoft Sans Serif", 9F, System.Drawing.FontStyle.Bold);
+            this.statusSummaryLabel.Location = new System.Drawing.Point(12, 24);
+            this.statusSummaryLabel.Name = "statusSummaryLabel";
+            this.statusSummaryLabel.Size = new System.Drawing.Size(200, 15);
+            this.statusSummaryLabel.TabIndex = 0;
+            this.statusSummaryLabel.Text = "Total: 0 | Success: 0 | Failed: 0";
+            // 
+            // showAllButton
+            // 
+            this.showAllButton.Location = new System.Drawing.Point(250, 18);
+            this.showAllButton.Name = "showAllButton";
+            this.showAllButton.Size = new System.Drawing.Size(75, 25);
+            this.showAllButton.TabIndex = 1;
+            this.showAllButton.Text = "Show All";
+            this.showAllButton.UseVisualStyleBackColor = true;
+            this.showAllButton.Click += new System.EventHandler(this.ShowAllButton_Click);
+            // 
+            // showSuccessButton
+            // 
+            this.showSuccessButton.BackColor = System.Drawing.Color.LightGreen;
+            this.showSuccessButton.Location = new System.Drawing.Point(330, 18);
+            this.showSuccessButton.Name = "showSuccessButton";
+            this.showSuccessButton.Size = new System.Drawing.Size(90, 25);
+            this.showSuccessButton.TabIndex = 2;
+            this.showSuccessButton.Text = "Success Only";
+            this.showSuccessButton.UseVisualStyleBackColor = false;
+            this.showSuccessButton.Click += new System.EventHandler(this.ShowSuccessButton_Click);
+            // 
+            // showFailedButton
+            // 
+            this.showFailedButton.BackColor = System.Drawing.Color.LightCoral;
+            this.showFailedButton.Location = new System.Drawing.Point(425, 18);
+            this.showFailedButton.Name = "showFailedButton";
+            this.showFailedButton.Size = new System.Drawing.Size(90, 25);
+            this.showFailedButton.TabIndex = 3;
+            this.showFailedButton.Text = "Failed Only";
+            this.showFailedButton.UseVisualStyleBackColor = false;
+            this.showFailedButton.Click += new System.EventHandler(this.ShowFailedButton_Click);
             //  
             // dataGridView
             // 
@@ -192,7 +271,7 @@
                 | System.Windows.Forms.AnchorStyles.Right)));
             this.dataGridView.AutoSizeColumnsMode = System.Windows.Forms.DataGridViewAutoSizeColumnsMode.None;
             this.dataGridView.ColumnHeadersHeightSizeMode = System.Windows.Forms.DataGridViewColumnHeadersHeightSizeMode.AutoSize;
-            this.dataGridView.Location = new System.Drawing.Point(15, 210);
+            this.dataGridView.Location = new System.Drawing.Point(15, 275);
             this.dataGridView.Name = "dataGridView";
             this.dataGridView.RowHeadersVisible = false;
             this.dataGridView.ReadOnly = true;
@@ -200,29 +279,15 @@
             this.dataGridView.RowTemplate.Height = 24;
             this.dataGridView.ScrollBars = System.Windows.Forms.ScrollBars.Both;
             this.dataGridView.SelectionMode = System.Windows.Forms.DataGridViewSelectionMode.FullRowSelect;
-            this.dataGridView.Size = new System.Drawing.Size(855, 300);
+            this.dataGridView.Size = new System.Drawing.Size(855, 235);
             this.dataGridView.TabIndex = 9;
-            //
-            // groupBox1
-            // 
-            this.groupBox1.Anchor = ((System.Windows.Forms.AnchorStyles)(((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Left)
-            | System.Windows.Forms.AnchorStyles.Right)));
-            this.groupBox1.Controls.Add(this.startStopButton);
-            this.groupBox1.Controls.Add(this.exportButton);
-            this.groupBox1.Controls.Add(this.manualCheckButton);
-            this.groupBox1.Controls.Add(this.testHL7Button);
-            this.groupBox1.Location = new System.Drawing.Point(15, 75);
-            this.groupBox1.Name = "groupBox1";
-            this.groupBox1.Size = new System.Drawing.Size(855, 62);
-            this.groupBox1.TabIndex = 8;
-            this.groupBox1.TabStop = false;
-            this.groupBox1.Text = "Controls";
             // 
             // Form1
             // 
             this.AutoScaleDimensions = new System.Drawing.SizeF(6F, 13F);
             this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
             this.ClientSize = new System.Drawing.Size(885, 525);
+            this.Controls.Add(this.groupBox3);
             this.Controls.Add(this.groupBox2);
             this.Controls.Add(this.dataGridView);
             this.Controls.Add(this.groupBox1);
@@ -237,6 +302,8 @@
             this.groupBox1.ResumeLayout(false);
             this.groupBox2.ResumeLayout(false);
             this.groupBox2.PerformLayout();
+            this.groupBox3.ResumeLayout(false);
+            this.groupBox3.PerformLayout();
             this.ResumeLayout(false);
             this.PerformLayout();
 
@@ -260,5 +327,10 @@
         private System.Windows.Forms.Label searchLabel;
         private System.Windows.Forms.DateTimePicker dateTimePicker;
         private System.Windows.Forms.Label dateLabel;
+        private System.Windows.Forms.GroupBox groupBox3;
+        private System.Windows.Forms.Label statusSummaryLabel;
+        private System.Windows.Forms.Button showAllButton;
+        private System.Windows.Forms.Button showSuccessButton;
+        private System.Windows.Forms.Button showFailedButton;
     }
 }

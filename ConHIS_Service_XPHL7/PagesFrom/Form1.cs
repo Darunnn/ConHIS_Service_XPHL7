@@ -59,12 +59,14 @@ namespace ConHIS_Service_XPHL7
             _processedDataTable.Columns.Add("Status", typeof(string));
             _processedDataTable.Columns.Add("API Response", typeof(string));
 
-            // สร้าง DataView สำหรับการกรอง
             _filteredDataView = new DataView(_processedDataTable);
             dataGridView.DataSource = _filteredDataView;
             dataGridView.CellDoubleClick += DataGridView_CellDoubleClick;
 
             dataGridView.Refresh();
+
+            // อัปเดต Status Summary เริ่มต้น
+            UpdateStatusSummary();
 
             try
             {
@@ -113,6 +115,9 @@ namespace ConHIS_Service_XPHL7
                 var apiService = new ApiService(AppConfig.ApiEndpoint);
                 var hl7Service = new HL7Service();
                 _processor = new DrugDispenseProcessor(_databaseService, hl7Service, apiService);
+
+                // เริ่มต้น Status Filter Buttons
+                UpdateStatusFilterButtons();
 
                 UpdateStatus("Ready - Service Stopped");
                 startStopButton.Enabled = true;
@@ -332,6 +337,9 @@ namespace ConHIS_Service_XPHL7
         #endregion
 
         #region Search and Filter
+        // ตัวแปรเก็บสถานะ Status Filter ปัจจุบัน
+        private string _currentStatusFilter = "All";
+
         private void SearchButton_Click(object sender, EventArgs e)
         {
             ApplyFilter();
@@ -352,6 +360,86 @@ namespace ConHIS_Service_XPHL7
             }
         }
 
+        // เพิ่ม Event Handler สำหรับ DateTimePicker
+        private void DateTimePicker_ValueChanged(object sender, EventArgs e)
+        {
+            ApplyFilter();
+        }
+
+        // เพิ่ม Event Handler สำหรับ Status Filter Buttons (แยกจาก Search)
+        private void ShowAllButton_Click(object sender, EventArgs e)
+        {
+            _currentStatusFilter = "All";
+            ApplyStatusFilter(); // เปลี่ยนมาใช้ ApplyStatusFilter แทน
+            UpdateStatusFilterButtons();
+        }
+
+        private void ShowSuccessButton_Click(object sender, EventArgs e)
+        {
+            _currentStatusFilter = "Success";
+            ApplyStatusFilter(); // เปลี่ยนมาใช้ ApplyStatusFilter แทน
+            UpdateStatusFilterButtons();
+        }
+
+        private void ShowFailedButton_Click(object sender, EventArgs e)
+        {
+            _currentStatusFilter = "Failed";
+            ApplyStatusFilter(); // เปลี่ยนมาใช้ ApplyStatusFilter แทน
+            UpdateStatusFilterButtons();
+        }
+
+        private void UpdateStatusFilterButtons()
+        {
+            // รีเซ็ตปุ่มทั้งหมด
+            showAllButton.Font = new System.Drawing.Font(showAllButton.Font, System.Drawing.FontStyle.Regular);
+            showSuccessButton.Font = new System.Drawing.Font(showSuccessButton.Font, System.Drawing.FontStyle.Regular);
+            showFailedButton.Font = new System.Drawing.Font(showFailedButton.Font, System.Drawing.FontStyle.Regular);
+
+            // ทำให้ปุ่มที่เลือกตัวหนา
+            if (_currentStatusFilter == "All")
+                showAllButton.Font = new System.Drawing.Font(showAllButton.Font, System.Drawing.FontStyle.Bold);
+            else if (_currentStatusFilter == "Success")
+                showSuccessButton.Font = new System.Drawing.Font(showSuccessButton.Font, System.Drawing.FontStyle.Bold);
+            else if (_currentStatusFilter == "Failed")
+                showFailedButton.Font = new System.Drawing.Font(showFailedButton.Font, System.Drawing.FontStyle.Bold);
+        }
+
+        // ฟังก์ชันใหม่: กรอง Status เท่านั้น (ไม่ยุ่งกับวันที่และ TextBox)
+        private void ApplyStatusFilter()
+        {
+            try
+            {
+                // กรอง Status เท่านั้น
+                if (_currentStatusFilter == "All")
+                {
+                    _filteredDataView.RowFilter = string.Empty;
+                }
+                else
+                {
+                    _filteredDataView.RowFilter = $"[Status] = '{_currentStatusFilter}'";
+                }
+
+                // อัปเดตสีของแถวหลัง filter
+                ApplyRowColors();
+
+                // อัปเดตจำนวนผลลัพธ์
+                int resultCount = _filteredDataView.Count;
+
+                string statusInfo = _currentStatusFilter == "All" ? "all statuses" : $"status '{_currentStatusFilter}'";
+                UpdateStatus($"Showing {resultCount} record(s) with {statusInfo}");
+
+                UpdateRecordCount();
+                UpdateStatusSummary();
+                _logger.LogInfo($"Status filter applied: {statusInfo} - Found {resultCount} record(s)");
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError("Error applying status filter", ex);
+                MessageBox.Show($"Status filter error: {ex.Message}", "Error",
+                    MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+        }
+
         private void ApplyFilter()
         {
             try
@@ -369,37 +457,22 @@ namespace ConHIS_Service_XPHL7
                 }
 
                 // กรณีค้นหาวันที่ - ค้นหาทั้ง Time Check และ Transaction DateTime
-                // สร้างรูปแบบวันที่สำหรับการค้นหา
                 string datePattern = selectedDate.ToString("yyyy-MM-dd");
-
-                // เพิ่ม filter สำหรับวันที่ (ค้นหาได้ทั้ง 2 คอลัมน์)
                 filterParts.Add($"([Time Check] LIKE '{datePattern}%' OR [Transaction DateTime] LIKE '{datePattern}%')");
 
-                // รวม filter ทั้งหมด
-                string filterExpression = string.Empty;
-                if (filterParts.Count > 0)
+                // เพิ่ม Status Filter (ถ้ามีการกรองอยู่)
+                if (_currentStatusFilter != "All")
                 {
-                    if (!string.IsNullOrEmpty(searchText))
-                    {
-                        // ถ้ามีทั้ง text และ date ให้ใช้ AND
-                        filterExpression = string.Join(" AND ", filterParts);
-                    }
-                    else
-                    {
-                        // ถ้ามีแค่ date
-                        filterExpression = filterParts[filterParts.Count - 1];
-                    }
+                    filterParts.Add($"[Status] = '{_currentStatusFilter}'");
                 }
 
-                // ถ้าไม่มีเงื่อนไขใดๆ แจ้งเตือน
-                if (string.IsNullOrEmpty(filterExpression))
-                {
-                    MessageBox.Show("Please enter Order No/HN or select a date to search.", "Search",
-                        MessageBoxButtons.OK, MessageBoxIcon.Information);
-                    return;
-                }
+                // รวม filter ทั้งหมดด้วย AND
+                string filterExpression = string.Join(" AND ", filterParts);
 
                 _filteredDataView.RowFilter = filterExpression;
+
+                // อัปเดตสีของแถวหลัง filter
+                ApplyRowColors();
 
                 // อัปเดตจำนวนผลลัพธ์
                 int resultCount = _filteredDataView.Count;
@@ -408,15 +481,13 @@ namespace ConHIS_Service_XPHL7
                 string searchInfo = string.Empty;
                 if (!string.IsNullOrEmpty(searchText))
                 {
-                    searchInfo += $"'{searchText}'";
+                    searchInfo += $"text '{searchText}' and ";
                 }
-                if (!string.IsNullOrEmpty(searchText) && filterParts.Count > 1)
+                searchInfo += $"date '{datePattern}'";
+
+                if (_currentStatusFilter != "All")
                 {
-                    searchInfo += " and ";
-                }
-                if (filterParts.Count > 0)
-                {
-                    searchInfo += $"date '{datePattern}'";
+                    searchInfo += $" (Status: {_currentStatusFilter})";
                 }
 
                 if (resultCount > 0)
@@ -426,12 +497,11 @@ namespace ConHIS_Service_XPHL7
                 else
                 {
                     UpdateStatus($"No records found matching {searchInfo}");
-                    MessageBox.Show($"No records found matching {searchInfo}", "Search Result",
-                        MessageBoxButtons.OK, MessageBoxIcon.Information);
                 }
 
                 UpdateRecordCount();
-                _logger.LogInfo($"Search applied: {searchInfo} - Found {resultCount} record(s)");
+                UpdateStatusSummary();
+                _logger.LogInfo($"Filter applied: {searchInfo} - Found {resultCount} record(s)");
             }
             catch (Exception ex)
             {
@@ -447,8 +517,15 @@ namespace ConHIS_Service_XPHL7
             {
                 searchTextBox.Text = string.Empty;
                 dateTimePicker.Value = DateTime.Today;
+                _currentStatusFilter = "All"; // รีเซ็ต Status Filter ด้วย
                 _filteredDataView.RowFilter = string.Empty;
+
+                // อัปเดตสีของแถวหลัง clear filter
+                ApplyRowColors();
+
                 UpdateRecordCount();
+                UpdateStatusSummary();
+                UpdateStatusFilterButtons();
                 UpdateStatus("Filter cleared - Showing all records");
                 _logger.LogInfo("Search filter cleared");
             }
@@ -463,7 +540,7 @@ namespace ConHIS_Service_XPHL7
 
         #region GridView
         private void AddRowToGrid(string time, string TransactionDateTime, string orderNo, string hn, string patientName,
-            string sex, string DateOfBirth, string FinancialClass, string OrderControl, string status, string apiResponse, HL7Message hl7Data)
+    string sex, string DateOfBirth, string FinancialClass, string OrderControl, string status, string apiResponse, HL7Message hl7Data)
         {
             if (dataGridView.InvokeRequired)
             {
@@ -472,21 +549,19 @@ namespace ConHIS_Service_XPHL7
                     int rowIndex = _processedDataTable.Rows.Count;
                     _processedDataTable.Rows.Add(time, TransactionDateTime, orderNo, hn, patientName, sex, DateOfBirth, FinancialClass, OrderControl, status, apiResponse);
 
-                    // เก็บ HL7Message ที่เชื่อมกับแถวนี้
                     if (hl7Data != null)
                     {
                         _rowHL7Data[rowIndex] = hl7Data;
                     }
 
                     UpdateRecordCount();
+                    UpdateStatusSummary(); // เพิ่มบรรทัดนี้
 
-                    // Scroll ไปแถวล่างสุด
                     if (dataGridView.Rows.Count > 0)
                     {
                         dataGridView.FirstDisplayedScrollingRowIndex = dataGridView.Rows.Count - 1;
                     }
 
-                    // สีตามสถานะ
                     var lastRow = dataGridView.Rows[dataGridView.Rows.Count - 1];
                     if (status == "Success")
                     {
@@ -503,13 +578,13 @@ namespace ConHIS_Service_XPHL7
                 int rowIndex = _processedDataTable.Rows.Count;
                 _processedDataTable.Rows.Add(time, TransactionDateTime, orderNo, hn, patientName, sex, DateOfBirth, FinancialClass, OrderControl, status, apiResponse);
 
-                // เก็บ HL7Message ที่เชื่อมกับแถวนี้
                 if (hl7Data != null)
                 {
                     _rowHL7Data[rowIndex] = hl7Data;
                 }
 
                 UpdateRecordCount();
+                UpdateStatusSummary(); // เพิ่มบรรทัดนี้
 
                 if (dataGridView.Rows.Count > 0)
                 {
@@ -527,7 +602,6 @@ namespace ConHIS_Service_XPHL7
                 }
             }
         }
-
         private void Form1_FormClosing(object sender, FormClosingEventArgs e)
         {
             StopBackgroundService();
@@ -574,6 +648,43 @@ namespace ConHIS_Service_XPHL7
                 }
             }
         }
+        private void ApplyRowColors()
+        {
+            if (dataGridView.InvokeRequired)
+            {
+                dataGridView.Invoke(new Action(ApplyRowColors));
+                return;
+            }
+
+            try
+            {
+                foreach (DataGridViewRow row in dataGridView.Rows)
+                {
+                    if (row.Cells["Status"].Value != null)
+                    {
+                        string status = row.Cells["Status"].Value.ToString();
+
+                        if (status == "Success")
+                        {
+                            row.DefaultCellStyle.BackColor = System.Drawing.Color.LightGreen;
+                        }
+                        else if (status == "Failed")
+                        {
+                            row.DefaultCellStyle.BackColor = System.Drawing.Color.LightCoral;
+                        }
+                        else
+                        {
+                            row.DefaultCellStyle.BackColor = dataGridView.DefaultCellStyle.BackColor;
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogError("Error applying row colors", ex);
+            }
+        }
+
         #endregion
 
         #region Start/Stop Service Manual and Auto
@@ -827,6 +938,51 @@ namespace ConHIS_Service_XPHL7
             }
 
             lastCheckLabel.Text = $"Last Check: {now}";
+        }
+
+        private void UpdateStatusSummary()
+        {
+            if (statusSummaryLabel.InvokeRequired)
+            {
+                statusSummaryLabel.Invoke(new Action(UpdateStatusSummary));
+                return;
+            }
+
+            try
+            {
+                int totalRecords = _processedDataTable.Rows.Count;
+                int successCount = 0;
+                int failedCount = 0;
+
+                foreach (DataRow row in _processedDataTable.Rows)
+                {
+                    string status = row["Status"]?.ToString() ?? "";
+                    if (status == "Success")
+                        successCount++;
+                    else if (status == "Failed")
+                        failedCount++;
+                }
+
+                statusSummaryLabel.Text = $"Total: {totalRecords} | Success: {successCount} | Failed: {failedCount}";
+
+                // อัปเดตสีของ label ตามสถานะ
+                if (failedCount > 0)
+                {
+                    statusSummaryLabel.ForeColor = System.Drawing.Color.DarkRed;
+                }
+                else if (successCount > 0)
+                {
+                    statusSummaryLabel.ForeColor = System.Drawing.Color.DarkGreen;
+                }
+                else
+                {
+                    statusSummaryLabel.ForeColor = System.Drawing.Color.Black;
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogError("Error updating status summary", ex);
+            }
         }
         #endregion
 
