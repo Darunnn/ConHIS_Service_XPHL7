@@ -35,7 +35,7 @@ namespace ConHIS_Service_XPHL7
             this.logTextBox = new System.Windows.Forms.TextBox();
             this.btnRefreshLogs = new System.Windows.Forms.Button();
             this.btnExportLogs = new System.Windows.Forms.Button();
-            this.btnViewRawLog = new System.Windows.Forms.Button();
+            
             this.tabControl.SuspendLayout();
             this.panelTop.SuspendLayout();
             this.tabLogs.SuspendLayout();
@@ -177,7 +177,7 @@ namespace ConHIS_Service_XPHL7
             this.tabLogs.Controls.Add(this.logTextBox);
             this.tabLogs.Controls.Add(this.btnRefreshLogs);
             this.tabLogs.Controls.Add(this.btnExportLogs);
-            this.tabLogs.Controls.Add(this.btnViewRawLog);
+            
             this.tabLogs.Location = new System.Drawing.Point(4, 22);
             this.tabLogs.Name = "tabLogs";
             this.tabLogs.Padding = new System.Windows.Forms.Padding(3);
@@ -222,17 +222,7 @@ namespace ConHIS_Service_XPHL7
             this.btnExportLogs.Text = "Export";
             this.btnExportLogs.UseVisualStyleBackColor = true;
             this.btnExportLogs.Click += new System.EventHandler(this.BtnExportLogs_Click);
-            // 
-            // btnViewRawLog
-            // 
-            this.btnViewRawLog.Location = new System.Drawing.Point(218, 10);
-            this.btnViewRawLog.Name = "btnViewRawLog";
-            this.btnViewRawLog.Size = new System.Drawing.Size(120, 30);
-            this.btnViewRawLog.TabIndex = 3;
-            this.btnViewRawLog.Text = "View Raw Log";
-            this.btnViewRawLog.UseVisualStyleBackColor = true;
-            this.btnViewRawLog.Click += new System.EventHandler(this.BtnViewRawLog_Click);
-            // 
+            //
             // HL7DetailForm
             // 
             this.AutoScaleDimensions = new System.Drawing.SizeF(6F, 13F);
@@ -269,6 +259,6 @@ namespace ConHIS_Service_XPHL7
         private System.Windows.Forms.TextBox logTextBox;
         private System.Windows.Forms.Button btnRefreshLogs;
         private System.Windows.Forms.Button btnExportLogs;
-        private System.Windows.Forms.Button btnViewRawLog;
+        
     }
 }

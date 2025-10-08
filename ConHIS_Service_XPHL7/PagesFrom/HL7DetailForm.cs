@@ -91,137 +91,7 @@ namespace ConHIS_Service_XPHL7
             LoadOrderLogs();
         }
 
-        private void BtnViewRawLog_Click(object sender, EventArgs e)
-        {
-            try
-            {
-                string baseDirectory = AppDomain.CurrentDomain.BaseDirectory;
-                string projectRoot = Directory.GetParent(baseDirectory)?.Parent?.Parent?.FullName ?? baseDirectory;
-
-                List<string> possibleLogPaths = new List<string>
-                {
-                    Path.Combine(baseDirectory, "logs"),
-                    Path.Combine(projectRoot, "logs"),
-                    Path.Combine(Directory.GetParent(baseDirectory).FullName, "logs"),
-                };
-
-                List<string> possibleErrorLogPaths = new List<string>
-                {
-                    Path.Combine(baseDirectory, "logreaderror"),
-                    Path.Combine(projectRoot, "logreaderror"),
-                    Path.Combine(Directory.GetParent(baseDirectory).FullName, "logreaderror"),
-                };
-
-                var allLogFiles = new List<string>();
-
-                // Get normal log files
-                foreach (var logDir in possibleLogPaths.Where(p => Directory.Exists(p)))
-                {
-                    allLogFiles.AddRange(Directory.GetFiles(logDir, "*.log"));
-                }
-
-                // Get error log files
-                foreach (var errorDir in possibleErrorLogPaths.Where(p => Directory.Exists(p)))
-                {
-                    allLogFiles.AddRange(Directory.GetFiles(errorDir, "hl7_error_*.txt"));
-                }
-
-                if (allLogFiles.Count == 0)
-                {
-                    var sb = new StringBuilder();
-                    sb.AppendLine("No log files found.");
-                    sb.AppendLine();
-                    sb.AppendLine("Searched locations:");
-                    sb.AppendLine("Normal logs:");
-                    foreach (var path in possibleLogPaths)
-                        sb.AppendLine($"  - {path} {(Directory.Exists(path) ? "(exists)" : "(not found)")}");
-                    sb.AppendLine();
-                    sb.AppendLine("Error logs:");
-                    foreach (var path in possibleErrorLogPaths)
-                        sb.AppendLine($"  - {path} {(Directory.Exists(path) ? "(exists)" : "(not found)")}");
-
-                    MessageBox.Show(sb.ToString(), "Information",
-                        MessageBoxButtons.OK, MessageBoxIcon.Information);
-                    return;
-                }
-
-                // Get latest log file
-                string latestLogFile = null;
-                DateTime latestTime = DateTime.MinValue;
-
-                foreach (var file in allLogFiles)
-                {
-                    var fileTime = File.GetLastWriteTime(file);
-                    if (fileTime > latestTime)
-                    {
-                        latestTime = fileTime;
-                        latestLogFile = file;
-                    }
-                }
-
-                if (latestLogFile == null)
-                {
-                    MessageBox.Show("No log files found.", "Information",
-                        MessageBoxButtons.OK, MessageBoxIcon.Information);
-                    return;
-                }
-
-                // Read and display raw log
-                string rawContent = File.ReadAllText(latestLogFile, Encoding.UTF8);
-
-                var result = new StringBuilder();
-                result.AppendLine("Raw Log File: " + Path.GetFileName(latestLogFile));
-                result.AppendLine("Directory: " + Path.GetDirectoryName(latestLogFile));
-                result.AppendLine("Last Modified: " + File.GetLastWriteTime(latestLogFile).ToString("yyyy-MM-dd HH:mm:ss"));
-                result.AppendLine("Size: " + new FileInfo(latestLogFile).Length.ToString("N0") + " bytes");
-                result.AppendLine(new string('=', 80));
-                result.AppendLine();
-                result.AppendLine("Searching for Order No patterns...");
-
-                // Count occurrences - simple way
-                int exactCount = 0;
-                int index = 0;
-                while ((index = rawContent.IndexOf(_orderNo, index, StringComparison.OrdinalIgnoreCase)) != -1)
-                {
-                    exactCount++;
-                    index += _orderNo.Length;
-                }
-
-                result.AppendLine("Found '" + _orderNo + "' mentioned " + exactCount + " time(s) in this file");
-                result.AppendLine(new string('=', 80));
-                result.AppendLine();
-
-                // Show first 500 lines
-                var lines = rawContent.Split(new string[] { "\r\n", "\r", "\n" }, StringSplitOptions.None);
-                int linesToShow = Math.Min(500, lines.Length);
-
-                result.AppendLine("Showing first " + linesToShow + " of " + lines.Length + " lines:");
-                result.AppendLine(new string('-', 80));
-
-                for (int i = 0; i < linesToShow; i++)
-                {
-                    result.AppendLine(lines[i]);
-                }
-
-                if (lines.Length > linesToShow)
-                {
-                    result.AppendLine();
-                    result.AppendLine("... (" + (lines.Length - linesToShow) + " more lines not shown)");
-                }
-
-                logTextBox.Text = result.ToString();
-                logTextBox.SelectionStart = 0;
-                logTextBox.ScrollToCaret();
-
-                _logManager.LogInfo("Displayed raw log file: " + Path.GetFileName(latestLogFile));
-            }
-            catch (Exception ex)
-            {
-                _logManager.LogError("Error viewing raw log", ex);
-                MessageBox.Show("Error viewing raw log: " + ex.Message, "Error",
-                    MessageBoxButtons.OK, MessageBoxIcon.Error);
-            }
-        }
+       
 
         private void BtnExportLogs_Click(object sender, EventArgs e)
         {
@@ -467,9 +337,9 @@ namespace ConHIS_Service_XPHL7
 
                     List<string> possibleLogPaths = new List<string>
                     {
-                        Path.Combine(baseDirectory, "logs"),
-                        Path.Combine(projectRoot, "logs"),
-                        Path.Combine(Directory.GetParent(baseDirectory).FullName, "logs"),
+                        Path.Combine(baseDirectory, "log"),
+                        Path.Combine(projectRoot, "log"),
+                        Path.Combine(Directory.GetParent(baseDirectory).FullName, "log"),
                     };
 
                     List<string> possibleErrorLogPaths = new List<string>
