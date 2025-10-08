@@ -90,9 +90,6 @@ namespace ConHIS_Service_XPHL7
         {
             LoadOrderLogs();
         }
-
-       
-
         private void BtnExportLogs_Click(object sender, EventArgs e)
         {
             try
@@ -186,9 +183,9 @@ namespace ConHIS_Service_XPHL7
 
                 List<string> possibleLogPaths = new List<string>
                 {
-                    Path.Combine(baseDirectory, "logs"),                    // bin\Debug\logs
-                    Path.Combine(projectRoot, "logs"),                      // Project\logs
-                    Path.Combine(Directory.GetParent(baseDirectory).FullName, "logs"),  // bin\logs
+                    Path.Combine(baseDirectory, "log"),                    // bin\Debug\log
+                    Path.Combine(projectRoot, "log"),                      // Project\log
+                    Path.Combine(Directory.GetParent(baseDirectory).FullName, "log"),  // bin\log
                 };
 
                 List<string> possibleErrorLogPaths = new List<string>
