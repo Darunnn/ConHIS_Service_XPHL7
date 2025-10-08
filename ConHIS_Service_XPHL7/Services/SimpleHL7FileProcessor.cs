@@ -54,7 +54,8 @@ namespace ConHIS_Service_XPHL7.Services
                 _logger.LogInfo($"Successfully read HL7 file: {filePath}, Length: {hl7RawData.Length} characters");
                 _logger.LogRawHL7Data(fileName, "FILE*PROCESS", hl7RawData);
                 var parsedMessage = _hl7Service.ParseHL7Message(hl7RawData);
-                _logger.LogInfo($"Successfully parsed HL7 message for file: {fileName}");
+                var orderNo = parsedMessage?.CommonOrder?.PlacerOrderNumber;
+                _logger.LogInfo($"Successfully parsed HL7 message for prescription: {orderNo}");
                 _logger.LogParsedHL7Data(fileName, parsedMessage);
                 return parsedMessage;
             }
@@ -153,7 +154,8 @@ namespace ConHIS_Service_XPHL7.Services
                     catch (Exception ex)
                     {
                         var err = $"Failed to send data to middleware API: {ex.Message}";
-                        _logger.LogError($"Failed to send data to middleware API for file: {fileName}", ex);
+                        var orderNo = parsedMessage?.CommonOrder?.PlacerOrderNumber ;
+                        _logger.LogError($"Failed to send data to middleware API for file: {orderNo}",ex);
                      
 
                         result.Success = false;
