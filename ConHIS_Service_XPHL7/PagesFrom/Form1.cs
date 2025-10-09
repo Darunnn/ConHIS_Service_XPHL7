@@ -55,11 +55,13 @@ namespace ConHIS_Service_XPHL7
             _processedDataTable.Columns.Add("FinancialClass", typeof(string));
             _processedDataTable.Columns.Add("OrderControl", typeof(string));
             _processedDataTable.Columns.Add("Status", typeof(string));
-            _processedDataTable.Columns.Add("API Response", typeof(string));
+            _processedDataTable.Columns.Add("API Response", typeof(string)); // เก็บข้อมูลไว้แต่จะไม่แสดง
 
             _filteredDataView = new DataView(_processedDataTable);
             dataGridView.DataSource = _filteredDataView;
-            dataGridView.CellDoubleClick += DataGridView_CellDoubleClick;
+
+            // ลบ double click event และเพิ่ม cell click event
+            dataGridView.CellClick += DataGridView_CellClick;
 
             dataGridView.Refresh();
 
@@ -78,7 +80,12 @@ namespace ConHIS_Service_XPHL7
                     dataGridView.Columns["FinancialClass"].Width = 150;
                     dataGridView.Columns["OrderControl"].Width = 80;
                     dataGridView.Columns["Status"].Width = 100;
-                    dataGridView.Columns["API Response"].Width = 80;
+
+                    // ซ่อนคอลัมน์ API Response เดิม
+                    dataGridView.Columns["API Response"].Visible = false;
+
+                    // เพิ่มคอลัมน์ปุ่ม View แทน
+                    AddViewButtonColumn();
                 }
             }
             catch (Exception ex)
@@ -595,43 +602,64 @@ namespace ConHIS_Service_XPHL7
             _logger.LogInfo("Application closing - Background service stopped");
         }
 
-        private void DataGridView_CellDoubleClick(object sender, DataGridViewCellEventArgs e)
+        private void AddViewButtonColumn()
         {
-            if (e.RowIndex >= 0 && e.RowIndex < dataGridView.Rows.Count)
+            if (!dataGridView.Columns.Contains("ViewButton"))
             {
-                try
+                DataGridViewButtonColumn viewButtonColumn = new DataGridViewButtonColumn();
+                viewButtonColumn.Name = "ViewButton";
+                viewButtonColumn.HeaderText = "API Response";
+                viewButtonColumn.Text = "View";
+                viewButtonColumn.UseColumnTextForButtonValue = true;
+                viewButtonColumn.Width = 100;
+
+                // เพิ่มคอลัมน์ไว้ตำแหน่งสุดท้าย
+                dataGridView.Columns.Add(viewButtonColumn);
+            }
+        }
+
+        // แทนที่ DataGridView_CellDoubleClick ด้วย DataGridView_CellClick
+        private void DataGridView_CellClick(object sender, DataGridViewCellEventArgs e)
+        {
+            // ตรวจสอบว่าคลิกที่คอลัมน์ปุ่ม View
+            if (e.RowIndex >= 0 && e.ColumnIndex >= 0)
+            {
+                if (dataGridView.Columns[e.ColumnIndex].Name == "ViewButton")
                 {
-                    // ดึง Order Number จากคอลัมน์
-                    string orderNo = dataGridView.Rows[e.RowIndex].Cells["Order No"].Value?.ToString() ?? "N/A";
-
-                    // หา row index ที่แท้จริงใน DataTable (เพราะอาจมีการกรอง)
-                    int actualRowIndex = -1;
-                    if (_filteredDataView.Count > 0 && e.RowIndex < _filteredDataView.Count)
+                    try
                     {
-                        DataRowView rowView = _filteredDataView[e.RowIndex];
-                        actualRowIndex = _processedDataTable.Rows.IndexOf(rowView.Row);
-                    }
+                        // ดึง Order Number จากคอลัมน์
+                        string orderNo = dataGridView.Rows[e.RowIndex].Cells["Order No"].Value?.ToString() ?? "N/A";
 
-                    // ตรวจสอบว่ามี HL7Message สำหรับแถวนี้หรือไม่
-                    if (actualRowIndex >= 0 && _rowHL7Data.ContainsKey(actualRowIndex))
-                    {
-                        var hl7Message = _rowHL7Data[actualRowIndex];
+                        // หา row index ที่แท้จริงใน DataTable (เพราะอาจมีการกรอง)
+                        int actualRowIndex = -1;
+                        if (_filteredDataView.Count > 0 && e.RowIndex < _filteredDataView.Count)
+                        {
+                            DataRowView rowView = _filteredDataView[e.RowIndex];
+                            actualRowIndex = _processedDataTable.Rows.IndexOf(rowView.Row);
+                        }
 
-                        // เปิดฟอร์มแสดงรายละเอียด
-                        var detailForm = new HL7DetailForm(hl7Message, orderNo);
-                        detailForm.ShowDialog();
+                        // ตรวจสอบว่ามี HL7Message สำหรับแถวนี้หรือไม่
+                        if (actualRowIndex >= 0 && _rowHL7Data.ContainsKey(actualRowIndex))
+                        {
+                            var hl7Message = _rowHL7Data[actualRowIndex];
+
+                            // เปิดฟอร์มแสดงรายละเอียด
+                            var detailForm = new HL7DetailForm(hl7Message, orderNo);
+                            detailForm.ShowDialog();
+                        }
+                        else
+                        {
+                            MessageBox.Show("No HL7 data available for this record.", "Information",
+                                MessageBoxButtons.OK, MessageBoxIcon.Information);
+                        }
                     }
-                    else
+                    catch (Exception ex)
                     {
-                        MessageBox.Show("No HL7 data available for this record.", "Information",
-                            MessageBoxButtons.OK, MessageBoxIcon.Information);
+                        _logger.LogError("Error showing HL7 detail", ex);
+                        MessageBox.Show($"Error displaying details: {ex.Message}", "Error",
+                            MessageBoxButtons.OK, MessageBoxIcon.Error);
                     }
-                }
-                catch (Exception ex)
-                {
-                    _logger.LogError("Error showing HL7 detail", ex);
-                    MessageBox.Show($"Error displaying details: {ex.Message}", "Error",
-                        MessageBoxButtons.OK, MessageBoxIcon.Error);
                 }
             }
         }
