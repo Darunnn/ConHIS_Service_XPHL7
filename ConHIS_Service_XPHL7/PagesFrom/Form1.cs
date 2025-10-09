@@ -52,8 +52,6 @@ namespace ConHIS_Service_XPHL7
             _processedDataTable.Columns.Add("Order No", typeof(string));
             _processedDataTable.Columns.Add("HN", typeof(string));
             _processedDataTable.Columns.Add("Patient Name", typeof(string));
-            _processedDataTable.Columns.Add("Sex", typeof(string));
-            _processedDataTable.Columns.Add("DateOfBirth", typeof(string));
             _processedDataTable.Columns.Add("FinancialClass", typeof(string));
             _processedDataTable.Columns.Add("OrderControl", typeof(string));
             _processedDataTable.Columns.Add("Status", typeof(string));
@@ -72,17 +70,15 @@ namespace ConHIS_Service_XPHL7
             {
                 if (dataGridView.Columns.Count >= 9)
                 {
-                    dataGridView.Columns["Time Check"].Width = 80;
+                    dataGridView.Columns["Time Check"].Width = 150;
                     dataGridView.Columns["Transaction DateTime"].Width = 150;
                     dataGridView.Columns["Order No"].Width = 100;
                     dataGridView.Columns["HN"].Width = 80;
                     dataGridView.Columns["Patient Name"].Width = 150;
-                    dataGridView.Columns["Sex"].Width = 100;
-                    dataGridView.Columns["DateOfBirth"].Width = 200;
                     dataGridView.Columns["FinancialClass"].Width = 150;
                     dataGridView.Columns["OrderControl"].Width = 80;
                     dataGridView.Columns["Status"].Width = 100;
-                    dataGridView.Columns["API Response"].Width = 300;
+                    dataGridView.Columns["API Response"].Width = 80;
                 }
             }
             catch (Exception ex)
@@ -205,14 +201,7 @@ namespace ConHIS_Service_XPHL7
                                 var name = result.ParsedMessage.PatientIdentification.OfficialName;
                                 patientName = $"{name.Prefix ?? ""} {name.FirstName ?? ""} {name.LastName ?? ""}".Trim();
                                 if (string.IsNullOrWhiteSpace(patientName)) patientName = "N/A";
-                            }
-
-                            // ดึงข้อมูลยาจาก RXD แรก (ถ้ามี)
-                            string sex = result.ParsedMessage?.PatientIdentification?.Sex ?? "N/A";
-                            string DateOfBirth = result.ParsedMessage?.PatientIdentification?.DateOfBirth != null
-                                ? ((DateTime)result.ParsedMessage.PatientIdentification.DateOfBirth)
-                                    .ToString("yyyy-MM-dd")
-                                : null;
+                            } 
                             string FinancialClass = "N/A";
                             if (result.ParsedMessage?.PatientVisit?.FinancialClass != null)
                             {
@@ -230,8 +219,6 @@ namespace ConHIS_Service_XPHL7
                                 orderNo,
                                 hn,
                                 patientName,
-                                sex,
-                                DateOfBirth,
                                 FinancialClass,
                                 OrderControl,
                                 result.Success ? "Success" : "Failed",
@@ -540,14 +527,14 @@ namespace ConHIS_Service_XPHL7
 
         #region GridView
         private void AddRowToGrid(string time, string TransactionDateTime, string orderNo, string hn, string patientName,
-    string sex, string DateOfBirth, string FinancialClass, string OrderControl, string status, string apiResponse, HL7Message hl7Data)
+    string FinancialClass, string OrderControl, string status, string apiResponse, HL7Message hl7Data)
         {
             if (dataGridView.InvokeRequired)
             {
                 dataGridView.Invoke(new Action(() =>
                 {
                     int rowIndex = _processedDataTable.Rows.Count;
-                    _processedDataTable.Rows.Add(time, TransactionDateTime, orderNo, hn, patientName, sex, DateOfBirth, FinancialClass, OrderControl, status, apiResponse);
+                    _processedDataTable.Rows.Add(time, TransactionDateTime, orderNo, hn, patientName,  FinancialClass, OrderControl, status, apiResponse);
 
                     if (hl7Data != null)
                     {
@@ -576,7 +563,7 @@ namespace ConHIS_Service_XPHL7
             else
             {
                 int rowIndex = _processedDataTable.Rows.Count;
-                _processedDataTable.Rows.Add(time, TransactionDateTime, orderNo, hn, patientName, sex, DateOfBirth, FinancialClass, OrderControl, status, apiResponse);
+                _processedDataTable.Rows.Add(time, TransactionDateTime, orderNo, hn, patientName, FinancialClass, OrderControl, status, apiResponse);
 
                 if (hl7Data != null)
                 {
@@ -794,11 +781,6 @@ namespace ConHIS_Service_XPHL7
                                     patientName = $"{name.Prefix ?? ""} {name.FirstName ?? ""} {name.LastName ?? ""}".Trim();
                                 }
 
-                                string sex = hl7Message?.PatientIdentification?.Sex ?? "N/A";
-                                string DateOfBirth = hl7Message?.PatientIdentification?.DateOfBirth != null
-                                    ? ((DateTime)hl7Message.PatientIdentification.DateOfBirth)
-                                        .ToString("yyyy-MM-dd")
-                                    : null;
                                 string FinancialClass = "N/A";
                                 if (hl7Message?.PatientVisit?.FinancialClass != null)
                                 {
@@ -814,8 +796,6 @@ namespace ConHIS_Service_XPHL7
                                     orderNo,
                                     hn,
                                     patientName,
-                                    sex,
-                                    DateOfBirth,
                                     FinancialClass,
                                     OrderControl,
                                     result.Success ? "Success" : "Failed",

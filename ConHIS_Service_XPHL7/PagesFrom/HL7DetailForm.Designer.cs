@@ -29,50 +29,15 @@ namespace ConHIS_Service_XPHL7
             this.tabRXR = new System.Windows.Forms.TabPage();
             this.tabNTE = new System.Windows.Forms.TabPage();
             this.tabLogs = new System.Windows.Forms.TabPage();
-            this.btnViewLogs = new System.Windows.Forms.Button();
-            this.panelTop = new System.Windows.Forms.Panel();
-            this.lblOrderNo = new System.Windows.Forms.Label();
             this.logTextBox = new System.Windows.Forms.TextBox();
             this.btnRefreshLogs = new System.Windows.Forms.Button();
             this.btnExportLogs = new System.Windows.Forms.Button();
-            
+            this.panelTop = new System.Windows.Forms.Panel();
+            this.lblOrderNo = new System.Windows.Forms.Label();
             this.tabControl.SuspendLayout();
-            this.panelTop.SuspendLayout();
             this.tabLogs.SuspendLayout();
+            this.panelTop.SuspendLayout();
             this.SuspendLayout();
-            // 
-            // panelTop
-            // 
-            this.panelTop.Controls.Add(this.lblOrderNo);
-            this.panelTop.Controls.Add(this.btnViewLogs);
-            this.panelTop.Dock = System.Windows.Forms.DockStyle.Top;
-            this.panelTop.Location = new System.Drawing.Point(0, 0);
-            this.panelTop.Name = "panelTop";
-            this.panelTop.Size = new System.Drawing.Size(1000, 50);
-            this.panelTop.TabIndex = 1;
-            // 
-            // lblOrderNo
-            // 
-            this.lblOrderNo.AutoSize = true;
-            this.lblOrderNo.Font = new System.Drawing.Font("Microsoft Sans Serif", 10F, System.Drawing.FontStyle.Bold);
-            this.lblOrderNo.Location = new System.Drawing.Point(12, 15);
-            this.lblOrderNo.Name = "lblOrderNo";
-            this.lblOrderNo.Size = new System.Drawing.Size(100, 17);
-            this.lblOrderNo.TabIndex = 0;
-            this.lblOrderNo.Text = "Order No: ";
-            // 
-            // btnViewLogs
-            // 
-            this.btnViewLogs.Anchor = ((System.Windows.Forms.AnchorStyles)((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Right)));
-            this.btnViewLogs.BackColor = System.Drawing.Color.LightSkyBlue;
-            this.btnViewLogs.Font = new System.Drawing.Font("Microsoft Sans Serif", 9F, System.Drawing.FontStyle.Bold);
-            this.btnViewLogs.Location = new System.Drawing.Point(850, 10);
-            this.btnViewLogs.Name = "btnViewLogs";
-            this.btnViewLogs.Size = new System.Drawing.Size(130, 30);
-            this.btnViewLogs.TabIndex = 1;
-            this.btnViewLogs.Text = "View Logs";
-            this.btnViewLogs.UseVisualStyleBackColor = false;
-            this.btnViewLogs.Click += new System.EventHandler(this.BtnViewLogs_Click);
             // 
             // tabControl
             // 
@@ -177,7 +142,6 @@ namespace ConHIS_Service_XPHL7
             this.tabLogs.Controls.Add(this.logTextBox);
             this.tabLogs.Controls.Add(this.btnRefreshLogs);
             this.tabLogs.Controls.Add(this.btnExportLogs);
-            
             this.tabLogs.Location = new System.Drawing.Point(4, 22);
             this.tabLogs.Name = "tabLogs";
             this.tabLogs.Padding = new System.Windows.Forms.Padding(3);
@@ -188,9 +152,9 @@ namespace ConHIS_Service_XPHL7
             // 
             // logTextBox
             // 
-            this.logTextBox.Anchor = ((System.Windows.Forms.AnchorStyles)((((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Bottom)
-                | System.Windows.Forms.AnchorStyles.Left)
-                | System.Windows.Forms.AnchorStyles.Right)));
+            this.logTextBox.Anchor = ((System.Windows.Forms.AnchorStyles)((((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Bottom) 
+            | System.Windows.Forms.AnchorStyles.Left) 
+            | System.Windows.Forms.AnchorStyles.Right)));
             this.logTextBox.BackColor = System.Drawing.Color.Black;
             this.logTextBox.Font = new System.Drawing.Font("Consolas", 9F);
             this.logTextBox.ForeColor = System.Drawing.Color.Lime;
@@ -222,7 +186,26 @@ namespace ConHIS_Service_XPHL7
             this.btnExportLogs.Text = "Export";
             this.btnExportLogs.UseVisualStyleBackColor = true;
             this.btnExportLogs.Click += new System.EventHandler(this.BtnExportLogs_Click);
-            //
+            // 
+            // panelTop
+            // 
+            this.panelTop.Controls.Add(this.lblOrderNo);
+            this.panelTop.Dock = System.Windows.Forms.DockStyle.Top;
+            this.panelTop.Location = new System.Drawing.Point(0, 0);
+            this.panelTop.Name = "panelTop";
+            this.panelTop.Size = new System.Drawing.Size(1000, 50);
+            this.panelTop.TabIndex = 1;
+            // 
+            // lblOrderNo
+            // 
+            this.lblOrderNo.AutoSize = true;
+            this.lblOrderNo.Font = new System.Drawing.Font("Microsoft Sans Serif", 10F, System.Drawing.FontStyle.Bold);
+            this.lblOrderNo.Location = new System.Drawing.Point(12, 15);
+            this.lblOrderNo.Name = "lblOrderNo";
+            this.lblOrderNo.Size = new System.Drawing.Size(85, 17);
+            this.lblOrderNo.TabIndex = 0;
+            this.lblOrderNo.Text = "Order No: ";
+            // 
             // HL7DetailForm
             // 
             this.AutoScaleDimensions = new System.Drawing.SizeF(6F, 13F);
@@ -234,11 +217,12 @@ namespace ConHIS_Service_XPHL7
             this.StartPosition = System.Windows.Forms.FormStartPosition.CenterScreen;
             this.Text = "HL7 Message Details";
             this.tabControl.ResumeLayout(false);
-            this.panelTop.ResumeLayout(false);
-            this.panelTop.PerformLayout();
             this.tabLogs.ResumeLayout(false);
             this.tabLogs.PerformLayout();
+            this.panelTop.ResumeLayout(false);
+            this.panelTop.PerformLayout();
             this.ResumeLayout(false);
+
         }
 
         #endregion
@@ -255,7 +239,6 @@ namespace ConHIS_Service_XPHL7
         private System.Windows.Forms.TabPage tabLogs;
         private System.Windows.Forms.Panel panelTop;
         private System.Windows.Forms.Label lblOrderNo;
-        private System.Windows.Forms.Button btnViewLogs;
         private System.Windows.Forms.TextBox logTextBox;
         private System.Windows.Forms.Button btnRefreshLogs;
         private System.Windows.Forms.Button btnExportLogs;

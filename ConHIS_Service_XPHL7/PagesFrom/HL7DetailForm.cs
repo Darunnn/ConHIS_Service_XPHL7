@@ -79,12 +79,7 @@ namespace ConHIS_Service_XPHL7
 
         #region Log Management
 
-        private void BtnViewLogs_Click(object sender, EventArgs e)
-        {
-            // Switch to Logs tab
-            tabControl.SelectedTab = tabLogs;
-            LoadOrderLogs();
-        }
+
 
         private void BtnRefreshLogs_Click(object sender, EventArgs e)
         {
@@ -170,7 +165,7 @@ namespace ConHIS_Service_XPHL7
                 logTextBox.Text = "Loading logs...\r\n";
                 logTextBox.Refresh();
 
-                // Debug mode - show what we're looking for
+                
                 var debugInfo = new StringBuilder();
                 debugInfo.AppendLine($"Search Parameters:");
                 debugInfo.AppendLine($"   Order No: '{_orderNo}' (Length: {_orderNo?.Length})");
@@ -243,10 +238,10 @@ namespace ConHIS_Service_XPHL7
 
                 // Count log files
                 int totalLogFiles = 0;
-                if (logsExists)
-                {
-                    totalLogFiles += Directory.GetFiles(logDirectory, "*.log").Length;
-                }
+                //if (logsExists)
+                //{
+                //    totalLogFiles += Directory.GetFiles(logDirectory, "*.log").Length;
+                //}
                 if (errorLogsExists)
                 {
                     totalLogFiles += Directory.GetFiles(errorLogDirectory, "hl7_error_*.txt").Length;
@@ -293,13 +288,11 @@ namespace ConHIS_Service_XPHL7
 
                     // สรุปสถิติ
                     var errorCount = logs.Count(l => l.LogLevel == "ERROR");
-                    var warningCount = logs.Count(l => l.LogLevel == "WARNING");
-                    var infoCount = logs.Count(l => l.LogLevel == "INFO");
-
+                   
                     sb.AppendLine();
                     sb.AppendLine(new string('=', 80));
                     sb.AppendLine("Statistics:");
-                    sb.AppendLine($"Errors: {errorCount} | Warnings: {warningCount} | Info: {infoCount}");
+                    sb.AppendLine($"Errors: {errorCount}");
                     sb.AppendLine(new string('=', 80));
 
                     logTextBox.Text = sb.ToString();
@@ -353,15 +346,15 @@ namespace ConHIS_Service_XPHL7
                 var allLogFiles = new List<string>();
 
                 // Get normal log files
-                if (!string.IsNullOrEmpty(logDirectory) && Directory.Exists(logDirectory))
-                {
-                    var normalLogs = Directory.GetFiles(logDirectory, "*.log")
-                        .OrderByDescending(f => File.GetLastWriteTime(f))
-                        .Take(30)
-                        .ToList();
-                    allLogFiles.AddRange(normalLogs);
-                    _logManager.LogInfo($"Found {normalLogs.Count} normal log files in: {logDirectory}");
-                }
+                //if (!string.IsNullOrEmpty(logDirectory) && Directory.Exists(logDirectory))
+                //{
+                //    var normalLogs = Directory.GetFiles(logDirectory, "*.log")
+                //        .OrderByDescending(f => File.GetLastWriteTime(f))
+                //        .Take(30)
+                //        .ToList();
+                //    allLogFiles.AddRange(normalLogs);
+                //    _logManager.LogInfo($"Found {normalLogs.Count} normal log files in: {logDirectory}");
+                //}
 
                 // Get error log files (hl7_error_*.txt)
                 if (!string.IsNullOrEmpty(errorLogDirectory) && Directory.Exists(errorLogDirectory))
@@ -395,7 +388,7 @@ namespace ConHIS_Service_XPHL7
                         .ToList();
 
                     allLogFiles.AddRange(errorLogs);
-                    _logManager.LogInfo($"Found {errorLogs.Count} error log files in: {errorLogDirectory}");
+                    //_logManager.LogInfo($"Found {errorLogs.Count} error log files in: {errorLogDirectory}");
                 }
 
                 if (allLogFiles.Count == 0)
@@ -417,7 +410,7 @@ namespace ConHIS_Service_XPHL7
                     try
                     {
                         filesChecked++;
-                        _logManager.LogInfo($"Checking file {filesChecked}/{allLogFiles.Count}: {Path.GetFileName(logFile)}");
+                        //_logManager.LogInfo($"Checking file {filesChecked}/{allLogFiles.Count}: {Path.GetFileName(logFile)}");
 
                         // ตรวจสอบว่าเป็นไฟล์ error log หรือไม่
                         bool isErrorLog = Path.GetFileName(logFile).StartsWith("hl7_error_");
@@ -502,18 +495,18 @@ namespace ConHIS_Service_XPHL7
                                         if (logEntry.ErrorDate.Date == errorLogFileDate.Value.Date)
                                         {
                                             matchingLogs.Add(logEntry);
-                                            _logManager.LogInfo($"Found matching entry #{matchingLogs.Count} in {Path.GetFileName(logFile)} (date matched: {errorLogFileDate.Value:yyyy-MM-dd})");
+                                            //_logManager.LogInfo($"Found matching entry #{matchingLogs.Count} in {Path.GetFileName(logFile)} (date matched: {errorLogFileDate.Value:yyyy-MM-dd})");
                                         }
-                                        else
-                                        {
-                                            _logManager.LogInfo($"Skipped entry in {Path.GetFileName(logFile)} - date mismatch (log: {logEntry.ErrorDate:yyyy-MM-dd}, file: {errorLogFileDate.Value:yyyy-MM-dd})");
-                                        }
+                                        //else
+                                        //{
+                                        //    _logManager.LogInfo($"Skipped entry in {Path.GetFileName(logFile)} - date mismatch (log: {logEntry.ErrorDate:yyyy-MM-dd}, file: {errorLogFileDate.Value:yyyy-MM-dd})");
+                                        //}
                                     }
                                     else
                                     {
                                         // Normal log file - add without date check
                                         matchingLogs.Add(logEntry);
-                                        _logManager.LogInfo($"Found matching entry #{matchingLogs.Count} in {Path.GetFileName(logFile)}");
+                                       // _logManager.LogInfo($"Found matching entry #{matchingLogs.Count} in {Path.GetFileName(logFile)}");
                                     }
                                 }
                             }
