@@ -41,29 +41,33 @@ namespace ConHIS_Service_XPHL7.Services
         {
             var fileName = Path.GetFileNameWithoutExtension(filePath);
             _logger.LogInfo($"Starting to process HL7 file: {filePath}");
+          
             try
             {
                 if (!File.Exists(filePath))
                 {
                     var errorMsg = $"HL7 file not found: {filePath}";
                     _logger.LogError(errorMsg);
-                    
                     return null;
                 }
+
+                // ⭐ อ่านไฟล์ก่อน
                 var hl7RawData = File.ReadAllText(filePath, Encoding.UTF8);
                 _logger.LogInfo($"Successfully read HL7 file: {filePath}, Length: {hl7RawData.Length} characters");
-                _logger.LogRawHL7Data(fileName, "FILE*PROCESS", hl7RawData);
                 var parsedMessage = _hl7Service.ParseHL7Message(hl7RawData);
                 var orderNo = parsedMessage?.CommonOrder?.PlacerOrderNumber;
+                var RecieveOrderType = parsedMessage?.CommonOrder?.OrderControl;
+                // ⭐ ตอนนี้มี orderNo แล้ว ค่อยเขียน log
+                _logger.LogRawHL7Data(fileName, RecieveOrderType, orderNo, hl7RawData);
                 _logger.LogInfo($"Successfully parsed HL7 message for prescription: {orderNo}");
                 _logger.LogParsedHL7Data(fileName, parsedMessage);
+
                 return parsedMessage;
             }
             catch (Exception ex)
             {
                 var errorMsg = $"Error processing HL7 file {filePath}: {ex.Message}";
                 _logger.LogError(errorMsg, ex);
-                
                 return null;
             }
         }

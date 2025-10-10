@@ -36,12 +36,19 @@ namespace ConHIS_Service_XPHL7.Utils
         }
 
         // 🧾 Raw HL7
-        public void LogRawHL7Data(string DrugDispenseipdId, string RecieveOrderType, string hl7Data, string rawLogFolder = "hl7_raw")
+        public void LogRawHL7Data(string DrugDispenseipdId, string RecieveOrderType, string orderno, string hl7Data, string rawLogFolder = "hl7_raw")
         {
             var appFolder = AppDomain.CurrentDomain.BaseDirectory ?? Environment.CurrentDirectory;
             var rawLogDir = Path.Combine(appFolder, rawLogFolder);
             Directory.CreateDirectory(rawLogDir);
-            var rawLogPath = Path.Combine(rawLogDir, $"hl7_data_raw_{DrugDispenseipdId}_{RecieveOrderType}.txt");
+
+            // ⭐ แก้ไข: ทำความสะอาดชื่อไฟล์
+            var safeOrderNo = SanitizeFileName(orderno);
+            var safeDispenseId = SanitizeFileName(DrugDispenseipdId);
+            var safeOrderType = SanitizeFileName(RecieveOrderType);
+
+            var rawLogPath = Path.Combine(rawLogDir, $"hl7_data_raw_{safeDispenseId}_{safeOrderType}_{safeOrderNo}.txt");
+
             try
             {
                 File.WriteAllText(rawLogPath, hl7Data);
@@ -52,13 +59,17 @@ namespace ConHIS_Service_XPHL7.Utils
             }
         }
 
-        // 🧩 Parsed HL7
         public void LogParsedHL7Data(string DrugDispenseipdId, object parsedData, string parsedLogFolder = "hl7_parsed")
         {
             var appFolder = AppDomain.CurrentDomain.BaseDirectory ?? Environment.CurrentDirectory;
             var parsedLogDir = Path.Combine(appFolder, parsedLogFolder);
             Directory.CreateDirectory(parsedLogDir);
-            var parsedLogPath = Path.Combine(parsedLogDir, $"hl7_data_parsed_{DrugDispenseipdId}.txt");
+
+            // ⭐ แก้ไข: ทำความสะอาดชื่อไฟล์
+            var safeDispenseId = SanitizeFileName(DrugDispenseipdId);
+
+            var parsedLogPath = Path.Combine(parsedLogDir, $"hl7_data_parsed_{safeDispenseId}.txt");
+
             try
             {
                 var jsonData = JsonConvert.SerializeObject(parsedData, Formatting.Indented);
@@ -70,7 +81,24 @@ namespace ConHIS_Service_XPHL7.Utils
             }
         }
 
+        private string SanitizeFileName(string fileName)
+        {
+            if (string.IsNullOrEmpty(fileName))
+                return "unknown";
 
+            var invalidChars = Path.GetInvalidFileNameChars();
+            var result = new StringBuilder(fileName.Length);
+
+            foreach (var c in fileName)
+            {
+                if (Array.IndexOf(invalidChars, c) >= 0)
+                    result.Append('_');
+                else
+                    result.Append(c);
+            }
+
+            return result.ToString();
+        }
         public void LogReadError(string DrugDispenseipdId, string errorMessage, string errorLogFolder = "logreaderror")
         {
             var appFolder = AppDomain.CurrentDomain.BaseDirectory ?? Environment.CurrentDirectory;

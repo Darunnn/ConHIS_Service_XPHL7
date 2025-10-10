@@ -31,7 +31,12 @@ namespace ConHIS_Service_XPHL7.Services
             _hl7Service = hl7Service;
             _apiService = apiService;
         }
-
+        public class ApiResponse
+        {
+            public string UniqID { get; set; }
+            public bool Status { get; set; }
+            public string Message { get; set; }
+        }
         // เพิ่ม overload ใหม่ที่รับ callback สำหรับส่งข้อมูลกลับ
         public void ProcessPendingOrders(Action<string> logAction, Action<ProcessResult> onProcessed = null)
         {
@@ -92,31 +97,22 @@ namespace ConHIS_Service_XPHL7.Services
              
                 hl7String = Encoding.UTF8.GetString(data.Hl7Data);
             }
-
-            // บันทึก raw HL7
-            try
-            {
-                _logger.LogRawHL7Data(data.DrugDispenseipdId.ToString(), data.RecieveOrderType.ToString(), hl7String, "hl7_raw");
-                _logger.LogInfo($"HL7 raw data saved to hl7_raw/hl7_data_raw_{data.PrescId}.txt");
-            }
-            catch (Exception ex)
-            {
-                _logger.LogWarning($"Failed to write HL7 raw data file for PrescId {data.PrescId}: {ex.Message}");
-              
-            }
-
-            logAction($"Processing prescription ID: {data.PrescId}");
-
-            // Parse HL7 message
+            
+            // Parse HL7 and raw HL7
             HL7Message hl7Message = null;
             try
             {
                 hl7Message = _hl7Service.ParseHL7Message(hl7String);
+                var orderNo = hl7Message?.CommonOrder?.PlacerOrderNumber;
+                _logger.LogInfo($"HL7 raw data saved to hl7_raw/hl7_data_raw_{data.PrescId}.txt");
+                _logger.LogRawHL7Data(data.DrugDispenseipdId.ToString(), data.RecieveOrderType.ToString(), hl7String, orderNo, "hl7_raw");
                 _logger.LogInfo($"Parsed HL7 message for prescription ID: {data.PrescId}");
                 _logger.LogParsedHL7Data(data.DrugDispenseipdId.ToString(), hl7Message, "hl7_parsed");
+
             }
             catch (Exception ex)
             {
+                _logger.LogWarning($"Failed to write HL7 raw data file for PrescId {data.PrescId}: {ex.Message}");
                 var errorMsg = $"Error parsing HL7 for prescription ID: {data.PrescId} - {ex.Message}";
                 _databaseService.UpdateReceiveStatus(data.DrugDispenseipdId, 'F');
                
@@ -130,6 +126,7 @@ namespace ConHIS_Service_XPHL7.Services
                     DispenseData = data,
                     ParsedMessage = null
                 });
+                logAction($"Processing prescription ID: {data.PrescId}");
                 return;
             }
 
@@ -209,13 +206,6 @@ namespace ConHIS_Service_XPHL7.Services
             }
         }
 
-        public class ApiResponse
-        {
-            public string UniqID { get; set; }
-            public bool Status { get; set; }
-            public string Message { get; set; }
-        }
-
         private string ProcessNewOrder(DrugDispenseipd data, HL7Message hl7Message)
         {
             try
@@ -260,6 +250,7 @@ namespace ConHIS_Service_XPHL7.Services
             }
             catch (Exception ex)
             {
+                _databaseService.UpdateReceiveStatus(data.DrugDispenseipdId, 'F');
                 _logger.LogError($"Error in ProcessNewOrder for {data.PrescId}", ex);
     
                 throw;
@@ -311,12 +302,12 @@ namespace ConHIS_Service_XPHL7.Services
             catch (Exception ex)
             {
                 _logger.LogError($"Error in ProcessReplaceOrder for {data.PrescId}", ex);
-               
+                _databaseService.UpdateReceiveStatus(data.DrugDispenseipdId, 'F');
                 throw;
             }
         }
 
-        // CreatePrescriptionBody ไม่เปลี่ยนแปลง - คัดลอกจากโค้ดเดิม
+        
         private object CreatePrescriptionBody(HL7Message result, DrugDispenseipd data)
         {
             // ... โค้ดเดิมทั้งหมด ...

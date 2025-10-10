@@ -628,8 +628,11 @@ namespace ConHIS_Service_XPHL7
                 {
                     try
                     {
-                        // ดึง Order Number จากคอลัมน์
+                        // ดึง Order Number และ Status จากคอลัมน์
+                        string time = dataGridView.Rows[e.RowIndex].Cells["Time Check"].Value?.ToString() ?? "N/A";
                         string orderNo = dataGridView.Rows[e.RowIndex].Cells["Order No"].Value?.ToString() ?? "N/A";
+                        string status = dataGridView.Rows[e.RowIndex].Cells["Status"].Value?.ToString() ?? "N/A";
+                       
 
                         // หา row index ที่แท้จริงใน DataTable (เพราะอาจมีการกรอง)
                         int actualRowIndex = -1;
@@ -644,8 +647,9 @@ namespace ConHIS_Service_XPHL7
                         {
                             var hl7Message = _rowHL7Data[actualRowIndex];
 
-                            // เปิดฟอร์มแสดงรายละเอียด
-                            var detailForm = new HL7DetailForm(hl7Message, orderNo);
+                            // เปิดฟอร์มแสดงรายละเอียด พร้อมส่ง status ไปด้วย
+                            DateTime? filterDate = DateTime.TryParse(time, out DateTime parsedDate) ? parsedDate.Date : (DateTime?)null;
+                            var detailForm = new HL7DetailForm(hl7Message, filterDate, orderNo, status);
                             detailForm.ShowDialog();
                         }
                         else
