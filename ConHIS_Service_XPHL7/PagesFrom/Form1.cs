@@ -93,7 +93,7 @@ namespace ConHIS_Service_XPHL7
                 _logger?.LogError("Error setting column widths", ex);
             }
 
-            UpdateRecordCount();
+        
         }
 
         private void InitializePanelPaintEvents()
@@ -176,6 +176,13 @@ namespace ConHIS_Service_XPHL7
                 _appConfig.LoadConfiguration();
                 _logger.LogInfo("Configuration loaded");
 
+                // โหลดค่า LogRetentionDays จาก App.config
+                if (int.TryParse(System.Configuration.ConfigurationManager.AppSettings["LogRetentionDays"], out int retentionDays))
+                {
+                    _logger.LogRetentionDays = retentionDays;
+                    _logger.LogInfo($"Log retention days loaded: {retentionDays} days");
+                }
+
                 _logger.LogInfo("Connecting to database");
                 _databaseService = new DatabaseService(_appConfig.ConnectionString);
                 _logger.LogInfo("DatabaseService initialized");
@@ -195,6 +202,7 @@ namespace ConHIS_Service_XPHL7
                 testHL7Button.Enabled = true;
                 manualCheckButton.Enabled = true;
                 exportButton.Enabled = true;
+                settingsButton.Enabled = true; // เพิ่มบรรทัดนี้
             }
             catch (Exception ex)
             {
@@ -1116,5 +1124,64 @@ namespace ConHIS_Service_XPHL7
 
         #endregion
 
+        #region Settings
+        private void SettingsButton_Click(object sender, EventArgs e)
+        {
+            try
+            {
+                // ดึงค่าปัจจุบันจาก LogManager
+                int currentDays = _logger?.LogRetentionDays ?? 30;
+
+                // เปิดฟอร์ม Settings
+                using (var settingsForm = new PagesFrom.SettingsForm(currentDays))
+                {
+                    if (settingsForm.ShowDialog() == DialogResult.OK)
+                    {
+                        if (_logger != null)
+                        {
+                            if (settingsForm.SaveToConfig)
+                            {
+                                // บันทึกลง App.config แล้ว ให้รีโหลดจาก config
+                                _logger.ReloadLogRetentionDays();
+
+                                UpdateStatus($"Settings saved permanently - Log retention: {_logger.LogRetentionDays} days");
+                            }
+                            else
+                            {
+                                // ใช้เฉพาะ Session นี้
+                                _logger.UpdateLogRetentionDaysTemporary(settingsForm.LogRetentionDays);
+
+                                UpdateStatus($"Settings updated temporarily - Log retention: {_logger.LogRetentionDays} days (session only)");
+                            }
+
+                            // ทำความสะอาด log เก่าทันทีตามค่าใหม่
+                            _logger.CleanOldLogs();
+
+                            string permanentStatus = settingsForm.SaveToConfig ? "ถาวร (App.config)" : "ชั่วคราว (Session only)";
+
+                            MessageBox.Show(
+                                $"ระบบได้ทำความสะอาดไฟล์ log เก่าเรียบร้อยแล้ว\n\n" +
+                                $"จำนวนวันเก็บ Log: {_logger.LogRetentionDays} วัน\n" +
+                                $"สถานะ: {permanentStatus}",
+                                "Log Cleanup Completed",
+                                MessageBoxButtons.OK,
+                                MessageBoxIcon.Information
+                            );
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogError("Error opening settings", ex);
+                MessageBox.Show(
+                    $"เกิดข้อผิดพลาดในการเปิด Settings:\n{ex.Message}",
+                    "Error",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Error
+                );
+            }
+        }
+        #endregion
     }
 }

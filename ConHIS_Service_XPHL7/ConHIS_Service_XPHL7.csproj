@@ -108,6 +108,12 @@
     <Compile Include="PagesFrom\Form1.Designer.cs">
       <DependentUpon>Form1.cs</DependentUpon>
     </Compile>
+    <Compile Include="PagesFrom\SettingsForm.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="PagesFrom\SettingsForm.Designer.cs">
+      <DependentUpon>SettingsForm.cs</DependentUpon>
+    </Compile>
     <Compile Include="PagesFrom\HL7DetailForm.cs">
       <SubType>Form</SubType>
     </Compile>

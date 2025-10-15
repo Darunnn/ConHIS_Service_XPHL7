@@ -23,6 +23,7 @@
             this.manualCheckButton = new System.Windows.Forms.Button();
             this.testHL7Button = new System.Windows.Forms.Button();
             this.exportButton = new System.Windows.Forms.Button();
+            this.settingsButton = new System.Windows.Forms.Button();
             this.dataGridView = new System.Windows.Forms.DataGridView();
             this.groupBox1 = new System.Windows.Forms.GroupBox();
             this.groupBox2 = new System.Windows.Forms.GroupBox();
@@ -123,6 +124,17 @@
             this.exportButton.UseVisualStyleBackColor = true;
             this.exportButton.Click += new System.EventHandler(this.ExportButton_Click);
             // 
+            // settingsButton
+            this.settingsButton = new System.Windows.Forms.Button();
+            this.settingsButton.Location = new System.Drawing.Point(393, 18);
+            this.settingsButton.Margin = new System.Windows.Forms.Padding(2);
+            this.settingsButton.Name = "settingsButton";
+            this.settingsButton.Size = new System.Drawing.Size(90, 32);
+            this.settingsButton.TabIndex = 8;
+            this.settingsButton.Text = "⚙️ Settings";
+            this.settingsButton.UseVisualStyleBackColor = true;
+            this.settingsButton.Click += new System.EventHandler(this.SettingsButton_Click);
+            //
             // dataGridView
             // 
             this.dataGridView.AllowUserToAddRows = false;
@@ -149,6 +161,7 @@
             this.groupBox1.Controls.Add(this.exportButton);
             this.groupBox1.Controls.Add(this.manualCheckButton);
             this.groupBox1.Controls.Add(this.testHL7Button);
+            this.groupBox1.Controls.Add(this.settingsButton);
             this.groupBox1.Location = new System.Drawing.Point(15, 75);
             this.groupBox1.Name = "groupBox1";
             this.groupBox1.Size = new System.Drawing.Size(1170, 62);
@@ -452,6 +465,7 @@
         private System.Windows.Forms.Button manualCheckButton;
         private System.Windows.Forms.Button testHL7Button;
         private System.Windows.Forms.Button exportButton;
+        private System.Windows.Forms.Button settingsButton;
         private System.Windows.Forms.DataGridView dataGridView;
         private System.Windows.Forms.GroupBox groupBox1;
         private System.Windows.Forms.GroupBox groupBox2;

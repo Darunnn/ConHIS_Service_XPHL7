@@ -1,6 +1,7 @@
 ﻿using ConHIS_Service_XPHL7.Configuration;
 using Newtonsoft.Json;
 using System;
+using System.Configuration;
 using System.IO;
 using System.Linq;
 using System.Text;
@@ -26,7 +27,87 @@ namespace ConHIS_Service_XPHL7.Utils
             var desired = Path.Combine(appFolder, logFolder);
             Directory.CreateDirectory(desired);
             _logFolder = desired;
-            _logRetentionDays = logRetentionDays > 0 ? logRetentionDays : 30;
+
+            // 🔧 เปิดโปรแกรมทุกครั้งให้อ่านจาก App.config เสมอ
+            _logRetentionDays = LoadLogRetentionDaysFromConfig(logRetentionDays);
+
+            LogInfo($"LogManager initialized with retention period: {_logRetentionDays} days (from App.config)");
+        }
+
+        /// <summary>
+        /// อ่านค่า LogRetentionDays จาก App.config
+        /// </summary>
+        private int LoadLogRetentionDaysFromConfig(int defaultValue)
+        {
+            try
+            {
+                string configValue = ConfigurationManager.AppSettings["LogRetentionDays"];
+
+                if (!string.IsNullOrEmpty(configValue) && int.TryParse(configValue, out int days))
+                {
+                    if (days > 0)
+                    {
+                        Console.WriteLine($"✅ Loaded LogRetentionDays from App.config: {days} days");
+                        return days;
+                    }
+                }
+
+                Console.WriteLine($"⚠️ LogRetentionDays not found in App.config, using default: {defaultValue} days");
+                return defaultValue;
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"❌ Error reading LogRetentionDays from App.config: {ex.Message}");
+                return defaultValue;
+            }
+        }
+
+        /// <summary>
+        /// อัปเดตค่า LogRetentionDays ชั่วคราว (ใช้ได้เฉพาะ session นี้)
+        /// เมื่อปิดโปรแกรมแล้วเปิดใหม่จะกลับไปอ่าน App.config
+        /// </summary>
+        public void UpdateLogRetentionDaysTemporary(int days)
+        {
+            try
+            {
+                if (days <= 0)
+                {
+                    throw new ArgumentException("Days must be greater than 0", nameof(days));
+                }
+
+                _logRetentionDays = days;
+
+                LogInfo($"LogRetentionDays temporarily updated to: {days} days (for this session only)");
+                Console.WriteLine($"💾 LogRetentionDays updated temporarily: {days} days");
+                Console.WriteLine($"📌 Note: This setting will reset to App.config value when program restarts");
+            }
+            catch (Exception ex)
+            {
+                LogError("Error updating log retention days", ex);
+                throw;
+            }
+        }
+
+        /// <summary>
+        /// รีโหลดค่า LogRetentionDays จาก App.config
+        /// </summary>
+        public void ReloadLogRetentionDays()
+        {
+            try
+            {
+                Console.WriteLine("🔄 Reloading LogRetentionDays from App.config...");
+
+                // Refresh config section เพื่อให้ได้ค่าล่าสุด
+                ConfigurationManager.RefreshSection("appSettings");
+
+                _logRetentionDays = LoadLogRetentionDaysFromConfig(30);
+
+                LogInfo($"LogRetentionDays reloaded from App.config: {_logRetentionDays} days");
+            }
+            catch (Exception ex)
+            {
+                LogError("Error reloading LogRetentionDays", ex);
+            }
         }
 
         public void LogToFile(string message, string logType = "INFO")
@@ -136,6 +217,7 @@ namespace ConHIS_Service_XPHL7.Utils
                             {
                                 Directory.Delete(dir, true); // true = ลบทั้งไฟล์ภายใน
                                 Console.WriteLine($"Deleted old log folder: {dir}");
+                                LogInfo($"Deleted old log folder: {dir}");
                             }
                             catch (Exception ex)
                             {
@@ -156,12 +238,61 @@ namespace ConHIS_Service_XPHL7.Utils
         {
             var appFolder = AppDomain.CurrentDomain.BaseDirectory ?? Environment.CurrentDirectory;
 
+            LogInfo($"Starting log cleanup. Retention period: {_logRetentionDays} days");
+            Console.WriteLine($"🧹 Starting log cleanup. Retention period: {_logRetentionDays} days");
+
             // ทำความสะอาดทุกโฟลเดอร์ log
             CleanOldLogFolders(Path.Combine(appFolder, "hl7_raw"));
             CleanOldLogFolders(Path.Combine(appFolder, "hl7_parsed"));
             CleanOldLogFolders(Path.Combine(appFolder, "logreaderror"));
 
-            Console.WriteLine($"Log cleanup completed. Retention period: {_logRetentionDays} days");
+            // ทำความสะอาดโฟลเดอร์ log หลักด้วย
+            CleanOldLogFiles(_logFolder);
+
+            Console.WriteLine($"✅ Log cleanup completed. Retention period: {_logRetentionDays} days");
+            LogInfo($"Log cleanup completed. Retention period: {_logRetentionDays} days");
+        }
+
+        // 🧹 ลบไฟล์ log เก่าในโฟลเดอร์หลัก (สำหรับไฟล์ที่ไม่ได้จัดเก็บในโฟลเดอร์ย่อย)
+        private void CleanOldLogFiles(string logFolder)
+        {
+            try
+            {
+                if (!Directory.Exists(logFolder))
+                    return;
+
+                var cutoffDate = DateTime.Now.AddDays(-_logRetentionDays);
+                var files = Directory.GetFiles(logFolder, "*.txt");
+
+                foreach (var file in files)
+                {
+                    var fileName = Path.GetFileNameWithoutExtension(file);
+
+                    // พยายามแปลงชื่อไฟล์เป็นวันที่ (รูปแบบ yyyy-MM-dd)
+                    if (DateTime.TryParseExact(fileName, "yyyy-MM-dd",
+                        System.Globalization.CultureInfo.InvariantCulture,
+                        System.Globalization.DateTimeStyles.None,
+                        out DateTime fileDate))
+                    {
+                        if (fileDate < cutoffDate)
+                        {
+                            try
+                            {
+                                File.Delete(file);
+                                Console.WriteLine($"Deleted old log file: {file}");
+                            }
+                            catch (Exception ex)
+                            {
+                                Console.WriteLine($"Failed to delete file {file}: {ex.Message}");
+                            }
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error cleaning old log files in {logFolder}: {ex.Message}");
+            }
         }
 
         private string SanitizeFileName(string fileName)
