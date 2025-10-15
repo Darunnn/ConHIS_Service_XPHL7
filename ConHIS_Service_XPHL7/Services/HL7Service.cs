@@ -110,7 +110,6 @@ namespace ConHIS_Service_XPHL7.Services
                 MSH18 = GetField(fields, 18),
             };
         }
-
         private PID ParsePID(string[] fields)
         {
             // PID-5 Official Name
@@ -195,7 +194,6 @@ namespace ConHIS_Service_XPHL7.Services
 
             };
         }
-
         private PV1 ParsePV1(string[] fields)
         {
             var locationComponents = GetField(fields, 3).Split(COMPONENT_SEPARATOR[0]);
@@ -344,9 +342,6 @@ namespace ConHIS_Service_XPHL7.Services
                 IdentificationDate = ParseDateTime(GetField(fields, 6))
             };
         }
-
-        
-
         private RXD ParseRXE(string[] fields)
         {
             var drugComponents = GetField(fields, 2).Split(COMPONENT_SEPARATOR[0]);

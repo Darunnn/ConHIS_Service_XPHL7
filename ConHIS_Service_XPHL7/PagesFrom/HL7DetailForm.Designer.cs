@@ -54,7 +54,7 @@ namespace ConHIS_Service_XPHL7
             this.tabControl.Location = new System.Drawing.Point(0, 50);
             this.tabControl.Name = "tabControl";
             this.tabControl.SelectedIndex = 0;
-            this.tabControl.Size = new System.Drawing.Size(1000, 650);
+            this.tabControl.Size = new System.Drawing.Size(900, 600);
             this.tabControl.TabIndex = 0;
             // 
             // tabMSH
@@ -62,7 +62,7 @@ namespace ConHIS_Service_XPHL7
             this.tabMSH.Location = new System.Drawing.Point(4, 22);
             this.tabMSH.Name = "tabMSH";
             this.tabMSH.Padding = new System.Windows.Forms.Padding(3);
-            this.tabMSH.Size = new System.Drawing.Size(992, 624);
+            this.tabMSH.Size = new System.Drawing.Size(892, 574);
             this.tabMSH.TabIndex = 0;
             this.tabMSH.Text = "MSH - Message Header";
             this.tabMSH.UseVisualStyleBackColor = true;
@@ -72,7 +72,7 @@ namespace ConHIS_Service_XPHL7
             this.tabPID.Location = new System.Drawing.Point(4, 22);
             this.tabPID.Name = "tabPID";
             this.tabPID.Padding = new System.Windows.Forms.Padding(3);
-            this.tabPID.Size = new System.Drawing.Size(992, 624);
+            this.tabPID.Size = new System.Drawing.Size(892, 574);
             this.tabPID.TabIndex = 1;
             this.tabPID.Text = "PID - Patient ID";
             this.tabPID.UseVisualStyleBackColor = true;
@@ -82,7 +82,7 @@ namespace ConHIS_Service_XPHL7
             this.tabPV1.Location = new System.Drawing.Point(4, 22);
             this.tabPV1.Name = "tabPV1";
             this.tabPV1.Padding = new System.Windows.Forms.Padding(3);
-            this.tabPV1.Size = new System.Drawing.Size(992, 624);
+            this.tabPV1.Size = new System.Drawing.Size(892, 574);
             this.tabPV1.TabIndex = 2;
             this.tabPV1.Text = "PV1 - Patient Visit";
             this.tabPV1.UseVisualStyleBackColor = true;
@@ -92,7 +92,7 @@ namespace ConHIS_Service_XPHL7
             this.tabORC.Location = new System.Drawing.Point(4, 22);
             this.tabORC.Name = "tabORC";
             this.tabORC.Padding = new System.Windows.Forms.Padding(3);
-            this.tabORC.Size = new System.Drawing.Size(992, 624);
+            this.tabORC.Size = new System.Drawing.Size(892, 574);
             this.tabORC.TabIndex = 3;
             this.tabORC.Text = "ORC - Common Order";
             this.tabORC.UseVisualStyleBackColor = true;
@@ -102,7 +102,7 @@ namespace ConHIS_Service_XPHL7
             this.tabAL1.Location = new System.Drawing.Point(4, 22);
             this.tabAL1.Name = "tabAL1";
             this.tabAL1.Padding = new System.Windows.Forms.Padding(3);
-            this.tabAL1.Size = new System.Drawing.Size(992, 624);
+            this.tabAL1.Size = new System.Drawing.Size(892, 574);
             this.tabAL1.TabIndex = 4;
             this.tabAL1.Text = "AL1 - Allergies";
             this.tabAL1.UseVisualStyleBackColor = true;
@@ -112,7 +112,7 @@ namespace ConHIS_Service_XPHL7
             this.tabRXD.Location = new System.Drawing.Point(4, 22);
             this.tabRXD.Name = "tabRXD";
             this.tabRXD.Padding = new System.Windows.Forms.Padding(3);
-            this.tabRXD.Size = new System.Drawing.Size(992, 624);
+            this.tabRXD.Size = new System.Drawing.Size(892, 574);
             this.tabRXD.TabIndex = 5;
             this.tabRXD.Text = "RXD - Pharmacy Dispense";
             this.tabRXD.UseVisualStyleBackColor = true;
@@ -122,7 +122,7 @@ namespace ConHIS_Service_XPHL7
             this.tabRXR.Location = new System.Drawing.Point(4, 22);
             this.tabRXR.Name = "tabRXR";
             this.tabRXR.Padding = new System.Windows.Forms.Padding(3);
-            this.tabRXR.Size = new System.Drawing.Size(992, 624);
+            this.tabRXR.Size = new System.Drawing.Size(892, 574);
             this.tabRXR.TabIndex = 6;
             this.tabRXR.Text = "RXR - Route Info";
             this.tabRXR.UseVisualStyleBackColor = true;
@@ -132,7 +132,7 @@ namespace ConHIS_Service_XPHL7
             this.tabNTE.Location = new System.Drawing.Point(4, 22);
             this.tabNTE.Name = "tabNTE";
             this.tabNTE.Padding = new System.Windows.Forms.Padding(3);
-            this.tabNTE.Size = new System.Drawing.Size(992, 624);
+            this.tabNTE.Size = new System.Drawing.Size(892, 574);
             this.tabNTE.TabIndex = 7;
             this.tabNTE.Text = "NTE - Notes";
             this.tabNTE.UseVisualStyleBackColor = true;
@@ -145,7 +145,7 @@ namespace ConHIS_Service_XPHL7
             this.tabLogs.Location = new System.Drawing.Point(4, 22);
             this.tabLogs.Name = "tabLogs";
             this.tabLogs.Padding = new System.Windows.Forms.Padding(3);
-            this.tabLogs.Size = new System.Drawing.Size(992, 624);
+            this.tabLogs.Size = new System.Drawing.Size(892, 574);
             this.tabLogs.TabIndex = 8;
             this.tabLogs.Text = "Logs";
             this.tabLogs.UseVisualStyleBackColor = true;
@@ -163,7 +163,7 @@ namespace ConHIS_Service_XPHL7
             this.logTextBox.Name = "logTextBox";
             this.logTextBox.ReadOnly = true;
             this.logTextBox.ScrollBars = System.Windows.Forms.ScrollBars.Both;
-            this.logTextBox.Size = new System.Drawing.Size(980, 573);
+            this.logTextBox.Size = new System.Drawing.Size(880, 533);
             this.logTextBox.TabIndex = 0;
             this.logTextBox.WordWrap = false;
             // 
@@ -193,7 +193,7 @@ namespace ConHIS_Service_XPHL7
             this.panelTop.Dock = System.Windows.Forms.DockStyle.Top;
             this.panelTop.Location = new System.Drawing.Point(0, 0);
             this.panelTop.Name = "panelTop";
-            this.panelTop.Size = new System.Drawing.Size(1000, 50);
+            this.panelTop.Size = new System.Drawing.Size(900, 50);
             this.panelTop.TabIndex = 1;
             // 
             // lblOrderNo
@@ -210,7 +210,7 @@ namespace ConHIS_Service_XPHL7
             // 
             this.AutoScaleDimensions = new System.Drawing.SizeF(6F, 13F);
             this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
-            this.ClientSize = new System.Drawing.Size(1000, 700);
+            this.ClientSize = new System.Drawing.Size(900, 650);
             this.Controls.Add(this.tabControl);
             this.Controls.Add(this.panelTop);
             this.Name = "HL7DetailForm";

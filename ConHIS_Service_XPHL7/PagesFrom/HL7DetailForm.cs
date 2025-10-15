@@ -162,7 +162,7 @@ namespace ConHIS_Service_XPHL7
                         File.WriteAllText(saveFileDialog.FileName, contentToExport, Encoding.UTF8);
                         MessageBox.Show($"Logs exported successfully to:\n{saveFileDialog.FileName}",
                             "Export Complete", MessageBoxButtons.OK, MessageBoxIcon.Information);
-                        
+
                         string dateLog = _filterDate.HasValue ? $" on {_filterDate.Value:yyyy-MM-dd}" : "";
                         _logManager.LogInfo($"Logs exported for Order No: {_orderNo} (Status: {_status}){dateLog} to {saveFileDialog.FileName}");
                     }
@@ -199,18 +199,18 @@ namespace ConHIS_Service_XPHL7
                 string projectRoot = Directory.GetParent(baseDirectory)?.Parent?.Parent?.FullName ?? baseDirectory;
 
                 List<string> possibleLogPaths = new List<string>
-                {
-                    Path.Combine(baseDirectory, "hl7_raw"),
-                    Path.Combine(projectRoot, "hl7_raw"),
-                    Path.Combine(Directory.GetParent(baseDirectory).FullName, "hl7_raw"),
-                };
+        {
+            Path.Combine(baseDirectory, "hl7_raw"),
+            Path.Combine(projectRoot, "hl7_raw"),
+            Path.Combine(Directory.GetParent(baseDirectory).FullName, "hl7_raw"),
+        };
 
                 List<string> possibleErrorLogPaths = new List<string>
-                {
-                    Path.Combine(baseDirectory, "logreaderror"),
-                    Path.Combine(projectRoot, "logreaderror"),
-                    Path.Combine(Directory.GetParent(baseDirectory).FullName, "logreaderror"),
-                };
+        {
+            Path.Combine(baseDirectory, "logreaderror"),
+            Path.Combine(projectRoot, "logreaderror"),
+            Path.Combine(Directory.GetParent(baseDirectory).FullName, "logreaderror"),
+        };
 
                 // กำหนด directory ที่จะใช้ตาม status
                 string logDirectory = null;
@@ -233,7 +233,7 @@ namespace ConHIS_Service_XPHL7
                     // ถ้าไม่ทราบ status ให้ค้นหาทั้งสองที่
                     logDirectory = possibleLogPaths.FirstOrDefault(p => Directory.Exists(p));
                     errorLogDirectory = possibleErrorLogPaths.FirstOrDefault(p => Directory.Exists(p));
-                    debugInfo.AppendLine($"   Log Type: All Logs");
+                    debugInfo.AppendLine($"   Log Type: All Logs (Both directories)");
                 }
 
                 debugInfo.AppendLine($"   Base Directory: {baseDirectory}");
@@ -248,9 +248,9 @@ namespace ConHIS_Service_XPHL7
                 bool errorLogsExists = !string.IsNullOrEmpty(errorLogDirectory) && Directory.Exists(errorLogDirectory);
 
                 debugInfo.AppendLine("Directory Status:");
-                if (_status == "Success" || _status == "N/A")
+                if (_status == "Success" || string.IsNullOrEmpty(_status) || (_status != "Failed"))
                     debugInfo.AppendLine($"   hl7_raw: {(logsExists ? "✓ Found" : "✗ Not found")}");
-                if (_status == "Failed" || _status == "N/A")
+                if (_status == "Failed" || string.IsNullOrEmpty(_status) || (_status != "Success"))
                     debugInfo.AppendLine($"   logreaderror: {(errorLogsExists ? "✓ Found" : "✗ Not found")}");
 
                 if (logsExists || errorLogsExists)
@@ -270,13 +270,13 @@ namespace ConHIS_Service_XPHL7
                     debugInfo.AppendLine("Error: Log directories not found!");
                     debugInfo.AppendLine();
                     debugInfo.AppendLine("Searched locations:");
-                    if (_status == "Success" || _status == "N/A")
+                    if (_status == "Success" || string.IsNullOrEmpty(_status) || (_status != "Failed"))
                     {
                         debugInfo.AppendLine("  HL7 Raw logs:");
                         foreach (var path in possibleLogPaths)
                             debugInfo.AppendLine($"    - {path}");
                     }
-                    if (_status == "Failed" || _status == "N/A")
+                    if (_status == "Failed" || string.IsNullOrEmpty(_status) || (_status != "Success"))
                     {
                         debugInfo.AppendLine("  Error logs:");
                         foreach (var path in possibleErrorLogPaths)
@@ -291,7 +291,20 @@ namespace ConHIS_Service_XPHL7
                 int totalLogFiles = 0;
                 if (logsExists)
                 {
-                    totalLogFiles += Directory.GetFiles(logDirectory, "hl7_data_raw_*.txt").Length;
+                    var rawFiles = Directory.GetFiles(logDirectory, "hl7_data_raw_*.txt");
+                    totalLogFiles += rawFiles.Length;
+
+                    // Debug: แสดงไฟล์ที่พบ
+                    debugInfo.AppendLine($"Raw log files found: {rawFiles.Length}");
+                    foreach (var file in rawFiles.Take(5))
+                    {
+                        debugInfo.AppendLine($"  - {Path.GetFileName(file)} (Size: {new FileInfo(file).Length} bytes, Modified: {File.GetLastWriteTime(file):yyyy-MM-dd HH:mm:ss})");
+                    }
+                    if (rawFiles.Length > 5)
+                    {
+                        debugInfo.AppendLine($"  ... and {rawFiles.Length - 5} more files");
+                    }
+                    debugInfo.AppendLine();
                 }
                 if (errorLogsExists)
                 {
@@ -307,7 +320,7 @@ namespace ConHIS_Service_XPHL7
                     }
                 }
 
-                debugInfo.AppendLine($"Found {totalLogFiles} log file(s) to search");
+                debugInfo.AppendLine($"Total log files to search: {totalLogFiles}");
                 debugInfo.AppendLine(new string('=', 80));
                 debugInfo.AppendLine();
 
@@ -330,6 +343,7 @@ namespace ConHIS_Service_XPHL7
                     if (_filterDate.HasValue)
                         sb.AppendLine($"• Check if logs exist for date: {_filterDate.Value:yyyy-MM-dd}");
                     sb.AppendLine("• Order No might be in a different format in the log");
+                    sb.AppendLine($"• Searched Order No: '{_orderNo}' (trimmed)");
 
                     logTextBox.Text = sb.ToString();
                 }
@@ -346,6 +360,7 @@ namespace ConHIS_Service_XPHL7
                     foreach (var log in logs)
                     {
                         sb.AppendLine(log.RawLog);
+                        sb.AppendLine(); // เว้นบรรทัดระหว่าง log entries
                     }
 
                     // สรุปสถิติ
@@ -391,18 +406,18 @@ namespace ConHIS_Service_XPHL7
                     string projectRoot = Directory.GetParent(baseDirectory)?.Parent?.Parent?.FullName ?? baseDirectory;
 
                     List<string> possibleLogPaths = new List<string>
-                    {
-                        Path.Combine(baseDirectory, "hl7_raw"),
-                        Path.Combine(projectRoot, "hl7_raw"),
-                        Path.Combine(Directory.GetParent(baseDirectory).FullName, "hl7_raw"),
-                    };
+            {
+                Path.Combine(baseDirectory, "hl7_raw"),
+                Path.Combine(projectRoot, "hl7_raw"),
+                Path.Combine(Directory.GetParent(baseDirectory).FullName, "hl7_raw"),
+            };
 
                     List<string> possibleErrorLogPaths = new List<string>
-                    {
-                        Path.Combine(baseDirectory, "logreaderror"),
-                        Path.Combine(projectRoot, "logreaderror"),
-                        Path.Combine(Directory.GetParent(baseDirectory).FullName, "logreaderror"),
-                    };
+            {
+                Path.Combine(baseDirectory, "logreaderror"),
+                Path.Combine(projectRoot, "logreaderror"),
+                Path.Combine(Directory.GetParent(baseDirectory).FullName, "logreaderror"),
+            };
 
                     // กำหนด directory ตาม status
                     if (_status == "Failed")
@@ -415,6 +430,7 @@ namespace ConHIS_Service_XPHL7
                     }
                     else
                     {
+                        // Status อื่นๆ ให้ค้นหาทั้งสองที่
                         logDirectory = possibleLogPaths.FirstOrDefault(p => Directory.Exists(p));
                         errorLogDirectory = possibleErrorLogPaths.FirstOrDefault(p => Directory.Exists(p));
                     }
@@ -422,15 +438,14 @@ namespace ConHIS_Service_XPHL7
 
                 var allLogFiles = new List<string>();
 
-                // Get hl7_raw log files (hl7_data_raw_*.txt) - เฉพาะเมื่อ status เป็น Success หรือ N/A
+                // Get hl7_raw log files (hl7_data_raw_*.txt)
                 if (!string.IsNullOrEmpty(logDirectory) && Directory.Exists(logDirectory) &&
-                    (_status == "Success" || _status == "N/A"))
+                    (_status == "Success" || string.IsNullOrEmpty(_status) || (_status != "Failed")))
                 {
                     var normalLogs = Directory.GetFiles(logDirectory, "hl7_data_raw_*.txt")
                         .OrderByDescending(f => File.GetLastWriteTime(f))
-                        .Take(50)
                         .ToList();
-                    
+
                     // กรองตามวันที่ถ้ามีการระบุ
                     if (_filterDate.HasValue)
                     {
@@ -438,18 +453,18 @@ namespace ConHIS_Service_XPHL7
                             .Where(f => File.GetLastWriteTime(f).Date == _filterDate.Value.Date)
                             .ToList();
                     }
-                    
+
                     allLogFiles.AddRange(normalLogs);
                     _logManager.LogInfo($"Found {normalLogs.Count} hl7_raw log files in: {logDirectory}");
                 }
 
-                // Get error log files (hl7_error_*.txt) - เฉพาะเมื่อ status เป็น Failed หรือ N/A
+                // Get error log files (hl7_error_*.txt)
                 if (!string.IsNullOrEmpty(errorLogDirectory) && Directory.Exists(errorLogDirectory) &&
-                    (_status == "Failed" || _status == "N/A"))
+                    (_status == "Failed" || string.IsNullOrEmpty(_status) || (_status != "Success")))
                 {
                     // ถ้ามีการกรองวันที่ ให้ค้นหาเฉพาะไฟล์ที่ตรงกับวันที่นั้น
-                    string searchPattern = _filterDate.HasValue 
-                        ? $"hl7_error_{_filterDate.Value:yyyy-MM-dd}*.txt" 
+                    string searchPattern = _filterDate.HasValue
+                        ? $"hl7_error_{_filterDate.Value:yyyy-MM-dd}*.txt"
                         : "hl7_error_*.txt";
 
                     var allErrorLogs = Directory.GetFiles(errorLogDirectory, searchPattern)
@@ -515,7 +530,7 @@ namespace ConHIS_Service_XPHL7
                                 if (DateTime.TryParse(dateMatch.Groups[1].Value, out DateTime fileDate))
                                 {
                                     errorLogFileDate = fileDate;
-                                    
+
                                     // ถ้ามีการกรองวันที่และไฟล์ไม่ตรงกับวันที่ ให้ข้าม
                                     if (_filterDate.HasValue && fileDate.Date != _filterDate.Value.Date)
                                     {
@@ -542,31 +557,51 @@ namespace ConHIS_Service_XPHL7
                                 DateTime fileDate = File.GetLastWriteTime(logFile).Date;
                                 if (fileDate != _filterDate.Value.Date)
                                 {
-                                    continue; // ข้ามไฟล์ที่ไม่ตรงวันที่
+                                    _logManager.LogInfo($"Skipping file {Path.GetFileName(logFile)} - date mismatch (File: {fileDate:yyyy-MM-dd}, Filter: {_filterDate.Value:yyyy-MM-dd})");
+                                    continue;
                                 }
                             }
 
-                            // ดึง Order No จากชื่อไฟล์: hl7_data_raw_110034_NW.txt -> 110034
-                            var fileNameMatch = Regex.Match(Path.GetFileName(logFile), @"hl7_data_raw_(.+)\.txt");
+                            // ดึง Order No จากชื่อไฟล์: hl7_data_raw_681001000302_NW.txt -> 681001000302
+                            // Pattern รองรับทั้ง: 
+                            // - hl7_data_raw_681001000302.txt
+                            // - hl7_data_raw_681001000302_NW.txt
+                            // - hl7_data_raw_681001000302_XX_YY.txt
+                            var fileNameMatch = Regex.Match(Path.GetFileName(logFile), @"hl7_data_raw_(.+?)(?:_[A-Z]{2})?\.txt");
                             if (fileNameMatch.Success)
                             {
-                                string fileOrderInfo = fileNameMatch.Groups[1].Value; // เช่น "110034_NW"
+                                string fileOrderInfo = fileNameMatch.Groups[1].Value; // เช่น "681001000302"
 
-                                // ตรวจสอบว่า Order No ตรงกันหรือไม่
-                                if (fileOrderInfo.StartsWith(searchOrderNo, StringComparison.OrdinalIgnoreCase))
+                                // Debug log
+                                _logManager.LogInfo($"Comparing: File order '{fileOrderInfo}' (length: {fileOrderInfo.Length}) with search order '{searchOrderNo}' (length: {searchOrderNo.Length})");
+
+                                // ตรวจสอบว่า Order No ตรงกันหรือไม่ (รองรับทั้ง exact match และ contains)
+                                bool isMatch = fileOrderInfo.Equals(searchOrderNo, StringComparison.OrdinalIgnoreCase) ||
+                                              fileOrderInfo.IndexOf(searchOrderNo, StringComparison.OrdinalIgnoreCase)>=0 ||
+                                              searchOrderNo.IndexOf(fileOrderInfo, StringComparison.OrdinalIgnoreCase) >= 0;
+
+                                if (isMatch)
                                 {
                                     // ไฟล์นี้ตรงกับ Order No ที่ค้นหา
                                     var logEntry = new LogEntry
                                     {
                                         Timestamp = File.GetLastWriteTime(logFile),
                                         LogLevel = "INFO",
-                                        RawLog = fullLogContent,
-                                        Message = "",
+                                        RawLog = fullLogContent.Trim(), // ตัด whitespace ด้านหน้า-หลัง
+                                        Message = $"Raw HL7 Data from file: {Path.GetFileName(logFile)}",
                                         ErrorDate = File.GetLastWriteTime(logFile).Date
                                     };
                                     matchingLogs.Add(logEntry);
-                                    _logManager.LogInfo($"Found matching raw log file: {Path.GetFileName(logFile)}");
+                                    _logManager.LogInfo($"✓ Found matching raw log file: {Path.GetFileName(logFile)} (Size: {fullLogContent.Length} chars)");
                                 }
+                                else
+                                {
+                                    _logManager.LogInfo($"✗ File order '{fileOrderInfo}' does not match search order '{searchOrderNo}'");
+                                }
+                            }
+                            else
+                            {
+                                _logManager.LogWarning($"Could not parse filename: {Path.GetFileName(logFile)}");
                             }
                             continue; // ข้ามไปไฟล์ถัดไปเพราะประมวลผลเสร็จแล้ว
                         }
@@ -592,16 +627,16 @@ namespace ConHIS_Service_XPHL7
                             {
                                 var patterns = new[]
                                 {
-                                    $"Order No: {searchOrderNo}",
-                                    $"OrderNo: {searchOrderNo}",
-                                    $"Order: {searchOrderNo}",
-                                    $"PlacerOrderNumber: {searchOrderNo}",
-                                    $"orderNo={searchOrderNo}",
-                                    $"\"{searchOrderNo}\"",
-                                    $"'{searchOrderNo}'",
-                                    $"for {searchOrderNo}",
-                                    $"order: {searchOrderNo}",
-                                };
+                            $"Order No: {searchOrderNo}",
+                            $"OrderNo: {searchOrderNo}",
+                            $"Order: {searchOrderNo}",
+                            $"PlacerOrderNumber: {searchOrderNo}",
+                            $"orderNo={searchOrderNo}",
+                            $"\"{searchOrderNo}\"",
+                            $"'{searchOrderNo}'",
+                            $"for {searchOrderNo}",
+                            $"order: {searchOrderNo}",
+                        };
 
                                 foreach (var pattern in patterns)
                                 {
@@ -670,6 +705,7 @@ namespace ConHIS_Service_XPHL7
                 _logManager.LogError("Error getting logs for order", ex);
             }
 
+            // เรียงลำดับตาม Timestamp จากใหม่ไปเก่า
             matchingLogs = matchingLogs.OrderByDescending(l => l.Timestamp).ToList();
 
             return matchingLogs;

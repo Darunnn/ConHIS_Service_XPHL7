@@ -96,6 +96,71 @@ namespace ConHIS_Service_XPHL7
             UpdateRecordCount();
         }
 
+        private void InitializePanelPaintEvents()
+        {
+            totalPanel.Paint += (s, e) => DrawPanelTopBar(e, System.Drawing.Color.Gray);
+            successPanel.Paint += (s, e) => DrawPanelTopBar(e, System.Drawing.Color.Green);
+            failedPanel.Paint += (s, e) => DrawPanelTopBar(e, System.Drawing.Color.Red);
+            pendingPanel.Paint += (s, e) => DrawPanelTopBar(e, System.Drawing.Color.Orange);
+            rejectPanel.Paint += (s, e) => DrawPanelTopBar(e, System.Drawing.Color.DarkGray);
+
+            // เพิ่ม Click Event สำหรับแต่ละ Panel
+            totalPanel.Click += TotalPanel_Click;
+            successPanel.Click += SuccessPanel_Click;
+            failedPanel.Click += FailedPanel_Click;
+            pendingPanel.Click += PendingPanel_Click;
+            rejectPanel.Click += RejectPanel_Click;
+
+            // เพิ่ม Click Event ให้กับ Label ภายใน Panel ด้วย
+            foreach (Control ctrl in totalPanel.Controls)
+            {
+                if (ctrl is Label)
+                {
+                    ctrl.Click += TotalPanel_Click;
+                    ctrl.Cursor = System.Windows.Forms.Cursors.Hand;
+                }
+            }
+            foreach (Control ctrl in successPanel.Controls)
+            {
+                if (ctrl is Label)
+                {
+                    ctrl.Click += SuccessPanel_Click;
+                    ctrl.Cursor = System.Windows.Forms.Cursors.Hand;
+                }
+            }
+            foreach (Control ctrl in failedPanel.Controls)
+            {
+                if (ctrl is Label)
+                {
+                    ctrl.Click += FailedPanel_Click;
+                    ctrl.Cursor = System.Windows.Forms.Cursors.Hand;
+                }
+            }
+            foreach (Control ctrl in pendingPanel.Controls)
+            {
+                if (ctrl is Label)
+                {
+                    ctrl.Click += PendingPanel_Click;
+                    ctrl.Cursor = System.Windows.Forms.Cursors.Hand;
+                }
+            }
+            foreach (Control ctrl in rejectPanel.Controls)
+            {
+                if (ctrl is Label)
+                {
+                    ctrl.Click += RejectPanel_Click;
+                    ctrl.Cursor = System.Windows.Forms.Cursors.Hand;
+                }
+            }
+
+            // เพิ่ม Cursor เป็น Hand เมื่อ Hover
+            totalPanel.Cursor = System.Windows.Forms.Cursors.Hand;
+            successPanel.Cursor = System.Windows.Forms.Cursors.Hand;
+            failedPanel.Cursor = System.Windows.Forms.Cursors.Hand;
+            pendingPanel.Cursor = System.Windows.Forms.Cursors.Hand;
+            rejectPanel.Cursor = System.Windows.Forms.Cursors.Hand;
+        }
+
         private void Form1_Load(object sender, EventArgs e)
         {
             _logger.LogInfo("Start Interface");
@@ -121,6 +186,9 @@ namespace ConHIS_Service_XPHL7
 
                 // เริ่มต้น Status Filter Buttons
                 UpdateStatusFilterButtons();
+
+                // เพิ่มบรรทัดนี้
+                InitializePanelPaintEvents();
 
                 UpdateStatus("Ready - Service Stopped");
                 startStopButton.Enabled = true;
@@ -208,7 +276,8 @@ namespace ConHIS_Service_XPHL7
                                 var name = result.ParsedMessage.PatientIdentification.OfficialName;
                                 patientName = $"{name.Prefix ?? ""} {name.FirstName ?? ""} {name.LastName ?? ""}".Trim();
                                 if (string.IsNullOrWhiteSpace(patientName)) patientName = "N/A";
-                            } 
+                            }
+
                             string FinancialClass = "N/A";
                             if (result.ParsedMessage?.PatientVisit?.FinancialClass != null)
                             {
@@ -360,42 +429,63 @@ namespace ConHIS_Service_XPHL7
             ApplyFilter();
         }
 
-        // เพิ่ม Event Handler สำหรับ Status Filter Buttons (แยกจาก Search)
-        private void ShowAllButton_Click(object sender, EventArgs e)
+        private void TotalPanel_Click(object sender, EventArgs e)
         {
             _currentStatusFilter = "All";
-            ApplyStatusFilter(); // เปลี่ยนมาใช้ ApplyStatusFilter แทน
+            ApplyStatusFilter();
             UpdateStatusFilterButtons();
         }
 
-        private void ShowSuccessButton_Click(object sender, EventArgs e)
+        private void SuccessPanel_Click(object sender, EventArgs e)
         {
             _currentStatusFilter = "Success";
-            ApplyStatusFilter(); // เปลี่ยนมาใช้ ApplyStatusFilter แทน
+            ApplyStatusFilter();
             UpdateStatusFilterButtons();
         }
 
-        private void ShowFailedButton_Click(object sender, EventArgs e)
+        private void FailedPanel_Click(object sender, EventArgs e)
         {
             _currentStatusFilter = "Failed";
-            ApplyStatusFilter(); // เปลี่ยนมาใช้ ApplyStatusFilter แทน
+            ApplyStatusFilter();
             UpdateStatusFilterButtons();
         }
 
+        private void PendingPanel_Click(object sender, EventArgs e)
+        {
+            _currentStatusFilter = "Pending";
+            ApplyStatusFilter();
+            UpdateStatusFilterButtons();
+        }
+
+        private void RejectPanel_Click(object sender, EventArgs e)
+        {
+            _currentStatusFilter = "Rejected";
+            ApplyStatusFilter();
+            UpdateStatusFilterButtons();
+        }
         private void UpdateStatusFilterButtons()
         {
-            // รีเซ็ตปุ่มทั้งหมด
-            showAllButton.Font = new System.Drawing.Font(showAllButton.Font, System.Drawing.FontStyle.Regular);
-            showSuccessButton.Font = new System.Drawing.Font(showSuccessButton.Font, System.Drawing.FontStyle.Regular);
-            showFailedButton.Font = new System.Drawing.Font(showFailedButton.Font, System.Drawing.FontStyle.Regular);
+            // ไม่ต้องทำอะไรเพราะไม่มีปุ่มแล้ว
+            // หรือถ้าต้องการ highlight Panel ที่เลือก อาจเพิ่ม border หนาขึ้น
 
-            // ทำให้ปุ่มที่เลือกตัวหนา
+            // Reset border ของทุก Panel
+            totalPanel.BorderStyle = System.Windows.Forms.BorderStyle.FixedSingle;
+            successPanel.BorderStyle = System.Windows.Forms.BorderStyle.FixedSingle;
+            failedPanel.BorderStyle = System.Windows.Forms.BorderStyle.FixedSingle;
+            pendingPanel.BorderStyle = System.Windows.Forms.BorderStyle.FixedSingle;
+            rejectPanel.BorderStyle = System.Windows.Forms.BorderStyle.FixedSingle;
+
+            // Highlight Panel ที่เลือกด้วย border หนา (ถ้าต้องการ)
             if (_currentStatusFilter == "All")
-                showAllButton.Font = new System.Drawing.Font(showAllButton.Font, System.Drawing.FontStyle.Bold);
+                totalPanel.BorderStyle = System.Windows.Forms.BorderStyle.Fixed3D;
             else if (_currentStatusFilter == "Success")
-                showSuccessButton.Font = new System.Drawing.Font(showSuccessButton.Font, System.Drawing.FontStyle.Bold);
+                successPanel.BorderStyle = System.Windows.Forms.BorderStyle.Fixed3D;
             else if (_currentStatusFilter == "Failed")
-                showFailedButton.Font = new System.Drawing.Font(showFailedButton.Font, System.Drawing.FontStyle.Bold);
+                failedPanel.BorderStyle = System.Windows.Forms.BorderStyle.Fixed3D;
+            else if (_currentStatusFilter == "Pending")
+                pendingPanel.BorderStyle = System.Windows.Forms.BorderStyle.Fixed3D;
+            else if (_currentStatusFilter == "Rejected")
+                rejectPanel.BorderStyle = System.Windows.Forms.BorderStyle.Fixed3D;
         }
 
         // ฟังก์ชันใหม่: กรอง Status เท่านั้น (ไม่ยุ่งกับวันที่และ TextBox)
@@ -422,7 +512,7 @@ namespace ConHIS_Service_XPHL7
                 string statusInfo = _currentStatusFilter == "All" ? "all statuses" : $"status '{_currentStatusFilter}'";
                 UpdateStatus($"Showing {resultCount} record(s) with {statusInfo}");
 
-                UpdateRecordCount();
+              
                 UpdateStatusSummary();
                 _logger.LogInfo($"Status filter applied: {statusInfo} - Found {resultCount} record(s)");
             }
@@ -492,8 +582,6 @@ namespace ConHIS_Service_XPHL7
                 {
                     UpdateStatus($"No records found matching {searchInfo}");
                 }
-
-                UpdateRecordCount();
                 UpdateStatusSummary();
                 _logger.LogInfo($"Filter applied: {searchInfo} - Found {resultCount} record(s)");
             }
@@ -511,13 +599,11 @@ namespace ConHIS_Service_XPHL7
             {
                 searchTextBox.Text = string.Empty;
                 dateTimePicker.Value = DateTime.Today;
-                _currentStatusFilter = "All"; // รีเซ็ต Status Filter ด้วย
+                _currentStatusFilter = "All";
                 _filteredDataView.RowFilter = string.Empty;
 
                 // อัปเดตสีของแถวหลัง clear filter
                 ApplyRowColors();
-
-                UpdateRecordCount();
                 UpdateStatusSummary();
                 UpdateStatusFilterButtons();
                 UpdateStatus("Filter cleared - Showing all records");
@@ -534,22 +620,20 @@ namespace ConHIS_Service_XPHL7
 
         #region GridView
         private void AddRowToGrid(string time, string TransactionDateTime, string orderNo, string hn, string patientName,
-    string FinancialClass, string OrderControl, string status, string apiResponse, HL7Message hl7Data)
+            string FinancialClass, string OrderControl, string status, string apiResponse, HL7Message hl7Data)
         {
             if (dataGridView.InvokeRequired)
             {
                 dataGridView.Invoke(new Action(() =>
                 {
                     int rowIndex = _processedDataTable.Rows.Count;
-                    _processedDataTable.Rows.Add(time, TransactionDateTime, orderNo, hn, patientName,  FinancialClass, OrderControl, status, apiResponse);
+                    _processedDataTable.Rows.Add(time, TransactionDateTime, orderNo, hn, patientName, FinancialClass, OrderControl, status, apiResponse);
 
                     if (hl7Data != null)
                     {
                         _rowHL7Data[rowIndex] = hl7Data;
                     }
-
-                    UpdateRecordCount();
-                    UpdateStatusSummary(); // เพิ่มบรรทัดนี้
+                    UpdateStatusSummary();
 
                     if (dataGridView.Rows.Count > 0)
                     {
@@ -576,9 +660,7 @@ namespace ConHIS_Service_XPHL7
                 {
                     _rowHL7Data[rowIndex] = hl7Data;
                 }
-
-                UpdateRecordCount();
-                UpdateStatusSummary(); // เพิ่มบรรทัดนี้
+                UpdateStatusSummary();
 
                 if (dataGridView.Rows.Count > 0)
                 {
@@ -596,6 +678,7 @@ namespace ConHIS_Service_XPHL7
                 }
             }
         }
+
         private void Form1_FormClosing(object sender, FormClosingEventArgs e)
         {
             StopBackgroundService();
@@ -632,7 +715,6 @@ namespace ConHIS_Service_XPHL7
                         string time = dataGridView.Rows[e.RowIndex].Cells["Time Check"].Value?.ToString() ?? "N/A";
                         string orderNo = dataGridView.Rows[e.RowIndex].Cells["Order No"].Value?.ToString() ?? "N/A";
                         string status = dataGridView.Rows[e.RowIndex].Cells["Status"].Value?.ToString() ?? "N/A";
-                       
 
                         // หา row index ที่แท้จริงใน DataTable (เพราะอาจมีการกรอง)
                         int actualRowIndex = -1;
@@ -667,6 +749,7 @@ namespace ConHIS_Service_XPHL7
                 }
             }
         }
+
         private void ApplyRowColors()
         {
             if (dataGridView.InvokeRequired)
@@ -902,27 +985,8 @@ namespace ConHIS_Service_XPHL7
         }
         #endregion
 
-        #region update
-        private void UpdateRecordCount()
-        {
-            if (recordCountLabel.InvokeRequired)
-            {
-                recordCountLabel.Invoke(new Action(UpdateRecordCount));
-                return;
-            }
-
-            int totalRecords = _processedDataTable.Rows.Count;
-            int displayedRecords = _filteredDataView.Count;
-
-            if (displayedRecords < totalRecords)
-            {
-                recordCountLabel.Text = $"Total Records: {displayedRecords} / {totalRecords} (filtered)";
-            }
-            else
-            {
-                recordCountLabel.Text = $"Total Records: {totalRecords}";
-            }
-        }
+        #region Update Methods
+  
 
         private void UpdateStatus(string status)
         {
@@ -954,9 +1018,9 @@ namespace ConHIS_Service_XPHL7
 
         private void UpdateStatusSummary()
         {
-            if (statusSummaryLabel.InvokeRequired)
+            if (InvokeRequired)
             {
-                statusSummaryLabel.Invoke(new Action(UpdateStatusSummary));
+                Invoke(new Action(UpdateStatusSummary));
                 return;
             }
 
@@ -965,37 +1029,91 @@ namespace ConHIS_Service_XPHL7
                 int totalRecords = _processedDataTable.Rows.Count;
                 int successCount = 0;
                 int failedCount = 0;
+                int pendingCount = 0;
+                int rejectCount = 0;
 
                 foreach (DataRow row in _processedDataTable.Rows)
                 {
                     string status = row["Status"]?.ToString() ?? "";
+
                     if (status == "Success")
                         successCount++;
                     else if (status == "Failed")
                         failedCount++;
+                    else if (status == "Pending")
+                        pendingCount++;
+                    else if (status == "Rejected")
+                        rejectCount++;
                 }
 
-                statusSummaryLabel.Text = $"Total: {totalRecords} | Success: {successCount} | Failed: {failedCount}";
+                // อัปเดตค่าใน Label แต่ละอัน
+                totalCountLabel.Text = totalRecords.ToString();
+                successCountLabel.Text = successCount.ToString();
+                failedCountLabel.Text = failedCount.ToString();
+                pendingCountLabel.Text = pendingCount.ToString();
+                rejectCountLabel.Text = rejectCount.ToString();
 
-                // อัปเดตสีของ label ตามสถานะ
-                if (failedCount > 0)
-                {
-                    statusSummaryLabel.ForeColor = System.Drawing.Color.DarkRed;
-                }
-                else if (successCount > 0)
-                {
-                    statusSummaryLabel.ForeColor = System.Drawing.Color.DarkGreen;
-                }
-                else
-                {
-                    statusSummaryLabel.ForeColor = System.Drawing.Color.Black;
-                }
+                // เปลี่ยนสี background ของ panel ตามสถานะ
+                UpdatePanelStyles(totalPanel, totalRecords, System.Drawing.Color.FromArgb(240, 240, 240));
+                UpdatePanelStyles(successPanel, successCount, System.Drawing.Color.FromArgb(220, 255, 220));
+                UpdatePanelStyles(failedPanel, failedCount, System.Drawing.Color.FromArgb(255, 220, 220));
+                UpdatePanelStyles(pendingPanel, pendingCount, System.Drawing.Color.FromArgb(255, 245, 220));
+                UpdatePanelStyles(rejectPanel, rejectCount, System.Drawing.Color.FromArgb(240, 240, 240));
             }
             catch (Exception ex)
             {
                 _logger?.LogError("Error updating status summary", ex);
             }
         }
+
+        private void UpdatePanelStyles(Panel panel, int count, System.Drawing.Color highlightColor)
+        {
+            if (count > 0)
+            {
+                panel.BackColor = highlightColor;
+                panel.BorderStyle = System.Windows.Forms.BorderStyle.FixedSingle;
+            }
+            else
+            {
+                panel.BackColor = System.Drawing.Color.White;
+                panel.BorderStyle = System.Windows.Forms.BorderStyle.FixedSingle;
+            }
+        }
+
+        // Paint Event Handlers for Panel Top Bars
+        private void TotalPanel_Paint(object sender, PaintEventArgs e)
+        {
+            DrawPanelTopBar(e, System.Drawing.Color.Gray);
+        }
+
+        private void SuccessPanel_Paint(object sender, PaintEventArgs e)
+        {
+            DrawPanelTopBar(e, System.Drawing.Color.Green);
+        }
+
+        private void FailedPanel_Paint(object sender, PaintEventArgs e)
+        {
+            DrawPanelTopBar(e, System.Drawing.Color.Red);
+        }
+
+        private void PendingPanel_Paint(object sender, PaintEventArgs e)
+        {
+            DrawPanelTopBar(e, System.Drawing.Color.Orange);
+        }
+
+        private void RejectPanel_Paint(object sender, PaintEventArgs e)
+        {
+            DrawPanelTopBar(e, System.Drawing.Color.DarkGray);
+        }
+
+        private void DrawPanelTopBar(PaintEventArgs e, System.Drawing.Color barColor)
+        {
+            using (var brush = new System.Drawing.SolidBrush(barColor))
+            {
+                e.Graphics.FillRectangle(brush, 0, 0, e.ClipRectangle.Width, 3);
+            }
+        }
+
         #endregion
 
     }

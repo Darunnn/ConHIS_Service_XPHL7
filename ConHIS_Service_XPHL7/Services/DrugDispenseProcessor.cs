@@ -194,7 +194,7 @@ namespace ConHIS_Service_XPHL7.Services
             catch (Exception ex)
             {
                 _logger.LogError($"Error processing order: {data.PrescId}", ex);
-                
+                _databaseService.UpdateReceiveStatus(data.DrugDispenseipdId, 'F');
                 onProcessed?.Invoke(new ProcessResult
                 {
                     Success = false,
