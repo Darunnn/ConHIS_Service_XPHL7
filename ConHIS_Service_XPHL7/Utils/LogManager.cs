@@ -2,6 +2,7 @@
 using Newtonsoft.Json;
 using System;
 using System.IO;
+using System.Linq;
 using System.Text;
 
 namespace ConHIS_Service_XPHL7.Utils
@@ -11,12 +12,21 @@ namespace ConHIS_Service_XPHL7.Utils
         private string _logFolder;
         public string LogFolder => _logFolder;
 
-        public LogManager(string logFolder = "log")
+        // ⚙️ จำนวนวันที่จะเก็บ log (ค่าเริ่มต้น 30 วัน)
+        private int _logRetentionDays = 30;
+        public int LogRetentionDays
+        {
+            get => _logRetentionDays;
+            set => _logRetentionDays = value > 0 ? value : 30;
+        }
+
+        public LogManager(string logFolder = "log", int logRetentionDays = 30)
         {
             var appFolder = AppDomain.CurrentDomain.BaseDirectory ?? Environment.CurrentDirectory;
             var desired = Path.Combine(appFolder, logFolder);
             Directory.CreateDirectory(desired);
             _logFolder = desired;
+            _logRetentionDays = logRetentionDays > 0 ? logRetentionDays : 30;
         }
 
         public void LogToFile(string message, string logType = "INFO")
@@ -35,19 +45,27 @@ namespace ConHIS_Service_XPHL7.Utils
             }
         }
 
-        // 🧾 Raw HL7
+        // 🧾 Raw HL7 - เก็บในโฟลเดอร์ตามวันที่
         public void LogRawHL7Data(string DrugDispenseipdId, string RecieveOrderType, string orderno, string hl7Data, string rawLogFolder = "hl7_raw")
         {
             var appFolder = AppDomain.CurrentDomain.BaseDirectory ?? Environment.CurrentDirectory;
-            var rawLogDir = Path.Combine(appFolder, rawLogFolder);
+            var rawLogBaseDir = Path.Combine(appFolder, rawLogFolder);
+
+            // 📁 สร้างโฟลเดอร์ตามวันที่ เช่น hl7_raw/2025-10-15
+            var dateFolder = DateTime.Now.ToString("yyyy-MM-dd");
+            var rawLogDir = Path.Combine(rawLogBaseDir, dateFolder);
             Directory.CreateDirectory(rawLogDir);
 
-            // ⭐ แก้ไข: ทำความสะอาดชื่อไฟล์
+            // 🧹 ทำความสะอาดโฟลเดอร์เก่า
+            CleanOldLogFolders(rawLogBaseDir);
+
+            // ⭐ ทำความสะอาดชื่อไฟล์
             var safeOrderNo = SanitizeFileName(orderno);
             var safeDispenseId = SanitizeFileName(DrugDispenseipdId);
             var safeOrderType = SanitizeFileName(RecieveOrderType);
 
-            var rawLogPath = Path.Combine(rawLogDir, $"hl7_data_raw_{safeDispenseId}_{safeOrderType}_{safeOrderNo}.txt");
+            var timestamp = DateTime.Now.ToString("HHmmss");
+            var rawLogPath = Path.Combine(rawLogDir, $"hl7_raw_{safeDispenseId}_{safeOrderType}_{safeOrderNo}_{timestamp}.txt");
 
             try
             {
@@ -59,16 +77,25 @@ namespace ConHIS_Service_XPHL7.Utils
             }
         }
 
+        // 📊 Parsed HL7 - เก็บในโฟลเดอร์ตามวันที่
         public void LogParsedHL7Data(string DrugDispenseipdId, object parsedData, string parsedLogFolder = "hl7_parsed")
         {
             var appFolder = AppDomain.CurrentDomain.BaseDirectory ?? Environment.CurrentDirectory;
-            var parsedLogDir = Path.Combine(appFolder, parsedLogFolder);
+            var parsedLogBaseDir = Path.Combine(appFolder, parsedLogFolder);
+
+            // 📁 สร้างโฟลเดอร์ตามวันที่ เช่น hl7_parsed/2025-10-15
+            var dateFolder = DateTime.Now.ToString("yyyy-MM-dd");
+            var parsedLogDir = Path.Combine(parsedLogBaseDir, dateFolder);
             Directory.CreateDirectory(parsedLogDir);
 
-            // ⭐ แก้ไข: ทำความสะอาดชื่อไฟล์
+            // 🧹 ทำความสะอาดโฟลเดอร์เก่า
+            CleanOldLogFolders(parsedLogBaseDir);
+
+            // ⭐ ทำความสะอาดชื่อไฟล์
             var safeDispenseId = SanitizeFileName(DrugDispenseipdId);
 
-            var parsedLogPath = Path.Combine(parsedLogDir, $"hl7_data_parsed_{safeDispenseId}.txt");
+            var timestamp = DateTime.Now.ToString("HHmmss");
+            var parsedLogPath = Path.Combine(parsedLogDir, $"hl7_parsed_{safeDispenseId}_{timestamp}.txt");
 
             try
             {
@@ -79,6 +106,62 @@ namespace ConHIS_Service_XPHL7.Utils
             {
                 Console.WriteLine($"Failed to write HL7 parsed data file for DrugDispenseipdId {DrugDispenseipdId}: {ex}");
             }
+        }
+
+        // 🧹 ลบโฟลเดอร์ที่เก่ากว่าจำนวนวันที่กำหนด
+        private void CleanOldLogFolders(string baseLogFolder)
+        {
+            try
+            {
+                if (!Directory.Exists(baseLogFolder))
+                    return;
+
+                var cutoffDate = DateTime.Now.AddDays(-_logRetentionDays);
+                var directories = Directory.GetDirectories(baseLogFolder);
+
+                foreach (var dir in directories)
+                {
+                    var folderName = Path.GetFileName(dir);
+
+                    // พยายามแปลงชื่อโฟลเดอร์เป็นวันที่ (รูปแบบ yyyy-MM-dd)
+                    if (DateTime.TryParseExact(folderName, "yyyy-MM-dd",
+                        System.Globalization.CultureInfo.InvariantCulture,
+                        System.Globalization.DateTimeStyles.None,
+                        out DateTime folderDate))
+                    {
+                        // ถ้าโฟลเดอร์เก่ากว่าวันที่กำหนด ให้ลบทิ้ง
+                        if (folderDate < cutoffDate)
+                        {
+                            try
+                            {
+                                Directory.Delete(dir, true); // true = ลบทั้งไฟล์ภายใน
+                                Console.WriteLine($"Deleted old log folder: {dir}");
+                            }
+                            catch (Exception ex)
+                            {
+                                Console.WriteLine($"Failed to delete folder {dir}: {ex.Message}");
+                            }
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error cleaning old log folders in {baseLogFolder}: {ex.Message}");
+            }
+        }
+
+        // 🧹 Method สำหรับเรียกทำความสะอาดด้วยตัวเอง (สำหรับ Scheduler หรือ Button)
+        public void CleanOldLogs()
+        {
+            var appFolder = AppDomain.CurrentDomain.BaseDirectory ?? Environment.CurrentDirectory;
+
+            // ทำความสะอาดทุกโฟลเดอร์ log
+            CleanOldLogFolders(Path.Combine(appFolder, "hl7_raw"));
+            CleanOldLogFolders(Path.Combine(appFolder, "hl7_parsed"));
+            CleanOldLogFolders(Path.Combine(appFolder, "logreaderror"));
+
+            Console.WriteLine($"Log cleanup completed. Retention period: {_logRetentionDays} days");
         }
 
         private string SanitizeFileName(string fileName)
@@ -99,13 +182,24 @@ namespace ConHIS_Service_XPHL7.Utils
 
             return result.ToString();
         }
+
         public void LogReadError(string DrugDispenseipdId, string errorMessage, string errorLogFolder = "logreaderror")
         {
             var appFolder = AppDomain.CurrentDomain.BaseDirectory ?? Environment.CurrentDirectory;
-            var errorLogDir = Path.Combine(appFolder, errorLogFolder);
+            var errorLogBaseDir = Path.Combine(appFolder, errorLogFolder);
+
+            // 📁 สร้างโฟลเดอร์ตามวันที่
+            var dateFolder = DateTime.Now.ToString("yyyy-MM-dd");
+            var errorLogDir = Path.Combine(errorLogBaseDir, dateFolder);
             Directory.CreateDirectory(errorLogDir);
-            var errorLogPath = Path.Combine(errorLogDir, $"hl7_error_{DrugDispenseipdId}.txt");
+
+            // 🧹 ทำความสะอาดโฟลเดอร์เก่า
+            CleanOldLogFolders(errorLogBaseDir);
+
+            var safeDispenseId = SanitizeFileName(DrugDispenseipdId);
+            var errorLogPath = Path.Combine(errorLogDir, $"hl7_error_{safeDispenseId}.txt");
             var logEntry = $"[{DateTime.Now:yyyy-MM-dd HH:mm:ss}] {errorMessage}{Environment.NewLine}";
+
             try
             {
                 File.AppendAllText(errorLogPath, logEntry);
@@ -123,11 +217,9 @@ namespace ConHIS_Service_XPHL7.Utils
                 ? $"{message} - Exception: {ex.Message}{Environment.NewLine}{ex.StackTrace}"
                 : message;
 
-            
             var dateFileName = DateTime.Now.ToString("yyyy-MM-dd");
             LogReadError(dateFileName, fullMessage);
         }
-
 
         public void LogInfo(string message)
         {
