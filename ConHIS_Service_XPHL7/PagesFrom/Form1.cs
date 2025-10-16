@@ -35,7 +35,8 @@ namespace ConHIS_Service_XPHL7
         private readonly int _connectionCheckIntervalSeconds = 30;
         private bool _isCheckingConnection = false;
         private DateTime? _lastDatabaseConnectionTime = null;
-
+        private bool _hasNotifiedDisconnection = false;
+        private bool _hasNotifiedReconnection = false;
         // DataTable for DataGridView
         private DataTable _processedDataTable;
         private DataView _filteredDataView;
@@ -142,11 +143,19 @@ namespace ConHIS_Service_XPHL7
             }
         }
 
-        // ⭐ เพิ่ม Connection Monitor Methods
+        // ⭐ เพิ่ม Method สำหรับ Reset Notification Flags
+        private void ResetNotificationFlags()
+        {
+            _hasNotifiedDisconnection = false;
+            _hasNotifiedReconnection = false;
+        }
+
+        // ⭐ เริ่ม Connection Monitor
         private void StartConnectionMonitor()
         {
             var intervalMs = _connectionCheckIntervalSeconds * 1000;
             _connectionCheckTimer = new Timer(ConnectionCheckCallback, null, intervalMs, intervalMs);
+            ResetNotificationFlags(); // Reset flags เมื่อเริ่ม monitor
             _logger?.LogInfo($"Connection monitor started - checking every {_connectionCheckIntervalSeconds} seconds");
         }
 
@@ -155,6 +164,7 @@ namespace ConHIS_Service_XPHL7
         {
             _connectionCheckTimer?.Dispose();
             _connectionCheckTimer = null;
+            ResetNotificationFlags(); // Reset flags เมื่อหยุด monitor
             _logger?.LogInfo("Connection monitor stopped");
         }
 
@@ -173,30 +183,40 @@ namespace ConHIS_Service_XPHL7
                 // อัพเดทสถานะเมื่อมีการเปลี่ยนแปลง
                 if (isConnected != _isDatabaseConnected)
                 {
-                    UpdateConnectionStatus(isConnected);
-
                     if (isConnected)
                     {
-                        // เชื่อมต่อกลับมาได้
+                        // ✅ เชื่อมต่อกลับมาได้
                         _logger?.LogInfo("✓ Database connection restored");
 
                         this.Invoke(new Action(async () =>
                         {
                             try
                             {
+                                UpdateConnectionStatus(true);
+
                                 // รีเฟรชข้อมูลทันที
                                 await LoadDataBySelectedDate();
                                 UpdateStatus("✓ Database reconnected - Data refreshed automatically");
 
-                                // แจ้งเตือนผู้ใช้
-                                MessageBox.Show(
-                                    $"Database connection has been restored!\n\n" +
-                                    $"Reconnected at: {_lastDatabaseConnectionTime.Value:yyyy-MM-dd HH:mm:ss}\n" +
-                                    $"Data has been refreshed automatically.",
-                                    "Connection Restored",
-                                    MessageBoxButtons.OK,
-                                    MessageBoxIcon.Information
-                                );
+                                // แจ้งเตือนครั้งเดียวเมื่อเชื่อมต่อกลับมา
+                                if (!_hasNotifiedReconnection)
+                                {
+                                    _hasNotifiedReconnection = true;
+                                    _hasNotifiedDisconnection = false; // Reset flag
+
+                                    // ใช้ BeginInvoke เพื่อไม่บล็อก UI
+                                    this.BeginInvoke(new Action(() =>
+                                    {
+                                        MessageBox.Show(
+                                            $"Database connection has been restored!\n\n" +
+                                            $"Reconnected at: {_lastDatabaseConnectionTime.Value:yyyy-MM-dd HH:mm:ss}\n" +
+                                            $"Data has been refreshed automatically.",
+                                            "Connection Restored",
+                                            MessageBoxButtons.OK,
+                                            MessageBoxIcon.Information
+                                        );
+                                    }));
+                                }
                             }
                             catch (Exception ex)
                             {
@@ -206,39 +226,69 @@ namespace ConHIS_Service_XPHL7
                     }
                     else
                     {
-                        // การเชื่อมต่อขาดหาย
+                        // ❌ การเชื่อมต่อขาดหาย
                         _logger?.LogWarning("✗ Database connection lost");
 
                         this.Invoke(new Action(() =>
                         {
-                            UpdateStatus("✗ Database connection lost - Attempting to reconnect...");
+                            UpdateConnectionStatus(false);
+                            UpdateStatus("✗ Database connection lost - Reconnecting...");
 
-                            // แจ้งเตือนการขาดการเชื่อมต่อ
-                            MessageBox.Show(
-                                $"Database connection has been lost!\n\n" +
-                                $"Lost at: {_lastDatabaseDisconnectionTime.Value:yyyy-MM-dd HH:mm:ss}\n" +
-                                $"System will attempt to reconnect automatically every {_connectionCheckIntervalSeconds} seconds.",
-                                "Connection Lost",
-                                MessageBoxButtons.OK,
-                                MessageBoxIcon.Warning
-                            );
+                            // แจ้งเตือนครั้งเดียวเมื่อขาดการเชื่อมต่อ
+                            if (!_hasNotifiedDisconnection)
+                            {
+                                _hasNotifiedDisconnection = true;
+                                _hasNotifiedReconnection = false; // Reset flag
+
+                                // ใช้ BeginInvoke เพื่อไม่บล็อก UI
+                                this.BeginInvoke(new Action(() =>
+                                {
+                                    MessageBox.Show(
+                                        $"Database connection has been lost!\n\n" +
+                                        $"Lost at: {_lastDatabaseDisconnectionTime.Value:yyyy-MM-dd HH:mm:ss}\n" +
+                                        $"System will attempt to reconnect automatically every {_connectionCheckIntervalSeconds} seconds.",
+                                        "Connection Lost",
+                                        MessageBoxButtons.OK,
+                                        MessageBoxIcon.Warning
+                                    );
+                                }));
+                            }
                         }));
                     }
                 }
                 else if (isConnected)
                 {
-                    // ยังคงเชื่อมต่ออยู่ - อัพเดทเวลา
+                    // ✅ ยังคงเชื่อมต่ออยู่ - อัพเดทเวลาตรวจสอบ
                     this.Invoke(new Action(() =>
                     {
                         string checkTime = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss");
                         connectionStatusLabel.Text = $"Database: ✓ Connected (Last Checked: {checkTime})";
+                        connectionStatusLabel.ForeColor = System.Drawing.Color.Green;
+                    }));
+                }
+                else
+                {
+                    // ❌ ยังคงขาดการเชื่อมต่ออยู่ - อัพเดทเวลา
+                    this.Invoke(new Action(() =>
+                    {
+                        string checkTime = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss");
+                        string lastConnectedStr = _lastDatabaseConnectionTime.HasValue
+                            ? _lastDatabaseConnectionTime.Value.ToString("yyyy-MM-dd HH:mm:ss")
+                            : "Never";
+
+                        connectionStatusLabel.Text = $"Database: ✗ Disconnected (Checking...) | Last Connected: {lastConnectedStr}";
+                        connectionStatusLabel.ForeColor = System.Drawing.Color.Red;
                     }));
                 }
             }
             catch (Exception ex)
             {
                 _logger?.LogError("Connection check error", ex);
-                UpdateConnectionStatus(false);
+
+                this.Invoke(new Action(() =>
+                {
+                    UpdateConnectionStatus(false);
+                }));
             }
             finally
             {
