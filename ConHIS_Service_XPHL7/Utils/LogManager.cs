@@ -145,8 +145,8 @@ namespace ConHIS_Service_XPHL7.Utils
             var safeDispenseId = SanitizeFileName(DrugDispenseipdId);
             var safeOrderType = SanitizeFileName(RecieveOrderType);
 
-            var timestamp = DateTime.Now.ToString("HHmmss");
-            var rawLogPath = Path.Combine(rawLogDir, $"hl7_raw_{safeDispenseId}_{safeOrderType}_{safeOrderNo}_{timestamp}.txt");
+           // var timestamp = DateTime.Now.ToString("HHmmss");
+            var rawLogPath = Path.Combine(rawLogDir, $"hl7_raw_{safeDispenseId}_{safeOrderType}_{safeOrderNo}.txt");
 
             try
             {
@@ -175,8 +175,8 @@ namespace ConHIS_Service_XPHL7.Utils
             // ⭐ ทำความสะอาดชื่อไฟล์
             var safeDispenseId = SanitizeFileName(DrugDispenseipdId);
 
-            var timestamp = DateTime.Now.ToString("HHmmss");
-            var parsedLogPath = Path.Combine(parsedLogDir, $"hl7_parsed_{safeDispenseId}_{timestamp}.txt");
+            //var timestamp = DateTime.Now.ToString("HHmmss");
+            var parsedLogPath = Path.Combine(parsedLogDir, $"hl7_parsed_{safeDispenseId}.txt");
 
             try
             {
