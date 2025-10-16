@@ -29,6 +29,13 @@ namespace ConHIS_Service_XPHL7
         private bool _isProcessing = false;
         private readonly int _intervalSeconds = 60;
 
+        // ⭐ Connection Monitor - เพิ่มใหม่
+        private Timer _connectionCheckTimer;
+        private DateTime? _lastDatabaseDisconnectionTime = null;
+        private readonly int _connectionCheckIntervalSeconds = 30;
+        private bool _isCheckingConnection = false;
+        private DateTime? _lastDatabaseConnectionTime = null;
+
         // DataTable for DataGridView
         private DataTable _processedDataTable;
         private DataView _filteredDataView;
@@ -37,9 +44,9 @@ namespace ConHIS_Service_XPHL7
         private System.Collections.Generic.Dictionary<int, HL7Message> _rowHL7Data = new System.Collections.Generic.Dictionary<int, HL7Message>();
 
         // Connection status
-        private Label _connectionStatusLabel;
+       
         private bool _isDatabaseConnected = false;
-
+       
         public Form1()
         {
             InitializeComponent();
@@ -93,41 +100,154 @@ namespace ConHIS_Service_XPHL7
             }
         }
 
-        private void AddConnectionStatusLabel()
-        {
-            _connectionStatusLabel = new Label();
-            _connectionStatusLabel.AutoSize = true;
-            _connectionStatusLabel.Location = new System.Drawing.Point(15, 52);
-            _connectionStatusLabel.Name = "connectionStatusLabel";
-            _connectionStatusLabel.Size = new System.Drawing.Size(150, 13);
-            _connectionStatusLabel.TabIndex = 2;
-            _connectionStatusLabel.Text = "Database: Connecting...";
-            _connectionStatusLabel.ForeColor = System.Drawing.Color.Gray;
 
-            this.Controls.Add(_connectionStatusLabel);
-        }
 
+        // ⭐ แก้ไข UpdateConnectionStatus เพื่อแสดงเวลา
         private void UpdateConnectionStatus(bool isConnected)
         {
             _isDatabaseConnected = isConnected;
 
-            if (_connectionStatusLabel.InvokeRequired)
+            if (connectionStatusLabel.InvokeRequired)
             {
-                _connectionStatusLabel.Invoke(new Action(() => UpdateConnectionStatus(isConnected)));
+                connectionStatusLabel.Invoke(new Action(() => UpdateConnectionStatus(isConnected)));
                 return;
             }
 
             if (isConnected)
             {
-                _connectionStatusLabel.Text = "Database: ✓ Connected";
-                _connectionStatusLabel.ForeColor = System.Drawing.Color.Green;
+                _lastDatabaseConnectionTime = DateTime.Now;
+                string timeStr = _lastDatabaseConnectionTime.Value.ToString("yyyy-MM-dd HH:mm:ss");
+
+                connectionStatusLabel.Text = $"Database: ✓ Connected (Last Connected: {timeStr})";
+                connectionStatusLabel.ForeColor = System.Drawing.Color.Green;
+
+                _logger?.LogInfo($"✓ Database connected at {timeStr}");
             }
             else
             {
-                _connectionStatusLabel.Text = "Database: ✗ Disconnected";
-                _connectionStatusLabel.ForeColor = System.Drawing.Color.Red;
+                _lastDatabaseDisconnectionTime = DateTime.Now;
+
+                string lastConnectedStr = _lastDatabaseConnectionTime.HasValue
+                    ? $"Last Connected: {_lastDatabaseConnectionTime.Value:yyyy-MM-dd HH:mm:ss}"
+                    : "Never Connected";
+
+                string disconnectedStr = _lastDatabaseDisconnectionTime.HasValue
+                    ? $"Disconnected at: {_lastDatabaseDisconnectionTime.Value:yyyy-MM-dd HH:mm:ss}"
+                    : "";
+
+                connectionStatusLabel.Text = $"Database: ✗ Disconnected ({disconnectedStr}) | {lastConnectedStr}";
+                connectionStatusLabel.ForeColor = System.Drawing.Color.Red;
+
+                _logger?.LogWarning($"✗ Database disconnected at {_lastDatabaseDisconnectionTime.Value:yyyy-MM-dd HH:mm:ss}");
             }
         }
+
+        // ⭐ เพิ่ม Connection Monitor Methods
+        private void StartConnectionMonitor()
+        {
+            var intervalMs = _connectionCheckIntervalSeconds * 1000;
+            _connectionCheckTimer = new Timer(ConnectionCheckCallback, null, intervalMs, intervalMs);
+            _logger?.LogInfo($"Connection monitor started - checking every {_connectionCheckIntervalSeconds} seconds");
+        }
+
+        // ⭐ หยุด Connection Monitor
+        private void StopConnectionMonitor()
+        {
+            _connectionCheckTimer?.Dispose();
+            _connectionCheckTimer = null;
+            _logger?.LogInfo("Connection monitor stopped");
+        }
+
+        // ⭐ Callback สำหรับตรวจสอบการเชื่อมต่อแบบ Realtime
+        private async void ConnectionCheckCallback(object state)
+        {
+            if (_isCheckingConnection) return;
+
+            _isCheckingConnection = true;
+
+            try
+            {
+                // ทดสอบการเชื่อมต่อ
+                bool isConnected = await Task.Run(() => _databaseService?.TestConnection() ?? false);
+
+                // อัพเดทสถานะเมื่อมีการเปลี่ยนแปลง
+                if (isConnected != _isDatabaseConnected)
+                {
+                    UpdateConnectionStatus(isConnected);
+
+                    if (isConnected)
+                    {
+                        // เชื่อมต่อกลับมาได้
+                        _logger?.LogInfo("✓ Database connection restored");
+
+                        this.Invoke(new Action(async () =>
+                        {
+                            try
+                            {
+                                // รีเฟรชข้อมูลทันที
+                                await LoadDataBySelectedDate();
+                                UpdateStatus("✓ Database reconnected - Data refreshed automatically");
+
+                                // แจ้งเตือนผู้ใช้
+                                MessageBox.Show(
+                                    $"Database connection has been restored!\n\n" +
+                                    $"Reconnected at: {_lastDatabaseConnectionTime.Value:yyyy-MM-dd HH:mm:ss}\n" +
+                                    $"Data has been refreshed automatically.",
+                                    "Connection Restored",
+                                    MessageBoxButtons.OK,
+                                    MessageBoxIcon.Information
+                                );
+                            }
+                            catch (Exception ex)
+                            {
+                                _logger?.LogError("Error refreshing data after reconnection", ex);
+                            }
+                        }));
+                    }
+                    else
+                    {
+                        // การเชื่อมต่อขาดหาย
+                        _logger?.LogWarning("✗ Database connection lost");
+
+                        this.Invoke(new Action(() =>
+                        {
+                            UpdateStatus("✗ Database connection lost - Attempting to reconnect...");
+
+                            // แจ้งเตือนการขาดการเชื่อมต่อ
+                            MessageBox.Show(
+                                $"Database connection has been lost!\n\n" +
+                                $"Lost at: {_lastDatabaseDisconnectionTime.Value:yyyy-MM-dd HH:mm:ss}\n" +
+                                $"System will attempt to reconnect automatically every {_connectionCheckIntervalSeconds} seconds.",
+                                "Connection Lost",
+                                MessageBoxButtons.OK,
+                                MessageBoxIcon.Warning
+                            );
+                        }));
+                    }
+                }
+                else if (isConnected)
+                {
+                    // ยังคงเชื่อมต่ออยู่ - อัพเดทเวลา
+                    this.Invoke(new Action(() =>
+                    {
+                        string checkTime = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss");
+                        connectionStatusLabel.Text = $"Database: ✓ Connected (Last Checked: {checkTime})";
+                    }));
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogError("Connection check error", ex);
+                UpdateConnectionStatus(false);
+            }
+            finally
+            {
+                _isCheckingConnection = false;
+            }
+        }
+
+        // ⭐ เพิ่ม Manual Connection Test Button Handler
+
 
         private void InitializePanelPaintEvents()
         {
@@ -170,6 +290,7 @@ namespace ConHIS_Service_XPHL7
             pendingPanel.Cursor = System.Windows.Forms.Cursors.Hand;
             rejectPanel.Cursor = System.Windows.Forms.Cursors.Hand;
         }
+
         private async Task LoadDataBySelectedDate()
         {
             try
@@ -178,22 +299,19 @@ namespace ConHIS_Service_XPHL7
                 string searchText = searchTextBox.Text.Trim();
 
                 UpdateStatus($"Loading data for {selectedDate:yyyy-MM-dd}...");
-                _processedDataTable.Rows.Clear(); // ล้างข้อมูลเก่า
+                _processedDataTable.Rows.Clear();
 
                 List<DrugDispenseipd> dispenseData = null;
 
-                // ดึงข้อมูลจาก Database
                 dispenseData = await Task.Run(() =>
                 {
                     if (!string.IsNullOrEmpty(searchText))
                     {
-                        // ถ้ามี search text ให้ค้นหา Order No / HN
                         _logger.LogInfo($"Search: {searchText} on {selectedDate:yyyy-MM-dd}");
                         return _databaseService.GetDispenseDataByDateAndSearch(selectedDate, searchText);
                     }
                     else
                     {
-                        // ถ้าไม่มี search text ให้ดึงข้อมูลของวันที่เลือก
                         _logger.LogInfo($"Load: {selectedDate:yyyy-MM-dd}");
                         return _databaseService.GetDispenseDataByDate(selectedDate, selectedDate);
                     }
@@ -206,7 +324,6 @@ namespace ConHIS_Service_XPHL7
                 {
                     try
                     {
-                        // Decode HL7 data
                         string hl7String;
                         try
                         {
@@ -222,10 +339,8 @@ namespace ConHIS_Service_XPHL7
                             hl7String = Encoding.UTF8.GetString(data.Hl7Data);
                         }
 
-                        // Parse HL7
                         HL7Message hl7Message = hl7Service.ParseHL7Message(hl7String);
 
-                        // Extract data - เลือกวันที่ที่เหมาะสม
                         DateTime timeCheckDate = DateTime.Now;
                         if (data.RecieveStatusDatetime.HasValue && data.RecieveStatusDatetime.Value != DateTime.MinValue)
                         {
@@ -246,8 +361,6 @@ namespace ConHIS_Service_XPHL7
                         string transactionDateTime = (transactionDt.HasValue && transactionDt.Value != DateTime.MinValue)
                             ? transactionDt.Value.ToString("yyyy-MM-dd HH:mm:ss")
                             : "N/A";
-
-                        _logger.LogInfo($"[Load] TimeCheck: {timeCheck} | TransactionDT: {transactionDateTime}");
 
                         string orderNo = hl7Message?.CommonOrder?.PlacerOrderNumber ?? "N/A";
                         string hn = hl7Message?.PatientIdentification?.PatientIDExternal ??
@@ -271,14 +384,13 @@ namespace ConHIS_Service_XPHL7
 
                         string orderControl = data.RecieveOrderType ?? hl7Message?.CommonOrder?.OrderControl ?? "N/A";
 
-                        // Map status
                         string status = "N/A";
                         if (data.RecieveStatus == 'Y')
                             status = "Success";
                         else if (data.RecieveStatus == 'F')
                             status = "Failed";
                         else if (data.RecieveStatus == 'N')
-                            continue; // Skip pending
+                            continue;
 
                         AddRowToGrid(timeCheck, transactionDateTime, orderNo, hn, patientName,
                                    financialClass, orderControl, status, "Database Record", hl7Message);
@@ -290,7 +402,6 @@ namespace ConHIS_Service_XPHL7
                     }
                 }
 
-                // ล้างค่า Search TextBox
                 _currentStatusFilter = "All";
                 _filteredDataView.RowFilter = string.Empty;
 
@@ -316,14 +427,13 @@ namespace ConHIS_Service_XPHL7
             }
         }
 
-        // ====== แก้ไข Form1_Load ======
+        // ⭐ แก้ไข Form1_Load เพื่อเปิด Connection Monitor
         private async void Form1_Load(object sender, EventArgs e)
         {
             _logger.LogInfo("Start Interface");
             UpdateStatus("Initializing...");
 
             InitializeDataTable();
-            AddConnectionStatusLabel();
             UpdateConnectionStatus(false);
 
             try
@@ -342,19 +452,26 @@ namespace ConHIS_Service_XPHL7
                 _logger.LogInfo("Connecting to database");
                 _databaseService = new DatabaseService(_appConfig.ConnectionString);
 
-                // Test database connection
+                // ทดสอบการเชื่อมต่อครั้งแรก
                 bool dbConnected = await Task.Run(() => _databaseService.TestConnection());
                 UpdateConnectionStatus(dbConnected);
 
                 if (dbConnected)
                 {
-                    _logger.LogInfo("DatabaseService initialized");
-
-                    // ตั้ง DateTimePicker ให้เป็นวันนี้
+                    _logger.LogInfo("DatabaseService initialized successfully");
                     dateTimePicker.Value = DateTime.Today;
-
-                    // ====== เรียก LoadDataBySelectedDate() แทน LoadExistingDataFromDatabase() ======
                     await LoadDataBySelectedDate();
+                }
+                else
+                {
+                    _logger.LogWarning("Initial database connection failed");
+                    MessageBox.Show(
+                        "Failed to connect to database on startup.\n\n" +
+                        "The system will continue to attempt connection automatically.",
+                        "Connection Warning",
+                        MessageBoxButtons.OK,
+                        MessageBoxIcon.Warning
+                    );
                 }
 
                 var apiService = new ApiService(AppConfig.ApiEndpoint);
@@ -363,6 +480,9 @@ namespace ConHIS_Service_XPHL7
 
                 UpdateStatusFilterButtons();
                 InitializePanelPaintEvents();
+
+                // ⭐ เริ่ม Connection Monitor
+                StartConnectionMonitor();
 
                 UpdateStatus("Ready - Service Stopped");
                 startStopButton.Enabled = true;
@@ -567,20 +687,17 @@ namespace ConHIS_Service_XPHL7
 
         private async void DateTimePicker_ValueChanged(object sender, EventArgs e)
         {
-            // ตรวจสอบว่า loaded data เสร็จแล้วหรือไม่
             if (_processedDataTable != null && _processedDataTable.Columns.Count > 0)
             {
                 await LoadDataBySelectedDate();
             }
         }
 
-       
         private async void SearchButton_Click(object sender, EventArgs e)
         {
             await LoadDataBySelectedDate();
         }
 
-        
         private async void RefreshButton_Click(object sender, EventArgs e)
         {
             try
@@ -589,7 +706,6 @@ namespace ConHIS_Service_XPHL7
                 dateTimePicker.Value = DateTime.Today;
                 _currentStatusFilter = "All";
 
-                // ดึงข้อมูลวันนี้ใหม่
                 await LoadDataBySelectedDate();
 
                 _logger.LogInfo("Data refreshed");
@@ -601,6 +717,7 @@ namespace ConHIS_Service_XPHL7
                     MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
         }
+
         private void SearchTextBox_KeyDown(object sender, KeyEventArgs e)
         {
             if (e.KeyCode == Keys.Enter)
@@ -703,23 +820,19 @@ namespace ConHIS_Service_XPHL7
 
                 var filterParts = new System.Collections.Generic.List<string>();
 
-                // ค้นหา Order No หรือ HN
                 if (!string.IsNullOrEmpty(searchText))
                 {
                     filterParts.Add($"([Order No] LIKE '%{searchText}%' OR [HN] LIKE '%{searchText}%')");
                 }
 
-                // ====== ทั้งสองคอลัมน์วันที่ต้อง MATCH ======
                 string datePattern = selectedDate.ToString("yyyy-MM-dd");
                 filterParts.Add($"([Time Check] LIKE '{datePattern}%' OR [Transaction DateTime] LIKE '{datePattern}%')");
 
-                // เพิ่ม Status Filter
                 if (_currentStatusFilter != "All")
                 {
                     filterParts.Add($"[Status] = '{_currentStatusFilter}'");
                 }
 
-                // รวม filter
                 string filterExpression = string.Join(" AND ", filterParts);
 
                 _logger.LogInfo($"=== FILTER ===");
@@ -743,21 +856,6 @@ namespace ConHIS_Service_XPHL7
                 else
                 {
                     UpdateStatus($"✗ No records - {info} (Total: {totalCount})");
-                    _logger.LogInfo($"No records found. Data available in table: {totalCount}");
-
-                    // ====== DEBUG: แสดงข้อมูลทั้งหมด ======
-                    if (totalCount > 0)
-                    {
-                        _logger.LogInfo("Available records:");
-                        foreach (DataRow row in _processedDataTable.Rows)
-                        {
-                            string tc = row["Time Check"]?.ToString() ?? "NULL";
-                            string td = row["Transaction DateTime"]?.ToString() ?? "NULL";
-                            string on = row["Order No"]?.ToString() ?? "NULL";
-                            string hn = row["HN"]?.ToString() ?? "NULL";
-                            _logger.LogInfo($"  {tc} | {td} | {on} | {hn}");
-                        }
-                    }
                 }
 
                 UpdateStatusSummary();
@@ -769,32 +867,6 @@ namespace ConHIS_Service_XPHL7
                 MessageBox.Show($"Search error: {ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
         }
-
-        private DateTime? GetFirstAvailableDate()
-        {
-            try
-            {
-                if (_processedDataTable == null || _processedDataTable.Rows.Count == 0)
-                    return null;
-
-                foreach (DataRow row in _processedDataTable.Rows)
-                {
-                    string timeCheckStr = row["Time Check"]?.ToString();
-                    if (!string.IsNullOrEmpty(timeCheckStr) && DateTime.TryParse(timeCheckStr, out DateTime dt))
-                    {
-                        return dt.Date;
-                    }
-                }
-
-                return null;
-            }
-            catch
-            {
-                return null;
-            }
-        }
-
-        
         #endregion
 
         #region GridView
@@ -861,7 +933,8 @@ namespace ConHIS_Service_XPHL7
         private void Form1_FormClosing(object sender, FormClosingEventArgs e)
         {
             StopBackgroundService();
-            _logger.LogInfo("Application closing - Background service stopped");
+            StopConnectionMonitor(); // ⭐ หยุด Connection Monitor
+            _logger.LogInfo("Application closing - All services stopped");
         }
 
         private void AddViewButtonColumn()
@@ -957,7 +1030,6 @@ namespace ConHIS_Service_XPHL7
                 _logger?.LogError("Error applying row colors", ex);
             }
         }
-
         #endregion
 
         #region Start/Stop Service Manual and Auto
@@ -1015,7 +1087,6 @@ namespace ConHIS_Service_XPHL7
 
             try
             {
-
                 if (isManual)
                 {
                     testHL7Button.Enabled = false;
@@ -1156,7 +1227,6 @@ namespace ConHIS_Service_XPHL7
         #endregion
 
         #region Update Methods
-
         private void UpdateStatus(string status)
         {
             if (statusLabel.InvokeRequired)
@@ -1279,48 +1349,6 @@ namespace ConHIS_Service_XPHL7
                 e.Graphics.FillRectangle(brush, 0, 0, e.ClipRectangle.Width, 3);
             }
         }
-
-        // ====== ใส่ ShowDataSummary() ที่นี่ ======
-        /// <summary>
-        /// แสดง Summary ของข้อมูลในตาราง (ใช้สำหรับ Debug)
-        /// </summary>
-        private void ShowDataSummary()
-        {
-            if (_processedDataTable == null || _processedDataTable.Rows.Count == 0)
-            {
-                _logger.LogInfo("=== DATA SUMMARY ===");
-                _logger.LogInfo("No data loaded");
-                return;
-            }
-
-            var dates = new System.Collections.Generic.HashSet<string>();
-            var statuses = new System.Collections.Generic.Dictionary<string, int>();
-
-            foreach (DataRow row in _processedDataTable.Rows)
-            {
-                string tc = row["Time Check"]?.ToString();
-                if (!string.IsNullOrEmpty(tc))
-                {
-                    string dateOnly = tc.Substring(0, 10); // YYYY-MM-DD
-                    dates.Add(dateOnly);
-                }
-
-                string st = row["Status"]?.ToString() ?? "N/A";
-                if (!statuses.ContainsKey(st))
-                    statuses[st] = 0;
-                statuses[st]++;
-            }
-
-            _logger.LogInfo("=== DATA SUMMARY ===");
-            _logger.LogInfo($"Total Records: {_processedDataTable.Rows.Count}");
-            _logger.LogInfo($"Dates Available: {string.Join(", ", dates)}");
-            foreach (var kvp in statuses)
-            {
-                _logger.LogInfo($"  Status '{kvp.Key}': {kvp.Value} records");
-            }
-            _logger.LogInfo("=== END SUMMARY ===");
-        }
-
         #endregion
 
         #region Settings

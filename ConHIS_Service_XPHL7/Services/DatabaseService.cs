@@ -109,7 +109,7 @@ namespace ConHIS_Service_XPHL7.Services
             catch (Exception ex)
             {
                 _logger.LogError("Error getting dispense data by date", ex);
-                throw new Exception($"Error getting dispense data by date: {ex.Message}", ex);
+                
             }
 
             return result;
@@ -259,7 +259,7 @@ namespace ConHIS_Service_XPHL7.Services
             catch (Exception ex)
             {
                 _logger.LogError("Error getting pending dispense data", ex);
-                throw new Exception($"Error getting pending dispense data: {ex.Message}", ex);
+               
             }
 
             return result;
@@ -295,7 +295,7 @@ namespace ConHIS_Service_XPHL7.Services
             catch (Exception ex)
             {
                 _logger.LogError($"Error updating receive status for ID {drugDispenseipdId}", ex);
-                throw new Exception($"Error updating receive status: {ex.Message}", ex);
+               
             }
         }
     }

@@ -19,6 +19,7 @@
         {
             this.statusLabel = new System.Windows.Forms.Label();
             this.lastCheckLabel = new System.Windows.Forms.Label();
+            this.connectionStatusLabel = new System.Windows.Forms.Label();
             this.startStopButton = new System.Windows.Forms.Button();
             this.manualCheckButton = new System.Windows.Forms.Button();
             this.testHL7Button = new System.Windows.Forms.Button();
@@ -80,6 +81,16 @@
             this.lastCheckLabel.TabIndex = 1;
             this.lastCheckLabel.Text = "Last Check: -";
             // 
+            // connectionStatusLabel
+            //
+            this.connectionStatusLabel.AutoSize = true;
+            this.connectionStatusLabel.Location = new System.Drawing.Point(15, 52);
+            this.connectionStatusLabel.Name = "connectionStatusLabel";
+            this.connectionStatusLabel.Size = new System.Drawing.Size(350, 13); // เพิ่มความกว้าง
+            this.connectionStatusLabel.TabIndex = 2;
+            this.connectionStatusLabel.Text = "Database: Connecting...";
+            this.connectionStatusLabel.ForeColor = System.Drawing.Color.Gray;
+            //
             // startStopButton
             // 
             this.startStopButton.Location = new System.Drawing.Point(15, 18);
@@ -432,6 +443,7 @@
             this.AutoScaleDimensions = new System.Drawing.SizeF(6F, 13F);
             this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
             this.ClientSize = new System.Drawing.Size(1200, 750);
+            this.Controls.Add(this.connectionStatusLabel);
             this.Controls.Add(this.groupBox3);
             this.Controls.Add(this.groupBox2);
             this.Controls.Add(this.dataGridView);
@@ -461,6 +473,7 @@
 
         private System.Windows.Forms.Label statusLabel;
         private System.Windows.Forms.Label lastCheckLabel;
+        private System.Windows.Forms.Label connectionStatusLabel;
         private System.Windows.Forms.Button startStopButton;
         private System.Windows.Forms.Button manualCheckButton;
         private System.Windows.Forms.Button testHL7Button;
