@@ -442,18 +442,7 @@ namespace ConHIS_Service_XPHL7
                 if (!string.IsNullOrEmpty(logDirectory) && Directory.Exists(logDirectory) &&
                     (_status == "Success" || string.IsNullOrEmpty(_status) || (_status != "Failed")))
                 {
-                    var normalLogs = Directory.GetFiles(logDirectory, "hl7_data_raw_*.txt")
-                        .OrderByDescending(f => File.GetLastWriteTime(f))
-                        .ToList();
-
-                    // กรองตามวันที่ถ้ามีการระบุ
-                    if (_filterDate.HasValue)
-                    {
-                        normalLogs = normalLogs
-                            .Where(f => File.GetLastWriteTime(f).Date == _filterDate.Value.Date)
-                            .ToList();
-                    }
-
+                    var normalLogs = GetLogFilesWithDateFolder(logDirectory, "hl7_data_raw_*.txt", _filterDate);
                     allLogFiles.AddRange(normalLogs);
                     _logManager.LogInfo($"Found {normalLogs.Count} hl7_raw log files in: {logDirectory}");
                 }
@@ -462,39 +451,7 @@ namespace ConHIS_Service_XPHL7
                 if (!string.IsNullOrEmpty(errorLogDirectory) && Directory.Exists(errorLogDirectory) &&
                     (_status == "Failed" || string.IsNullOrEmpty(_status) || (_status != "Success")))
                 {
-                    // ถ้ามีการกรองวันที่ ให้ค้นหาเฉพาะไฟล์ที่ตรงกับวันที่นั้น
-                    string searchPattern = _filterDate.HasValue
-                        ? $"hl7_error_{_filterDate.Value:yyyy-MM-dd}*.txt"
-                        : "hl7_error_*.txt";
-
-                    var allErrorLogs = Directory.GetFiles(errorLogDirectory, searchPattern)
-                        .OrderByDescending(f => File.GetLastWriteTime(f))
-                        .ToList();
-
-                    var errorLogsWithDates = new Dictionary<string, DateTime>();
-
-                    foreach (var errorLog in allErrorLogs)
-                    {
-                        var dateMatch = Regex.Match(Path.GetFileName(errorLog), @"hl7_error_(\d{4}-\d{2}-\d{2})");
-                        if (dateMatch.Success)
-                        {
-                            if (DateTime.TryParse(dateMatch.Groups[1].Value, out DateTime fileDate))
-                            {
-                                // ถ้ามีการกรองวันที่ ให้เช็คว่าตรงกับวันที่ที่ระบุหรือไม่
-                                if (!_filterDate.HasValue || fileDate.Date == _filterDate.Value.Date)
-                                {
-                                    errorLogsWithDates[errorLog] = fileDate;
-                                }
-                            }
-                        }
-                    }
-
-                    var errorLogs = errorLogsWithDates
-                        .OrderByDescending(kvp => kvp.Value)
-                        .Take(30)
-                        .Select(kvp => kvp.Key)
-                        .ToList();
-
+                    var errorLogs = GetLogFilesWithDateFolder(errorLogDirectory, "hl7_error_*.txt", _filterDate);
                     allLogFiles.AddRange(errorLogs);
                     _logManager.LogInfo($"Found {errorLogs.Count} error log files in: {errorLogDirectory}");
                 }
@@ -520,25 +477,6 @@ namespace ConHIS_Service_XPHL7
 
                         bool isErrorLog = Path.GetFileName(logFile).StartsWith("hl7_error_");
                         bool isRawLog = Path.GetFileName(logFile).StartsWith("hl7_data_raw_");
-                        DateTime? errorLogFileDate = null;
-
-                        if (isErrorLog)
-                        {
-                            var dateMatch = Regex.Match(Path.GetFileName(logFile), @"hl7_error_(\d{4}-\d{2}-\d{2})");
-                            if (dateMatch.Success)
-                            {
-                                if (DateTime.TryParse(dateMatch.Groups[1].Value, out DateTime fileDate))
-                                {
-                                    errorLogFileDate = fileDate;
-
-                                    // ถ้ามีการกรองวันที่และไฟล์ไม่ตรงกับวันที่ ให้ข้าม
-                                    if (_filterDate.HasValue && fileDate.Date != _filterDate.Value.Date)
-                                    {
-                                        continue;
-                                    }
-                                }
-                            }
-                        }
 
                         string fullLogContent = File.ReadAllText(logFile, Encoding.UTF8);
 
@@ -551,43 +489,25 @@ namespace ConHIS_Service_XPHL7
                         // สำหรับไฟล์ hl7_data_raw_*.txt ให้เช็คว่าชื่อไฟล์ตรงกับ Order No หรือไม่
                         if (isRawLog)
                         {
-                            // เช็ควันที่ของไฟล์ถ้ามีการกรอง
-                            if (_filterDate.HasValue)
-                            {
-                                DateTime fileDate = File.GetLastWriteTime(logFile).Date;
-                                if (fileDate != _filterDate.Value.Date)
-                                {
-                                    _logManager.LogInfo($"Skipping file {Path.GetFileName(logFile)} - date mismatch (File: {fileDate:yyyy-MM-dd}, Filter: {_filterDate.Value:yyyy-MM-dd})");
-                                    continue;
-                                }
-                            }
-
                             // ดึง Order No จากชื่อไฟล์: hl7_data_raw_681001000302_NW.txt -> 681001000302
-                            // Pattern รองรับทั้ง: 
-                            // - hl7_data_raw_681001000302.txt
-                            // - hl7_data_raw_681001000302_NW.txt
-                            // - hl7_data_raw_681001000302_XX_YY.txt
                             var fileNameMatch = Regex.Match(Path.GetFileName(logFile), @"hl7_data_raw_(.+?)(?:_[A-Z]{2})?\.txt");
                             if (fileNameMatch.Success)
                             {
-                                string fileOrderInfo = fileNameMatch.Groups[1].Value; // เช่น "681001000302"
+                                string fileOrderInfo = fileNameMatch.Groups[1].Value;
 
-                                // Debug log
                                 _logManager.LogInfo($"Comparing: File order '{fileOrderInfo}' (length: {fileOrderInfo.Length}) with search order '{searchOrderNo}' (length: {searchOrderNo.Length})");
 
-                                // ตรวจสอบว่า Order No ตรงกันหรือไม่ (รองรับทั้ง exact match และ contains)
                                 bool isMatch = fileOrderInfo.Equals(searchOrderNo, StringComparison.OrdinalIgnoreCase) ||
-                                              fileOrderInfo.IndexOf(searchOrderNo, StringComparison.OrdinalIgnoreCase)>=0 ||
+                                              fileOrderInfo.IndexOf(searchOrderNo, StringComparison.OrdinalIgnoreCase) >= 0 ||
                                               searchOrderNo.IndexOf(fileOrderInfo, StringComparison.OrdinalIgnoreCase) >= 0;
 
                                 if (isMatch)
                                 {
-                                    // ไฟล์นี้ตรงกับ Order No ที่ค้นหา
                                     var logEntry = new LogEntry
                                     {
                                         Timestamp = File.GetLastWriteTime(logFile),
                                         LogLevel = "INFO",
-                                        RawLog = fullLogContent.Trim(), // ตัด whitespace ด้านหน้า-หลัง
+                                        RawLog = fullLogContent.Trim(),
                                         Message = $"Raw HL7 Data from file: {Path.GetFileName(logFile)}",
                                         ErrorDate = File.GetLastWriteTime(logFile).Date
                                     };
@@ -603,7 +523,7 @@ namespace ConHIS_Service_XPHL7
                             {
                                 _logManager.LogWarning($"Could not parse filename: {Path.GetFileName(logFile)}");
                             }
-                            continue; // ข้ามไปไฟล์ถัดไปเพราะประมวลผลเสร็จแล้ว
+                            continue;
                         }
 
                         // สำหรับไฟล์ error log ให้แยก entries ตาม timestamp
@@ -656,36 +576,14 @@ namespace ConHIS_Service_XPHL7
                                     // ตรวจสอบวันที่ของ log entry
                                     if (_filterDate.HasValue)
                                     {
-                                        // ต้องตรงกับวันที่ที่กรอง
                                         if (logEntry.ErrorDate.Date == _filterDate.Value.Date)
                                         {
-                                            if (isErrorLog && errorLogFileDate.HasValue)
-                                            {
-                                                if (logEntry.ErrorDate.Date == errorLogFileDate.Value.Date)
-                                                {
-                                                    matchingLogs.Add(logEntry);
-                                                }
-                                            }
-                                            else
-                                            {
-                                                matchingLogs.Add(logEntry);
-                                            }
+                                            matchingLogs.Add(logEntry);
                                         }
                                     }
                                     else
                                     {
-                                        // ไม่มีการกรองวันที่
-                                        if (isErrorLog && errorLogFileDate.HasValue)
-                                        {
-                                            if (logEntry.ErrorDate.Date == errorLogFileDate.Value.Date)
-                                            {
-                                                matchingLogs.Add(logEntry);
-                                            }
-                                        }
-                                        else
-                                        {
-                                            matchingLogs.Add(logEntry);
-                                        }
+                                        matchingLogs.Add(logEntry);
                                     }
                                 }
                             }
@@ -709,6 +607,85 @@ namespace ConHIS_Service_XPHL7
             matchingLogs = matchingLogs.OrderByDescending(l => l.Timestamp).ToList();
 
             return matchingLogs;
+        }
+
+        /// <summary>
+        /// ค้นหาไฟล์ log พร้อมจัดการโฟลเดอร์ย่อยตามวันที่
+        /// </summary>
+        private List<string> GetLogFilesWithDateFolder(string baseDirectory, string searchPattern, DateTime? filterDate)
+        {
+            var logFiles = new List<string>();
+
+            try
+            {
+                if (!Directory.Exists(baseDirectory))
+                {
+                    _logManager.LogWarning($"Directory not found: {baseDirectory}");
+                    return logFiles;
+                }
+
+                // ถ้ามีการกรองวันที่ ให้ค้นหาในโฟลเดอร์ตามวันที่ที่ระบุ
+                if (filterDate.HasValue)
+                {
+                    string dateFolderName = filterDate.Value.ToString("yyyy-MM-dd");
+                    string dateFolderPath = Path.Combine(baseDirectory, dateFolderName);
+
+                    if (Directory.Exists(dateFolderPath))
+                    {
+                        var filesInDateFolder = Directory.GetFiles(dateFolderPath, searchPattern)
+                            .OrderByDescending(f => File.GetLastWriteTime(f))
+                            .ToList();
+                        logFiles.AddRange(filesInDateFolder);
+                        _logManager.LogInfo($"Found {filesInDateFolder.Count} files in date folder: {dateFolderPath}");
+                    }
+                    else
+                    {
+                        _logManager.LogInfo($"Date folder not found: {dateFolderPath}");
+                    }
+
+                    // ค้นหาในโฟลเดอร์แม่ด้วย (ในกรณีที่ไฟล์อยู่โดยตรงในโฟลเดอร์หลัก)
+                    var filesInRoot = Directory.GetFiles(baseDirectory, searchPattern)
+                        .Where(f => File.GetLastWriteTime(f).Date == filterDate.Value.Date)
+                        .OrderByDescending(f => File.GetLastWriteTime(f))
+                        .ToList();
+                    logFiles.AddRange(filesInRoot);
+
+                    if (filesInRoot.Count > 0)
+                    {
+                        _logManager.LogInfo($"Found {filesInRoot.Count} files in root directory matching date filter");
+                    }
+                }
+                else
+                {
+                    // ถ้าไม่มีการกรองวันที่ ให้ค้นหาทั้งหมด
+                    // ค้นหาในโฟลเดอร์ย่อย (ตามวันที่)
+                    var subdirectories = Directory.GetDirectories(baseDirectory);
+                    foreach (var subDir in subdirectories.OrderByDescending(d => d))
+                    {
+                        var filesInSubDir = Directory.GetFiles(subDir, searchPattern)
+                            .OrderByDescending(f => File.GetLastWriteTime(f))
+                            .ToList();
+                        logFiles.AddRange(filesInSubDir);
+                    }
+
+                    // ค้นหาในโฟลเดอร์หลัก
+                    var filesInRoot = Directory.GetFiles(baseDirectory, searchPattern)
+                        .OrderByDescending(f => File.GetLastWriteTime(f))
+                        .ToList();
+                    logFiles.AddRange(filesInRoot);
+
+                    _logManager.LogInfo($"Found {logFiles.Count} total files in directory and subdirectories: {baseDirectory}");
+                }
+
+                // ลบการซ้ำกัน และจำกัดจำนวนไฟล์ (ทั้งหมด 50 ไฟล์)
+                logFiles = logFiles.Distinct().Take(50).ToList();
+            }
+            catch (Exception ex)
+            {
+                _logManager.LogError($"Error getting log files from {baseDirectory}", ex);
+            }
+
+            return logFiles;
         }
 
         private LogEntry ParseLogEntry(string rawEntry, string orderNo)

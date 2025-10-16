@@ -17,6 +17,185 @@ namespace ConHIS_Service_XPHL7.Services
             _connectionString = connectionString;
         }
 
+        /// <summary>
+        /// ทดสอบการเชื่อมต่อกับฐานข้อมูล
+        /// </summary>
+        public bool TestConnection()
+        {
+            try
+            {
+                using (var conn = new MySqlConnection(_connectionString))
+                {
+                    conn.Open();
+                    _logger.LogInfo("Database connection test successful");
+                    return true;
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError("Database connection test failed", ex);
+                return false;
+            }
+        }
+
+        /// <summary>
+        /// ดึงข้อมูลตามวันที่ที่เลือก (Success & Failed เท่านั้น)
+        /// </summary>
+        public List<DrugDispenseipd> GetDispenseDataByDate(DateTime startDate, DateTime endDate)
+        {
+            var result = new List<DrugDispenseipd>();
+            _logger.LogInfo($"GetDispenseDataByDate: Start - From {startDate:yyyy-MM-dd} to {endDate:yyyy-MM-dd}");
+
+            try
+            {
+                using (var conn = new MySqlConnection(_connectionString))
+                {
+                    conn.Open();
+                    _logger.LogInfo("Database connection opened for GetDispenseDataByDate");
+
+                    // ดึงข้อมูลที่ Status = 'Y' (Success) หรือ 'F' (Failed) เท่านั้น
+                    // และ recieve_status_datetime อยู่ในช่วงวันที่ที่เลือก
+                    var sql = @"SELECT drug_dispense_ipd_id, presc_id, drug_request_msg_type, 
+                               hl7_data, drug_dispense_datetime, recieve_status, recieve_status_datetime, recieve_order_type
+                               FROM drug_dispense_ipd 
+                               WHERE recieve_status IN ('Y', 'F')
+                               AND DATE(recieve_status_datetime) BETWEEN @startDate AND @endDate
+                               ORDER BY recieve_status_datetime DESC
+                               LIMIT 1000";
+
+                    using (var cmd = new MySqlCommand(sql, conn))
+                    {
+                        cmd.CommandTimeout = 30;
+                        cmd.Parameters.AddWithValue("@startDate", startDate.Date);
+                        cmd.Parameters.AddWithValue("@endDate", endDate.Date);
+
+                        using (var reader = cmd.ExecuteReader())
+                        {
+                            int recieveStatusDatetimeOrdinal = reader.GetOrdinal("recieve_status_datetime");
+                            int recieveOrderTypeOrdinal = reader.GetOrdinal("recieve_order_type");
+
+                            while (reader.Read())
+                            {
+                                try
+                                {
+                                    var orderType = reader.IsDBNull(recieveOrderTypeOrdinal) ? null : reader.GetString(recieveOrderTypeOrdinal);
+                                    var prescId = reader.GetInt32("presc_id");
+                                    var hl7Data = reader["hl7_data"] as byte[];
+
+                                    result.Add(new DrugDispenseipd
+                                    {
+                                        DrugDispenseipdId = reader.GetInt32("drug_dispense_ipd_id"),
+                                        PrescId = prescId,
+                                        DrugRequestMsgType = reader.GetString("drug_request_msg_type"),
+                                        Hl7Data = hl7Data,
+                                        DrugDispenseDatetime = reader.GetDateTime("drug_dispense_datetime"),
+                                        RecieveStatus = reader.GetChar("recieve_status"),
+                                        RecieveStatusDatetime = reader.IsDBNull(recieveStatusDatetimeOrdinal) ?
+                                            (DateTime?)null : reader.GetDateTime(recieveStatusDatetimeOrdinal),
+                                        RecieveOrderType = orderType
+                                    });
+                                }
+                                catch (Exception ex)
+                                {
+                                    _logger.LogWarning($"Error reading row from GetDispenseDataByDate: {ex.Message}");
+                                }
+                            }
+                        }
+                    }
+
+                    _logger.LogInfo($"GetDispenseDataByDate: Found {result.Count} rows");
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError("Error getting dispense data by date", ex);
+                throw new Exception($"Error getting dispense data by date: {ex.Message}", ex);
+            }
+
+            return result;
+        }
+
+        /// <summary>
+        /// ดึงข้อมูลตามวันที่และ Order No / HN
+        /// </summary>
+        public List<DrugDispenseipd> GetDispenseDataByDateAndSearch(DateTime date, string orderNoOrHN)
+        {
+            var result = new List<DrugDispenseipd>();
+            _logger.LogInfo($"GetDispenseDataByDateAndSearch: Date={date:yyyy-MM-dd}, Search={orderNoOrHN}");
+
+            try
+            {
+                using (var conn = new MySqlConnection(_connectionString))
+                {
+                    conn.Open();
+                    _logger.LogInfo("Database connection opened for GetDispenseDataByDateAndSearch");
+
+                    // ค้นหาตามวันที่ + Order No / HN
+                    var sql = @"SELECT DISTINCT ddi.drug_dispense_ipd_id, ddi.presc_id, ddi.drug_request_msg_type, 
+                               ddi.hl7_data, ddi.drug_dispense_datetime, ddi.recieve_status, ddi.recieve_status_datetime, ddi.recieve_order_type
+                               FROM drug_dispense_ipd ddi
+                               WHERE ddi.recieve_status IN ('Y', 'F')
+                               AND DATE(ddi.recieve_status_datetime) = @date
+                               AND CAST(ddi.hl7_data AS CHAR) LIKE @searchPattern
+                               ORDER BY ddi.recieve_status_datetime DESC
+                               LIMIT 1000";
+
+                    using (var cmd = new MySqlCommand(sql, conn))
+                    {
+                        cmd.CommandTimeout = 30;
+                        cmd.Parameters.AddWithValue("@date", date.Date);
+                        cmd.Parameters.AddWithValue("@searchPattern", $"%{orderNoOrHN}%");
+
+                        using (var reader = cmd.ExecuteReader())
+                        {
+                            int recieveStatusDatetimeOrdinal = reader.GetOrdinal("recieve_status_datetime");
+                            int recieveOrderTypeOrdinal = reader.GetOrdinal("recieve_order_type");
+
+                            while (reader.Read())
+                            {
+                                try
+                                {
+                                    var orderType = reader.IsDBNull(recieveOrderTypeOrdinal) ? null : reader.GetString(recieveOrderTypeOrdinal);
+                                    var prescId = reader.GetInt32("presc_id");
+
+                                    result.Add(new DrugDispenseipd
+                                    {
+                                        DrugDispenseipdId = reader.GetInt32("drug_dispense_ipd_id"),
+                                        PrescId = prescId,
+                                        DrugRequestMsgType = reader.GetString("drug_request_msg_type"),
+                                        Hl7Data = reader["hl7_data"] as byte[],
+                                        DrugDispenseDatetime = reader.GetDateTime("drug_dispense_datetime"),
+                                        RecieveStatus = reader.GetChar("recieve_status"),
+                                        RecieveStatusDatetime = reader.IsDBNull(recieveStatusDatetimeOrdinal) ?
+                                            (DateTime?)null : reader.GetDateTime(recieveStatusDatetimeOrdinal),
+                                        RecieveOrderType = orderType
+                                    });
+                                }
+                                catch (Exception ex)
+                                {
+                                    _logger.LogWarning($"Error reading row from GetDispenseDataByDateAndSearch: {ex.Message}");
+                                }
+                            }
+                        }
+                    }
+
+                    _logger.LogInfo($"GetDispenseDataByDateAndSearch: Found {result.Count} rows");
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError("Error getting dispense data by date and search", ex);
+                // ถ้า CAST ไม่ได้ ให้ดึงแบบปกติแล้ว filter ใน application
+                _logger.LogWarning("Fallback: Using in-memory search instead");
+                return GetDispenseDataByDate(date, date);
+            }
+
+            return result;
+        }
+
+        /// <summary>
+        /// ดึงข้อมูลยาที่รอการจัดส่ง (RecieveStatus = 'N') จากฐานข้อมูล
+        /// </summary>
         public List<DrugDispenseipd> GetPendingDispenseData()
         {
             var result = new List<DrugDispenseipd>();
@@ -27,40 +206,53 @@ namespace ConHIS_Service_XPHL7.Services
                 {
                     conn.Open();
                     _logger.LogInfo("Database connection opened for GetPendingDispenseData");
+
                     var sql = @"SELECT drug_dispense_ipd_id, presc_id, drug_request_msg_type, 
                                hl7_data, drug_dispense_datetime, recieve_status, recieve_status_datetime, recieve_order_type
                                FROM drug_dispense_ipd 
                                WHERE recieve_status = 'N'
-                               ORDER BY drug_dispense_datetime";
+                               ORDER BY drug_dispense_datetime
+                               LIMIT 500";
 
                     using (var cmd = new MySqlCommand(sql, conn))
-                    using (var reader = cmd.ExecuteReader())
                     {
-                        int recieveStatusDatetimeOrdinal = reader.GetOrdinal("recieve_status_datetime");
-                        int recieveOrderTypeOrdinal = reader.GetOrdinal("recieve_order_type");
-                        while (reader.Read())
+                        cmd.CommandTimeout = 30;
+
+                        using (var reader = cmd.ExecuteReader())
                         {
-                            var orderType = reader.IsDBNull(recieveOrderTypeOrdinal) ? null : reader.GetString(recieveOrderTypeOrdinal);
-                            var prescId = reader.GetInt32("presc_id");
+                            int recieveStatusDatetimeOrdinal = reader.GetOrdinal("recieve_status_datetime");
+                            int recieveOrderTypeOrdinal = reader.GetOrdinal("recieve_order_type");
 
-                            result.Add(new DrugDispenseipd
+                            while (reader.Read())
                             {
-                                DrugDispenseipdId = reader.GetInt32("drug_dispense_ipd_id"),
-                                PrescId = prescId,
-                                DrugRequestMsgType = reader.GetString("drug_request_msg_type"),
-                                Hl7Data = reader["hl7_data"] as byte[],
-                                DrugDispenseDatetime = reader.GetDateTime("drug_dispense_datetime"),
-                                RecieveStatus = reader.GetChar("recieve_status"),
-                                RecieveStatusDatetime = reader.IsDBNull(recieveStatusDatetimeOrdinal) ?
-                                    (DateTime?)null : reader.GetDateTime(recieveStatusDatetimeOrdinal),
-                                RecieveOrderType = orderType
-                            });
+                                try
+                                {
+                                    var orderType = reader.IsDBNull(recieveOrderTypeOrdinal) ? null : reader.GetString(recieveOrderTypeOrdinal);
+                                    var prescId = reader.GetInt32("presc_id");
 
-                            // Log each row's presc id and order type for debugging
-                            _logger.LogInfo($"GetPendingDispenseData: Row PrescId={prescId}, RecieveOrderType={orderType}");
+                                    result.Add(new DrugDispenseipd
+                                    {
+                                        DrugDispenseipdId = reader.GetInt32("drug_dispense_ipd_id"),
+                                        PrescId = prescId,
+                                        DrugRequestMsgType = reader.GetString("drug_request_msg_type"),
+                                        Hl7Data = reader["hl7_data"] as byte[],
+                                        DrugDispenseDatetime = reader.GetDateTime("drug_dispense_datetime"),
+                                        RecieveStatus = reader.GetChar("recieve_status"),
+                                        RecieveStatusDatetime = reader.IsDBNull(recieveStatusDatetimeOrdinal) ?
+                                            (DateTime?)null : reader.GetDateTime(recieveStatusDatetimeOrdinal),
+                                        RecieveOrderType = orderType
+                                    });
+
+                                    _logger.LogInfo($"GetPendingDispenseData: Row PrescId={prescId}, RecieveOrderType={orderType}");
+                                }
+                                catch (Exception ex)
+                                {
+                                    _logger.LogWarning($"Error reading pending row: {ex.Message}");
+                                }
+                            }
+
+                            _logger.LogInfo($"GetPendingDispenseData: Found {result.Count} rows");
                         }
-                        // log เฉพาะจำนวน row สุดท้าย
-                        _logger.LogInfo($"GetPendingDispenseData: Found {result.Count} rows");
                     }
                 }
             }
@@ -73,6 +265,9 @@ namespace ConHIS_Service_XPHL7.Services
             return result;
         }
 
+        /// <summary>
+        /// อัปเดตสถานะการรับในฐานข้อมูล
+        /// </summary>
         public void UpdateReceiveStatus(int drugDispenseipdId, char status)
         {
             _logger.LogInfo($"UpdateReceiveStatus: Start for ID {drugDispenseipdId}, status {status}");
@@ -82,6 +277,7 @@ namespace ConHIS_Service_XPHL7.Services
                 {
                     conn.Open();
                     _logger.LogInfo("Database connection opened for UpdateReceiveStatus");
+
                     var sql = @"UPDATE drug_dispense_ipd 
                                SET recieve_status = @status, recieve_status_datetime = @datetime
                                WHERE drug_dispense_ipd_id = @id";
@@ -99,10 +295,8 @@ namespace ConHIS_Service_XPHL7.Services
             catch (Exception ex)
             {
                 _logger.LogError($"Error updating receive status for ID {drugDispenseipdId}", ex);
-               
                 throw new Exception($"Error updating receive status: {ex.Message}", ex);
             }
         }
-
     }
 }

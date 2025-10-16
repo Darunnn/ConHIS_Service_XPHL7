@@ -4,6 +4,7 @@ using ConHIS_Service_XPHL7.Services;
 using ConHIS_Service_XPHL7.Utils;
 using Org.BouncyCastle.Utilities.Encoders;
 using System;
+using System.Collections.Generic;
 using System.Data;
 using System.IO;
 using System.Text;
@@ -35,6 +36,10 @@ namespace ConHIS_Service_XPHL7
         // เก็บ HL7Message ที่เชื่อมกับแต่ละแถว
         private System.Collections.Generic.Dictionary<int, HL7Message> _rowHL7Data = new System.Collections.Generic.Dictionary<int, HL7Message>();
 
+        // Connection status
+        private Label _connectionStatusLabel;
+        private bool _isDatabaseConnected = false;
+
         public Form1()
         {
             InitializeComponent();
@@ -55,17 +60,14 @@ namespace ConHIS_Service_XPHL7
             _processedDataTable.Columns.Add("FinancialClass", typeof(string));
             _processedDataTable.Columns.Add("OrderControl", typeof(string));
             _processedDataTable.Columns.Add("Status", typeof(string));
-            _processedDataTable.Columns.Add("API Response", typeof(string)); // เก็บข้อมูลไว้แต่จะไม่แสดง
+            _processedDataTable.Columns.Add("API Response", typeof(string));
 
             _filteredDataView = new DataView(_processedDataTable);
             dataGridView.DataSource = _filteredDataView;
 
-            // ลบ double click event และเพิ่ม cell click event
             dataGridView.CellClick += DataGridView_CellClick;
-
             dataGridView.Refresh();
 
-            // อัปเดต Status Summary เริ่มต้น
             UpdateStatusSummary();
 
             try
@@ -81,10 +83,7 @@ namespace ConHIS_Service_XPHL7
                     dataGridView.Columns["OrderControl"].Width = 80;
                     dataGridView.Columns["Status"].Width = 100;
 
-                    // ซ่อนคอลัมน์ API Response เดิม
                     dataGridView.Columns["API Response"].Visible = false;
-
-                    // เพิ่มคอลัมน์ปุ่ม View แทน
                     AddViewButtonColumn();
                 }
             }
@@ -92,8 +91,42 @@ namespace ConHIS_Service_XPHL7
             {
                 _logger?.LogError("Error setting column widths", ex);
             }
+        }
 
-        
+        private void AddConnectionStatusLabel()
+        {
+            _connectionStatusLabel = new Label();
+            _connectionStatusLabel.AutoSize = true;
+            _connectionStatusLabel.Location = new System.Drawing.Point(15, 52);
+            _connectionStatusLabel.Name = "connectionStatusLabel";
+            _connectionStatusLabel.Size = new System.Drawing.Size(150, 13);
+            _connectionStatusLabel.TabIndex = 2;
+            _connectionStatusLabel.Text = "Database: Connecting...";
+            _connectionStatusLabel.ForeColor = System.Drawing.Color.Gray;
+
+            this.Controls.Add(_connectionStatusLabel);
+        }
+
+        private void UpdateConnectionStatus(bool isConnected)
+        {
+            _isDatabaseConnected = isConnected;
+
+            if (_connectionStatusLabel.InvokeRequired)
+            {
+                _connectionStatusLabel.Invoke(new Action(() => UpdateConnectionStatus(isConnected)));
+                return;
+            }
+
+            if (isConnected)
+            {
+                _connectionStatusLabel.Text = "Database: ✓ Connected";
+                _connectionStatusLabel.ForeColor = System.Drawing.Color.Green;
+            }
+            else
+            {
+                _connectionStatusLabel.Text = "Database: ✗ Disconnected";
+                _connectionStatusLabel.ForeColor = System.Drawing.Color.Red;
+            }
         }
 
         private void InitializePanelPaintEvents()
@@ -104,70 +137,194 @@ namespace ConHIS_Service_XPHL7
             pendingPanel.Paint += (s, e) => DrawPanelTopBar(e, System.Drawing.Color.Orange);
             rejectPanel.Paint += (s, e) => DrawPanelTopBar(e, System.Drawing.Color.DarkGray);
 
-            // เพิ่ม Click Event สำหรับแต่ละ Panel
             totalPanel.Click += TotalPanel_Click;
             successPanel.Click += SuccessPanel_Click;
             failedPanel.Click += FailedPanel_Click;
             pendingPanel.Click += PendingPanel_Click;
             rejectPanel.Click += RejectPanel_Click;
 
-            // เพิ่ม Click Event ให้กับ Label ภายใน Panel ด้วย
             foreach (Control ctrl in totalPanel.Controls)
             {
-                if (ctrl is Label)
-                {
-                    ctrl.Click += TotalPanel_Click;
-                    ctrl.Cursor = System.Windows.Forms.Cursors.Hand;
-                }
+                if (ctrl is Label) { ctrl.Click += TotalPanel_Click; ctrl.Cursor = System.Windows.Forms.Cursors.Hand; }
             }
             foreach (Control ctrl in successPanel.Controls)
             {
-                if (ctrl is Label)
-                {
-                    ctrl.Click += SuccessPanel_Click;
-                    ctrl.Cursor = System.Windows.Forms.Cursors.Hand;
-                }
+                if (ctrl is Label) { ctrl.Click += SuccessPanel_Click; ctrl.Cursor = System.Windows.Forms.Cursors.Hand; }
             }
             foreach (Control ctrl in failedPanel.Controls)
             {
-                if (ctrl is Label)
-                {
-                    ctrl.Click += FailedPanel_Click;
-                    ctrl.Cursor = System.Windows.Forms.Cursors.Hand;
-                }
+                if (ctrl is Label) { ctrl.Click += FailedPanel_Click; ctrl.Cursor = System.Windows.Forms.Cursors.Hand; }
             }
             foreach (Control ctrl in pendingPanel.Controls)
             {
-                if (ctrl is Label)
-                {
-                    ctrl.Click += PendingPanel_Click;
-                    ctrl.Cursor = System.Windows.Forms.Cursors.Hand;
-                }
+                if (ctrl is Label) { ctrl.Click += PendingPanel_Click; ctrl.Cursor = System.Windows.Forms.Cursors.Hand; }
             }
             foreach (Control ctrl in rejectPanel.Controls)
             {
-                if (ctrl is Label)
-                {
-                    ctrl.Click += RejectPanel_Click;
-                    ctrl.Cursor = System.Windows.Forms.Cursors.Hand;
-                }
+                if (ctrl is Label) { ctrl.Click += RejectPanel_Click; ctrl.Cursor = System.Windows.Forms.Cursors.Hand; }
             }
 
-            // เพิ่ม Cursor เป็น Hand เมื่อ Hover
             totalPanel.Cursor = System.Windows.Forms.Cursors.Hand;
             successPanel.Cursor = System.Windows.Forms.Cursors.Hand;
             failedPanel.Cursor = System.Windows.Forms.Cursors.Hand;
             pendingPanel.Cursor = System.Windows.Forms.Cursors.Hand;
             rejectPanel.Cursor = System.Windows.Forms.Cursors.Hand;
         }
+        private async Task LoadDataBySelectedDate()
+        {
+            try
+            {
+                DateTime selectedDate = dateTimePicker.Value.Date;
+                string searchText = searchTextBox.Text.Trim();
 
-        private void Form1_Load(object sender, EventArgs e)
+                UpdateStatus($"Loading data for {selectedDate:yyyy-MM-dd}...");
+                _processedDataTable.Rows.Clear(); // ล้างข้อมูลเก่า
+
+                List<DrugDispenseipd> dispenseData = null;
+
+                // ดึงข้อมูลจาก Database
+                dispenseData = await Task.Run(() =>
+                {
+                    if (!string.IsNullOrEmpty(searchText))
+                    {
+                        // ถ้ามี search text ให้ค้นหา Order No / HN
+                        _logger.LogInfo($"Search: {searchText} on {selectedDate:yyyy-MM-dd}");
+                        return _databaseService.GetDispenseDataByDateAndSearch(selectedDate, searchText);
+                    }
+                    else
+                    {
+                        // ถ้าไม่มี search text ให้ดึงข้อมูลของวันที่เลือก
+                        _logger.LogInfo($"Load: {selectedDate:yyyy-MM-dd}");
+                        return _databaseService.GetDispenseDataByDate(selectedDate, selectedDate);
+                    }
+                });
+
+                var hl7Service = new HL7Service();
+                int loadedCount = 0;
+
+                foreach (var data in dispenseData)
+                {
+                    try
+                    {
+                        // Decode HL7 data
+                        string hl7String;
+                        try
+                        {
+                            Encoding tisEncoding = null;
+                            try { tisEncoding = Encoding.GetEncoding("TIS-620"); }
+                            catch { }
+                            if (tisEncoding == null) { try { tisEncoding = Encoding.GetEncoding(874); } catch { } }
+                            if (tisEncoding != null) { hl7String = tisEncoding.GetString(data.Hl7Data); }
+                            else { hl7String = Encoding.UTF8.GetString(data.Hl7Data); }
+                        }
+                        catch
+                        {
+                            hl7String = Encoding.UTF8.GetString(data.Hl7Data);
+                        }
+
+                        // Parse HL7
+                        HL7Message hl7Message = hl7Service.ParseHL7Message(hl7String);
+
+                        // Extract data - เลือกวันที่ที่เหมาะสม
+                        DateTime timeCheckDate = DateTime.Now;
+                        if (data.RecieveStatusDatetime.HasValue && data.RecieveStatusDatetime.Value != DateTime.MinValue)
+                        {
+                            timeCheckDate = data.RecieveStatusDatetime.Value;
+                        }
+                        else if (data.DrugDispenseDatetime != DateTime.MinValue)
+                        {
+                            timeCheckDate = data.DrugDispenseDatetime;
+                        }
+                        else if (hl7Message?.CommonOrder?.TransactionDateTime.HasValue == true)
+                        {
+                            timeCheckDate = hl7Message.CommonOrder.TransactionDateTime.Value;
+                        }
+
+                        string timeCheck = timeCheckDate.ToString("yyyy-MM-dd HH:mm:ss");
+
+                        DateTime? transactionDt = hl7Message?.CommonOrder?.TransactionDateTime;
+                        string transactionDateTime = (transactionDt.HasValue && transactionDt.Value != DateTime.MinValue)
+                            ? transactionDt.Value.ToString("yyyy-MM-dd HH:mm:ss")
+                            : "N/A";
+
+                        _logger.LogInfo($"[Load] TimeCheck: {timeCheck} | TransactionDT: {transactionDateTime}");
+
+                        string orderNo = hl7Message?.CommonOrder?.PlacerOrderNumber ?? "N/A";
+                        string hn = hl7Message?.PatientIdentification?.PatientIDExternal ??
+                                   hl7Message?.PatientIdentification?.PatientIDInternal ?? "N/A";
+
+                        string patientName = "N/A";
+                        if (hl7Message?.PatientIdentification?.OfficialName != null)
+                        {
+                            var name = hl7Message.PatientIdentification.OfficialName;
+                            patientName = $"{name.Prefix ?? ""} {name.FirstName ?? ""} {name.LastName ?? ""}".Trim();
+                            if (string.IsNullOrWhiteSpace(patientName)) patientName = "N/A";
+                        }
+
+                        string financialClass = "N/A";
+                        if (hl7Message?.PatientVisit?.FinancialClass != null)
+                        {
+                            var fc = hl7Message.PatientVisit.FinancialClass;
+                            financialClass = $"{fc.ID ?? ""} {fc.Name ?? ""}".Trim();
+                            if (string.IsNullOrWhiteSpace(financialClass)) financialClass = "N/A";
+                        }
+
+                        string orderControl = data.RecieveOrderType ?? hl7Message?.CommonOrder?.OrderControl ?? "N/A";
+
+                        // Map status
+                        string status = "N/A";
+                        if (data.RecieveStatus == 'Y')
+                            status = "Success";
+                        else if (data.RecieveStatus == 'F')
+                            status = "Failed";
+                        else if (data.RecieveStatus == 'N')
+                            continue; // Skip pending
+
+                        AddRowToGrid(timeCheck, transactionDateTime, orderNo, hn, patientName,
+                                   financialClass, orderControl, status, "Database Record", hl7Message);
+                        loadedCount++;
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogWarning($"Error loading record {data.DrugDispenseipdId}: {ex.Message}");
+                    }
+                }
+
+                // ล้างค่า Search TextBox
+                _currentStatusFilter = "All";
+                _filteredDataView.RowFilter = string.Empty;
+
+                ApplyRowColors();
+                UpdateStatusSummary();
+                UpdateStatusFilterButtons();
+
+                if (loadedCount > 0)
+                {
+                    UpdateStatus($"✓ Loaded {loadedCount} records for {selectedDate:yyyy-MM-dd}");
+                }
+                else
+                {
+                    UpdateStatus($"✗ No records for {selectedDate:yyyy-MM-dd}");
+                }
+
+                _logger.LogInfo($"[LoadDataBySelectedDate] Loaded {loadedCount} records");
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError("Error loading data by date", ex);
+                UpdateStatus($"✗ Error: {ex.Message}");
+            }
+        }
+
+        // ====== แก้ไข Form1_Load ======
+        private async void Form1_Load(object sender, EventArgs e)
         {
             _logger.LogInfo("Start Interface");
             UpdateStatus("Initializing...");
 
-            // Initialize DataTable first
             InitializeDataTable();
+            AddConnectionStatusLabel();
+            UpdateConnectionStatus(false);
 
             try
             {
@@ -176,7 +333,6 @@ namespace ConHIS_Service_XPHL7
                 _appConfig.LoadConfiguration();
                 _logger.LogInfo("Configuration loaded");
 
-                // โหลดค่า LogRetentionDays จาก App.config
                 if (int.TryParse(System.Configuration.ConfigurationManager.AppSettings["LogRetentionDays"], out int retentionDays))
                 {
                     _logger.LogRetentionDays = retentionDays;
@@ -185,16 +341,27 @@ namespace ConHIS_Service_XPHL7
 
                 _logger.LogInfo("Connecting to database");
                 _databaseService = new DatabaseService(_appConfig.ConnectionString);
-                _logger.LogInfo("DatabaseService initialized");
+
+                // Test database connection
+                bool dbConnected = await Task.Run(() => _databaseService.TestConnection());
+                UpdateConnectionStatus(dbConnected);
+
+                if (dbConnected)
+                {
+                    _logger.LogInfo("DatabaseService initialized");
+
+                    // ตั้ง DateTimePicker ให้เป็นวันนี้
+                    dateTimePicker.Value = DateTime.Today;
+
+                    // ====== เรียก LoadDataBySelectedDate() แทน LoadExistingDataFromDatabase() ======
+                    await LoadDataBySelectedDate();
+                }
 
                 var apiService = new ApiService(AppConfig.ApiEndpoint);
                 var hl7Service = new HL7Service();
                 _processor = new DrugDispenseProcessor(_databaseService, hl7Service, apiService);
 
-                // เริ่มต้น Status Filter Buttons
                 UpdateStatusFilterButtons();
-
-                // เพิ่มบรรทัดนี้
                 InitializePanelPaintEvents();
 
                 UpdateStatus("Ready - Service Stopped");
@@ -202,12 +369,13 @@ namespace ConHIS_Service_XPHL7
                 testHL7Button.Enabled = true;
                 manualCheckButton.Enabled = true;
                 exportButton.Enabled = true;
-                settingsButton.Enabled = true; // เพิ่มบรรทัดนี้
+                settingsButton.Enabled = true;
             }
             catch (Exception ex)
             {
                 _logger.LogError("Failed to initialize", ex);
                 UpdateStatus($"Error: {ex.Message}");
+                UpdateConnectionStatus(false);
                 MessageBox.Show($"Failed to initialize: {ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
         }
@@ -268,7 +436,6 @@ namespace ConHIS_Service_XPHL7
 
                         if (result != null)
                         {
-                            // ดึงข้อมูลจาก HL7Message
                             string TransactionDateTime = result.ParsedMessage?.CommonOrder?.TransactionDateTime != null
                                     ? ((DateTime)result.ParsedMessage?.CommonOrder?.TransactionDateTime)
                                         .ToString("yyyy-MM-dd HH:mm:ss")
@@ -277,7 +444,6 @@ namespace ConHIS_Service_XPHL7
                             string hn = result.ParsedMessage?.PatientIdentification?.PatientIDExternal ??
                                        result.ParsedMessage?.PatientIdentification?.PatientIDInternal ?? "N/A";
 
-                            // สร้างชื่อผู้ป่วย
                             string patientName = "N/A";
                             if (result.ParsedMessage?.PatientIdentification?.OfficialName != null)
                             {
@@ -296,7 +462,6 @@ namespace ConHIS_Service_XPHL7
 
                             string OrderControl = result.ParsedMessage?.CommonOrder?.OrderControl ?? "N/A";
 
-                            // เพิ่มข้อมูลลงตาราง
                             AddRowToGrid(
                                 DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss"),
                                 TransactionDateTime,
@@ -307,17 +472,10 @@ namespace ConHIS_Service_XPHL7
                                 OrderControl,
                                 result.Success ? "Success" : "Failed",
                                 result.ApiResponse ?? result.ErrorMessage ?? "N/A",
-                                result.ParsedMessage  // ส่ง HL7Message ไปด้วย
+                                result.ParsedMessage
                             );
 
-                            if (result.Success)
-                            {
-                                UpdateStatus($"HL7 test completed - {fileName}");
-                            }
-                            else
-                            {
-                                UpdateStatus($"HL7 test failed - {fileName}");
-                            }
+                            UpdateStatus(result.Success ? $"HL7 test completed - {fileName}" : $"HL7 test failed - {fileName}");
                         }
                         else
                         {
@@ -378,7 +536,6 @@ namespace ConHIS_Service_XPHL7
         {
             var csv = new StringBuilder();
 
-            // Headers
             var headers = new string[_processedDataTable.Columns.Count];
             for (int i = 0; i < _processedDataTable.Columns.Count; i++)
             {
@@ -386,14 +543,12 @@ namespace ConHIS_Service_XPHL7
             }
             csv.AppendLine(string.Join(",", headers));
 
-            // Data rows
             foreach (DataRow row in _processedDataTable.Rows)
             {
                 var fields = new string[_processedDataTable.Columns.Count];
                 for (int i = 0; i < _processedDataTable.Columns.Count; i++)
                 {
                     var value = row[i].ToString();
-                    // Escape commas and quotes in CSV
                     if (value.Contains(",") || value.Contains("\"") || value.Contains("\n"))
                     {
                         value = $"\"{value.Replace("\"", "\"\"")}\"";
@@ -408,19 +563,44 @@ namespace ConHIS_Service_XPHL7
         #endregion
 
         #region Search and Filter
-        // ตัวแปรเก็บสถานะ Status Filter ปัจจุบัน
         private string _currentStatusFilter = "All";
 
-        private void SearchButton_Click(object sender, EventArgs e)
+        private async void DateTimePicker_ValueChanged(object sender, EventArgs e)
         {
-            ApplyFilter();
+            // ตรวจสอบว่า loaded data เสร็จแล้วหรือไม่
+            if (_processedDataTable != null && _processedDataTable.Columns.Count > 0)
+            {
+                await LoadDataBySelectedDate();
+            }
         }
 
-        private void RefreshButton_Click(object sender, EventArgs e)
+       
+        private async void SearchButton_Click(object sender, EventArgs e)
         {
-            ClearFilter();
+            await LoadDataBySelectedDate();
         }
 
+        
+        private async void RefreshButton_Click(object sender, EventArgs e)
+        {
+            try
+            {
+                searchTextBox.Text = string.Empty;
+                dateTimePicker.Value = DateTime.Today;
+                _currentStatusFilter = "All";
+
+                // ดึงข้อมูลวันนี้ใหม่
+                await LoadDataBySelectedDate();
+
+                _logger.LogInfo("Data refreshed");
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError("Error refreshing data", ex);
+                MessageBox.Show($"Error refreshing data: {ex.Message}", "Error",
+                    MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+        }
         private void SearchTextBox_KeyDown(object sender, KeyEventArgs e)
         {
             if (e.KeyCode == Keys.Enter)
@@ -429,12 +609,6 @@ namespace ConHIS_Service_XPHL7
                 e.Handled = true;
                 e.SuppressKeyPress = true;
             }
-        }
-
-        // เพิ่ม Event Handler สำหรับ DateTimePicker
-        private void DateTimePicker_ValueChanged(object sender, EventArgs e)
-        {
-            ApplyFilter();
         }
 
         private void TotalPanel_Click(object sender, EventArgs e)
@@ -471,19 +645,15 @@ namespace ConHIS_Service_XPHL7
             ApplyStatusFilter();
             UpdateStatusFilterButtons();
         }
+
         private void UpdateStatusFilterButtons()
         {
-            // ไม่ต้องทำอะไรเพราะไม่มีปุ่มแล้ว
-            // หรือถ้าต้องการ highlight Panel ที่เลือก อาจเพิ่ม border หนาขึ้น
-
-            // Reset border ของทุก Panel
             totalPanel.BorderStyle = System.Windows.Forms.BorderStyle.FixedSingle;
             successPanel.BorderStyle = System.Windows.Forms.BorderStyle.FixedSingle;
             failedPanel.BorderStyle = System.Windows.Forms.BorderStyle.FixedSingle;
             pendingPanel.BorderStyle = System.Windows.Forms.BorderStyle.FixedSingle;
             rejectPanel.BorderStyle = System.Windows.Forms.BorderStyle.FixedSingle;
 
-            // Highlight Panel ที่เลือกด้วย border หนา (ถ้าต้องการ)
             if (_currentStatusFilter == "All")
                 totalPanel.BorderStyle = System.Windows.Forms.BorderStyle.Fixed3D;
             else if (_currentStatusFilter == "Success")
@@ -496,12 +666,10 @@ namespace ConHIS_Service_XPHL7
                 rejectPanel.BorderStyle = System.Windows.Forms.BorderStyle.Fixed3D;
         }
 
-        // ฟังก์ชันใหม่: กรอง Status เท่านั้น (ไม่ยุ่งกับวันที่และ TextBox)
         private void ApplyStatusFilter()
         {
             try
             {
-                // กรอง Status เท่านั้น
                 if (_currentStatusFilter == "All")
                 {
                     _filteredDataView.RowFilter = string.Empty;
@@ -511,16 +679,10 @@ namespace ConHIS_Service_XPHL7
                     _filteredDataView.RowFilter = $"[Status] = '{_currentStatusFilter}'";
                 }
 
-                // อัปเดตสีของแถวหลัง filter
                 ApplyRowColors();
-
-                // อัปเดตจำนวนผลลัพธ์
                 int resultCount = _filteredDataView.Count;
-
                 string statusInfo = _currentStatusFilter == "All" ? "all statuses" : $"status '{_currentStatusFilter}'";
                 UpdateStatus($"Showing {resultCount} record(s) with {statusInfo}");
-
-              
                 UpdateStatusSummary();
                 _logger.LogInfo($"Status filter applied: {statusInfo} - Found {resultCount} record(s)");
             }
@@ -539,91 +701,100 @@ namespace ConHIS_Service_XPHL7
                 string searchText = searchTextBox.Text.Trim();
                 DateTime selectedDate = dateTimePicker.Value.Date;
 
-                // สร้าง filter expression
                 var filterParts = new System.Collections.Generic.List<string>();
 
-                // กรณีค้นหา Order No หรือ HN
+                // ค้นหา Order No หรือ HN
                 if (!string.IsNullOrEmpty(searchText))
                 {
                     filterParts.Add($"([Order No] LIKE '%{searchText}%' OR [HN] LIKE '%{searchText}%')");
                 }
 
-                // กรณีค้นหาวันที่ - ค้นหาทั้ง Time Check และ Transaction DateTime
+                // ====== ทั้งสองคอลัมน์วันที่ต้อง MATCH ======
                 string datePattern = selectedDate.ToString("yyyy-MM-dd");
                 filterParts.Add($"([Time Check] LIKE '{datePattern}%' OR [Transaction DateTime] LIKE '{datePattern}%')");
 
-                // เพิ่ม Status Filter (ถ้ามีการกรองอยู่)
+                // เพิ่ม Status Filter
                 if (_currentStatusFilter != "All")
                 {
                     filterParts.Add($"[Status] = '{_currentStatusFilter}'");
                 }
 
-                // รวม filter ทั้งหมดด้วย AND
+                // รวม filter
                 string filterExpression = string.Join(" AND ", filterParts);
 
-                _filteredDataView.RowFilter = filterExpression;
+                _logger.LogInfo($"=== FILTER ===");
+                _logger.LogInfo($"Date: {datePattern} | Search: '{searchText}' | Status: {_currentStatusFilter}");
+                _logger.LogInfo($"Expression: {filterExpression}");
 
-                // อัปเดตสีของแถวหลัง filter
+                _filteredDataView.RowFilter = filterExpression;
                 ApplyRowColors();
 
-                // อัปเดตจำนวนผลลัพธ์
                 int resultCount = _filteredDataView.Count;
+                int totalCount = _processedDataTable.Rows.Count;
 
-                // สร้างข้อความแสดงผลการค้นหา
-                string searchInfo = string.Empty;
-                if (!string.IsNullOrEmpty(searchText))
-                {
-                    searchInfo += $"text '{searchText}' and ";
-                }
-                searchInfo += $"date '{datePattern}'";
-
-                if (_currentStatusFilter != "All")
-                {
-                    searchInfo += $" (Status: {_currentStatusFilter})";
-                }
+                string info = $"Date: {datePattern}";
+                if (!string.IsNullOrEmpty(searchText)) info += $" | Search: {searchText}";
+                if (_currentStatusFilter != "All") info += $" | Status: {_currentStatusFilter}";
 
                 if (resultCount > 0)
                 {
-                    UpdateStatus($"Found {resultCount} record(s) matching {searchInfo}");
+                    UpdateStatus($"✓ {resultCount} record(s) - {info} (Total: {totalCount})");
                 }
                 else
                 {
-                    UpdateStatus($"No records found matching {searchInfo}");
+                    UpdateStatus($"✗ No records - {info} (Total: {totalCount})");
+                    _logger.LogInfo($"No records found. Data available in table: {totalCount}");
+
+                    // ====== DEBUG: แสดงข้อมูลทั้งหมด ======
+                    if (totalCount > 0)
+                    {
+                        _logger.LogInfo("Available records:");
+                        foreach (DataRow row in _processedDataTable.Rows)
+                        {
+                            string tc = row["Time Check"]?.ToString() ?? "NULL";
+                            string td = row["Transaction DateTime"]?.ToString() ?? "NULL";
+                            string on = row["Order No"]?.ToString() ?? "NULL";
+                            string hn = row["HN"]?.ToString() ?? "NULL";
+                            _logger.LogInfo($"  {tc} | {td} | {on} | {hn}");
+                        }
+                    }
                 }
+
                 UpdateStatusSummary();
-                _logger.LogInfo($"Filter applied: {searchInfo} - Found {resultCount} record(s)");
+                _logger.LogInfo($"Result: {resultCount} records | Total: {totalCount}");
             }
             catch (Exception ex)
             {
                 _logger.LogError("Error applying filter", ex);
-                MessageBox.Show($"Search error: {ex.Message}", "Error",
-                    MessageBoxButtons.OK, MessageBoxIcon.Error);
+                MessageBox.Show($"Search error: {ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
         }
 
-        private void ClearFilter()
+        private DateTime? GetFirstAvailableDate()
         {
             try
             {
-                searchTextBox.Text = string.Empty;
-                dateTimePicker.Value = DateTime.Today;
-                _currentStatusFilter = "All";
-                _filteredDataView.RowFilter = string.Empty;
+                if (_processedDataTable == null || _processedDataTable.Rows.Count == 0)
+                    return null;
 
-                // อัปเดตสีของแถวหลัง clear filter
-                ApplyRowColors();
-                UpdateStatusSummary();
-                UpdateStatusFilterButtons();
-                UpdateStatus("Filter cleared - Showing all records");
-                _logger.LogInfo("Search filter cleared");
+                foreach (DataRow row in _processedDataTable.Rows)
+                {
+                    string timeCheckStr = row["Time Check"]?.ToString();
+                    if (!string.IsNullOrEmpty(timeCheckStr) && DateTime.TryParse(timeCheckStr, out DateTime dt))
+                    {
+                        return dt.Date;
+                    }
+                }
+
+                return null;
             }
-            catch (Exception ex)
+            catch
             {
-                _logger.LogError("Error clearing filter", ex);
-                MessageBox.Show($"Error clearing filter: {ex.Message}", "Error",
-                    MessageBoxButtons.OK, MessageBoxIcon.Error);
+                return null;
             }
         }
+
+        
         #endregion
 
         #region GridView
@@ -704,27 +875,22 @@ namespace ConHIS_Service_XPHL7
                 viewButtonColumn.UseColumnTextForButtonValue = true;
                 viewButtonColumn.Width = 100;
 
-                // เพิ่มคอลัมน์ไว้ตำแหน่งสุดท้าย
                 dataGridView.Columns.Add(viewButtonColumn);
             }
         }
 
-        // แทนที่ DataGridView_CellDoubleClick ด้วย DataGridView_CellClick
         private void DataGridView_CellClick(object sender, DataGridViewCellEventArgs e)
         {
-            // ตรวจสอบว่าคลิกที่คอลัมน์ปุ่ม View
             if (e.RowIndex >= 0 && e.ColumnIndex >= 0)
             {
                 if (dataGridView.Columns[e.ColumnIndex].Name == "ViewButton")
                 {
                     try
                     {
-                        // ดึง Order Number และ Status จากคอลัมน์
                         string time = dataGridView.Rows[e.RowIndex].Cells["Time Check"].Value?.ToString() ?? "N/A";
                         string orderNo = dataGridView.Rows[e.RowIndex].Cells["Order No"].Value?.ToString() ?? "N/A";
                         string status = dataGridView.Rows[e.RowIndex].Cells["Status"].Value?.ToString() ?? "N/A";
 
-                        // หา row index ที่แท้จริงใน DataTable (เพราะอาจมีการกรอง)
                         int actualRowIndex = -1;
                         if (_filteredDataView.Count > 0 && e.RowIndex < _filteredDataView.Count)
                         {
@@ -732,12 +898,9 @@ namespace ConHIS_Service_XPHL7
                             actualRowIndex = _processedDataTable.Rows.IndexOf(rowView.Row);
                         }
 
-                        // ตรวจสอบว่ามี HL7Message สำหรับแถวนี้หรือไม่
                         if (actualRowIndex >= 0 && _rowHL7Data.ContainsKey(actualRowIndex))
                         {
                             var hl7Message = _rowHL7Data[actualRowIndex];
-
-                            // เปิดฟอร์มแสดงรายละเอียด พร้อมส่ง status ไปด้วย
                             DateTime? filterDate = DateTime.TryParse(time, out DateTime parsedDate) ? parsedDate.Date : (DateTime?)null;
                             var detailForm = new HL7DetailForm(hl7Message, filterDate, orderNo, status);
                             detailForm.ShowDialog();
@@ -971,7 +1134,6 @@ namespace ConHIS_Service_XPHL7
             {
                 _isProcessing = false;
 
-                // เปิดปุ่มกลับเมื่อทำงานเสร็จ (เฉพาะ manual)
                 if (isManual)
                 {
                     this.Invoke(new Action(() =>
@@ -994,7 +1156,6 @@ namespace ConHIS_Service_XPHL7
         #endregion
 
         #region Update Methods
-  
 
         private void UpdateStatus(string status)
         {
@@ -1054,14 +1215,12 @@ namespace ConHIS_Service_XPHL7
                         rejectCount++;
                 }
 
-                // อัปเดตค่าใน Label แต่ละอัน
                 totalCountLabel.Text = totalRecords.ToString();
                 successCountLabel.Text = successCount.ToString();
                 failedCountLabel.Text = failedCount.ToString();
                 pendingCountLabel.Text = pendingCount.ToString();
                 rejectCountLabel.Text = rejectCount.ToString();
 
-                // เปลี่ยนสี background ของ panel ตามสถานะ
                 UpdatePanelStyles(totalPanel, totalRecords, System.Drawing.Color.FromArgb(240, 240, 240));
                 UpdatePanelStyles(successPanel, successCount, System.Drawing.Color.FromArgb(220, 255, 220));
                 UpdatePanelStyles(failedPanel, failedCount, System.Drawing.Color.FromArgb(255, 220, 220));
@@ -1088,7 +1247,6 @@ namespace ConHIS_Service_XPHL7
             }
         }
 
-        // Paint Event Handlers for Panel Top Bars
         private void TotalPanel_Paint(object sender, PaintEventArgs e)
         {
             DrawPanelTopBar(e, System.Drawing.Color.Gray);
@@ -1122,6 +1280,47 @@ namespace ConHIS_Service_XPHL7
             }
         }
 
+        // ====== ใส่ ShowDataSummary() ที่นี่ ======
+        /// <summary>
+        /// แสดง Summary ของข้อมูลในตาราง (ใช้สำหรับ Debug)
+        /// </summary>
+        private void ShowDataSummary()
+        {
+            if (_processedDataTable == null || _processedDataTable.Rows.Count == 0)
+            {
+                _logger.LogInfo("=== DATA SUMMARY ===");
+                _logger.LogInfo("No data loaded");
+                return;
+            }
+
+            var dates = new System.Collections.Generic.HashSet<string>();
+            var statuses = new System.Collections.Generic.Dictionary<string, int>();
+
+            foreach (DataRow row in _processedDataTable.Rows)
+            {
+                string tc = row["Time Check"]?.ToString();
+                if (!string.IsNullOrEmpty(tc))
+                {
+                    string dateOnly = tc.Substring(0, 10); // YYYY-MM-DD
+                    dates.Add(dateOnly);
+                }
+
+                string st = row["Status"]?.ToString() ?? "N/A";
+                if (!statuses.ContainsKey(st))
+                    statuses[st] = 0;
+                statuses[st]++;
+            }
+
+            _logger.LogInfo("=== DATA SUMMARY ===");
+            _logger.LogInfo($"Total Records: {_processedDataTable.Rows.Count}");
+            _logger.LogInfo($"Dates Available: {string.Join(", ", dates)}");
+            foreach (var kvp in statuses)
+            {
+                _logger.LogInfo($"  Status '{kvp.Key}': {kvp.Value} records");
+            }
+            _logger.LogInfo("=== END SUMMARY ===");
+        }
+
         #endregion
 
         #region Settings
@@ -1129,10 +1328,8 @@ namespace ConHIS_Service_XPHL7
         {
             try
             {
-                // ดึงค่าปัจจุบันจาก LogManager
                 int currentDays = _logger?.LogRetentionDays ?? 30;
 
-                // เปิดฟอร์ม Settings
                 using (var settingsForm = new PagesFrom.SettingsForm(currentDays))
                 {
                     if (settingsForm.ShowDialog() == DialogResult.OK)
@@ -1141,20 +1338,15 @@ namespace ConHIS_Service_XPHL7
                         {
                             if (settingsForm.SaveToConfig)
                             {
-                                // บันทึกลง App.config แล้ว ให้รีโหลดจาก config
                                 _logger.ReloadLogRetentionDays();
-
                                 UpdateStatus($"Settings saved permanently - Log retention: {_logger.LogRetentionDays} days");
                             }
                             else
                             {
-                                // ใช้เฉพาะ Session นี้
                                 _logger.UpdateLogRetentionDaysTemporary(settingsForm.LogRetentionDays);
-
                                 UpdateStatus($"Settings updated temporarily - Log retention: {_logger.LogRetentionDays} days (session only)");
                             }
 
-                            // ทำความสะอาด log เก่าทันทีตามค่าใหม่
                             _logger.CleanOldLogs();
 
                             string permanentStatus = settingsForm.SaveToConfig ? "ถาวร (App.config)" : "ชั่วคราว (Session only)";
