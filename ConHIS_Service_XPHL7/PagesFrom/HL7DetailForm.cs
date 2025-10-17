@@ -15,7 +15,7 @@ using System.Windows.Forms;
 
 namespace ConHIS_Service_XPHL7
 {
-    public partial class HL7DetailForm : Form
+    public partial class HL7DetailForm : System.Windows.Forms.Form
     {
         private HL7Message _hl7Message;
         private Utils.LogManager _logManager;

@@ -16,7 +16,7 @@ using Timer = System.Threading.Timer;
 
 namespace ConHIS_Service_XPHL7
 {
-    public partial class Form1 : Form
+    public partial class Form : System.Windows.Forms.Form
     {
         private AppConfig _appConfig;
         private DatabaseService _databaseService;
@@ -45,10 +45,10 @@ namespace ConHIS_Service_XPHL7
         private System.Collections.Generic.Dictionary<int, HL7Message> _rowHL7Data = new System.Collections.Generic.Dictionary<int, HL7Message>();
 
         // Connection status
-       
+
         private bool _isDatabaseConnected = false;
-       
-        public Form1()
+
+        public Form()
         {
             InitializeComponent();
             this.Load += Form1_Load;

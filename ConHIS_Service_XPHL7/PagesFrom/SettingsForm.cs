@@ -4,7 +4,7 @@ using System.Windows.Forms;
 
 namespace ConHIS_Service_XPHL7.PagesFrom
 {
-    public partial class SettingsForm : Form
+    public partial class SettingsForm : System.Windows.Forms.Form
     {
         public int LogRetentionDays { get; private set; }
         public bool SaveToConfig { get; private set; }

@@ -1,6 +1,6 @@
 ﻿namespace ConHIS_Service_XPHL7
 {
-    partial class Form1
+    partial class Form
     {
         private System.ComponentModel.IContainer components = null;
 
