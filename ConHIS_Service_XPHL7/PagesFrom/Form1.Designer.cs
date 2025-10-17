@@ -136,7 +136,7 @@
             this.exportButton.Click += new System.EventHandler(this.ExportButton_Click);
             // 
             // settingsButton
-            this.settingsButton = new System.Windows.Forms.Button();
+            
             this.settingsButton.Location = new System.Drawing.Point(393, 18);
             this.settingsButton.Margin = new System.Windows.Forms.Padding(2);
             this.settingsButton.Name = "settingsButton";
@@ -494,7 +494,6 @@
         private System.Windows.Forms.Panel failedPanel;
         private System.Windows.Forms.Panel pendingPanel;
         private System.Windows.Forms.Panel rejectPanel;
-        // ประกาศ Label เหล่านี้เพียงครั้งเดียวที่นี่
         private System.Windows.Forms.Label totalCountLabel;
         private System.Windows.Forms.Label successCountLabel;
         private System.Windows.Forms.Label failedCountLabel;

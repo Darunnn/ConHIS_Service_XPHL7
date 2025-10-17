@@ -32,7 +32,7 @@ namespace ConHIS_Service_XPHL7
         // ⭐ Connection Monitor - เพิ่มใหม่
         private Timer _connectionCheckTimer;
         private DateTime? _lastDatabaseDisconnectionTime = null;
-        private readonly int _connectionCheckIntervalSeconds = 30;
+        private readonly int _connectionCheckIntervalSeconds = 10;
         private bool _isCheckingConnection = false;
         private DateTime? _lastDatabaseConnectionTime = null;
         private bool _hasNotifiedDisconnection = false;
@@ -515,13 +515,7 @@ namespace ConHIS_Service_XPHL7
                 else
                 {
                     _logger.LogWarning("Initial database connection failed");
-                    MessageBox.Show(
-                        "Failed to connect to database on startup.\n\n" +
-                        "The system will continue to attempt connection automatically.",
-                        "Connection Warning",
-                        MessageBoxButtons.OK,
-                        MessageBoxIcon.Warning
-                    );
+                   
                 }
 
                 var apiService = new ApiService(AppConfig.ApiEndpoint);
@@ -546,7 +540,7 @@ namespace ConHIS_Service_XPHL7
                 _logger.LogError("Failed to initialize", ex);
                 UpdateStatus($"Error: {ex.Message}");
                 UpdateConnectionStatus(false);
-                MessageBox.Show($"Failed to initialize: {ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                
             }
         }
 
@@ -672,11 +666,7 @@ namespace ConHIS_Service_XPHL7
         #region Export
         private void ExportButton_Click(object sender, EventArgs e)
         {
-            if (_processedDataTable.Rows.Count == 0)
-            {
-                MessageBox.Show("No data to export.", "Export", MessageBoxButtons.OK, MessageBoxIcon.Information);
-                return;
-            }
+          
 
             try
             {
@@ -689,8 +679,7 @@ namespace ConHIS_Service_XPHL7
                     if (saveFileDialog.ShowDialog() == DialogResult.OK)
                     {
                         ExportToCSV(saveFileDialog.FileName);
-                        MessageBox.Show($"Data exported successfully to:\n{saveFileDialog.FileName}",
-                            "Export Complete", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                       
                         _logger.LogInfo($"Data exported to: {saveFileDialog.FileName}");
                     }
                 }
@@ -698,7 +687,7 @@ namespace ConHIS_Service_XPHL7
             catch (Exception ex)
             {
                 _logger.LogError("Export error", ex);
-                MessageBox.Show($"Export failed: {ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                
             }
         }
 
@@ -763,8 +752,7 @@ namespace ConHIS_Service_XPHL7
             catch (Exception ex)
             {
                 _logger.LogError("Error refreshing data", ex);
-                MessageBox.Show($"Error refreshing data: {ex.Message}", "Error",
-                    MessageBoxButtons.OK, MessageBoxIcon.Error);
+                
             }
         }
 
@@ -856,8 +844,7 @@ namespace ConHIS_Service_XPHL7
             catch (Exception ex)
             {
                 _logger.LogError("Error applying status filter", ex);
-                MessageBox.Show($"Status filter error: {ex.Message}", "Error",
-                    MessageBoxButtons.OK, MessageBoxIcon.Error);
+                
             }
         }
 
@@ -914,7 +901,7 @@ namespace ConHIS_Service_XPHL7
             catch (Exception ex)
             {
                 _logger.LogError("Error applying filter", ex);
-                MessageBox.Show($"Search error: {ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+               
             }
         }
         #endregion
@@ -1028,17 +1015,12 @@ namespace ConHIS_Service_XPHL7
                             var detailForm = new HL7DetailForm(hl7Message, filterDate, orderNo, status);
                             detailForm.ShowDialog();
                         }
-                        else
-                        {
-                            MessageBox.Show("No HL7 data available for this record.", "Information",
-                                MessageBoxButtons.OK, MessageBoxIcon.Information);
-                        }
+                       
                     }
                     catch (Exception ex)
                     {
                         _logger.LogError("Error showing HL7 detail", ex);
-                        MessageBox.Show($"Error displaying details: {ex.Message}", "Error",
-                            MessageBoxButtons.OK, MessageBoxIcon.Error);
+                       
                     }
                 }
             }
