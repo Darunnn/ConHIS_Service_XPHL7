@@ -23,7 +23,7 @@ namespace ConHIS_Service_XPHL7
         private LogManager _logger;
         private DrugDispenseProcessor _processor;
         private SimpleHL7FileProcessor _hl7FileProcessor;
-
+       
         // Background service components
         private CancellationTokenSource _backgroundCancellationTokenSource = null;
 
@@ -49,7 +49,7 @@ namespace ConHIS_Service_XPHL7
         // Connection status
 
         private bool _isDatabaseConnected = false;
-
+        private bool _isInitializing = false;
         public Form()
         {
             InitializeComponent();
@@ -539,13 +539,18 @@ namespace ConHIS_Service_XPHL7
                 if (dbConnected)
                 {
                     _logger.LogInfo("DatabaseService initialized successfully");
-                    dateTimePicker.Value = DateTime.Today;
+
+                    // ⭐ ป้องกัน double-load โดยตั้ง flag ก่อน
+                    _isInitializing = true;
+                    dateTimePicker.Value = DateTime.Today;  // นี่จะ trigger event แต่จะถูก skip
+                    _isInitializing = false;
+
+                    // ⭐ เรียกครั้งเดียว
                     await LoadDataBySelectedDate();
                 }
                 else
                 {
                     _logger.LogWarning("Initial database connection failed");
-                   
                 }
 
                 var apiService = new ApiService(AppConfig.ApiEndpoint);
@@ -570,7 +575,6 @@ namespace ConHIS_Service_XPHL7
                 _logger.LogError("Failed to initialize", ex);
                 UpdateStatus($"Error: {ex.Message}");
                 UpdateConnectionStatus(false);
-                
             }
         }
 
@@ -756,11 +760,19 @@ namespace ConHIS_Service_XPHL7
 
         private async void DateTimePicker_ValueChanged(object sender, EventArgs e)
         {
+            // ⭐ ข้ามการโหลดเมื่อกำลังเริ่มต้น
+            if (_isInitializing)
+            {
+                _logger.LogInfo("Skipping load during initialization");
+                return;
+            }
+
             if (_processedDataTable != null && _processedDataTable.Columns.Count > 0)
             {
                 await LoadDataBySelectedDate();
             }
         }
+
 
         private async void SearchButton_Click(object sender, EventArgs e)
         {

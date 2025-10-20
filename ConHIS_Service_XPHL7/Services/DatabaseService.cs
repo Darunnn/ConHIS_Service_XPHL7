@@ -27,13 +27,11 @@ namespace ConHIS_Service_XPHL7.Services
                 using (var conn = new MySqlConnection(_connectionString))
                 {
                     conn.Open();
-                    _logger.LogInfo("Database connection test successful");
                     return true;
                 }
             }
             catch (Exception ex)
             {
-                _logger.LogError("Database connection test failed", ex);
                 return false;
             }
         }
