@@ -61,6 +61,15 @@ namespace ConHIS_Service_XPHL7
 
         private void InitializeDataTable()
         {
+            // ⭐ ลบการเชื่อม event เก่า (ถ้ามี)
+            if (dataGridView != null)
+            {
+                dataGridView.CellClick -= DataGridView_CellClick;
+                dataGridView.DataSource = null;
+                dataGridView.Rows.Clear();
+                dataGridView.Columns.Clear();
+            }
+
             _processedDataTable = new DataTable();
             _processedDataTable.Columns.Add("Time Check", typeof(string));
             _processedDataTable.Columns.Add("Transaction DateTime", typeof(string));
@@ -73,10 +82,12 @@ namespace ConHIS_Service_XPHL7
             _processedDataTable.Columns.Add("API Response", typeof(string));
 
             _filteredDataView = new DataView(_processedDataTable);
+
+            // ⭐ ผูก DataSource ครั้งเดียว
             dataGridView.DataSource = _filteredDataView;
 
+            // ⭐ เชื่อม event ครั้งเดียวเท่านั้น
             dataGridView.CellClick += DataGridView_CellClick;
-            dataGridView.Refresh();
 
             UpdateStatusSummary();
 
@@ -351,7 +362,15 @@ namespace ConHIS_Service_XPHL7
                 string searchText = searchTextBox.Text.Trim();
 
                 UpdateStatus($"Loading data for {selectedDate:yyyy-MM-dd}...");
+
+                // ⭐ ล้างข้อมูลเก่าทั้งหมด
                 _processedDataTable.Rows.Clear();
+                _rowHL7Data.Clear();
+
+                if (_filteredDataView != null)
+                {
+                    _filteredDataView.RowFilter = string.Empty;
+                }
 
                 List<DrugDispenseipd> dispenseData = null;
 
@@ -368,6 +387,13 @@ namespace ConHIS_Service_XPHL7
                         return _databaseService.GetDispenseDataByDate(selectedDate, selectedDate);
                     }
                 });
+
+                if (dispenseData == null)
+                {
+                    dispenseData = new List<DrugDispenseipd>();
+                }
+
+                _logger.LogInfo($"[LoadDataBySelectedDate] Database returned {dispenseData.Count} records");
 
                 var hl7Service = new HL7Service();
                 int loadedCount = 0;
@@ -454,6 +480,8 @@ namespace ConHIS_Service_XPHL7
                     }
                 }
 
+                _logger.LogInfo($"[LoadDataBySelectedDate] Added {loadedCount} rows to DataTable. DataTable.Rows.Count = {_processedDataTable.Rows.Count}");
+
                 _currentStatusFilter = "All";
                 _filteredDataView.RowFilter = string.Empty;
 
@@ -470,7 +498,7 @@ namespace ConHIS_Service_XPHL7
                     UpdateStatus($"✗ No records for {selectedDate:yyyy-MM-dd}");
                 }
 
-                _logger.LogInfo($"[LoadDataBySelectedDate] Loaded {loadedCount} records");
+                _logger.LogInfo($"[LoadDataBySelectedDate] Complete - DataGridView.Rows.Count = {dataGridView.Rows.Count}");
             }
             catch (Exception ex)
             {
@@ -910,27 +938,57 @@ namespace ConHIS_Service_XPHL7
 
         #region GridView
         private void AddRowToGrid(string time, string TransactionDateTime, string orderNo, string hn, string patientName,
+     string FinancialClass, string OrderControl, string status, string apiResponse, HL7Message hl7Data)
+        {
+            try
+            {
+                // ⭐ ตรวจสอบ InvokeRequired ก่อน
+                if (dataGridView.InvokeRequired)
+                {
+                    dataGridView.Invoke(new Action(() =>
+                    {
+                        AddRowToGridDirect(time, TransactionDateTime, orderNo, hn, patientName, FinancialClass,
+                                          OrderControl, status, apiResponse, hl7Data);
+                    }));
+                    return;  // ⭐ เพิ่ม return เพื่อไม่ให้ทำงานซ้ำ
+                }
+
+                AddRowToGridDirect(time, TransactionDateTime, orderNo, hn, patientName, FinancialClass,
+                                  OrderControl, status, apiResponse, hl7Data);
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogError("Error in AddRowToGrid", ex);
+            }
+        }
+
+        // ⭐ method ที่ทำงานจริง
+        private void AddRowToGridDirect(string time, string TransactionDateTime, string orderNo, string hn, string patientName,
             string FinancialClass, string OrderControl, string status, string apiResponse, HL7Message hl7Data)
         {
-            if (dataGridView.InvokeRequired)
+            try
             {
-                dataGridView.Invoke(new Action(() =>
+                int rowIndex = _processedDataTable.Rows.Count;
+                _processedDataTable.Rows.Add(time, TransactionDateTime, orderNo, hn, patientName,
+                                             FinancialClass, OrderControl, status, apiResponse);
+
+                if (hl7Data != null)
                 {
-                    int rowIndex = _processedDataTable.Rows.Count;
-                    _processedDataTable.Rows.Add(time, TransactionDateTime, orderNo, hn, patientName, FinancialClass, OrderControl, status, apiResponse);
+                    _rowHL7Data[rowIndex] = hl7Data;
+                }
 
-                    if (hl7Data != null)
-                    {
-                        _rowHL7Data[rowIndex] = hl7Data;
-                    }
-                    UpdateStatusSummary();
+                UpdateStatusSummary();
 
-                    if (dataGridView.Rows.Count > 0)
-                    {
-                        dataGridView.FirstDisplayedScrollingRowIndex = dataGridView.Rows.Count - 1;
-                    }
+                if (dataGridView.Rows.Count > 0)
+                {
+                    dataGridView.FirstDisplayedScrollingRowIndex = dataGridView.Rows.Count - 1;
+                }
 
-                    var lastRow = dataGridView.Rows[dataGridView.Rows.Count - 1];
+                // ⭐ ใช้ RowCount - 1 แทน LastRow
+                int lastRowIndex = dataGridView.Rows.Count - 1;
+                if (lastRowIndex >= 0)
+                {
+                    var lastRow = dataGridView.Rows[lastRowIndex];
                     if (status == "Success")
                     {
                         lastRow.DefaultCellStyle.BackColor = System.Drawing.Color.LightGreen;
@@ -939,36 +997,13 @@ namespace ConHIS_Service_XPHL7
                     {
                         lastRow.DefaultCellStyle.BackColor = System.Drawing.Color.LightCoral;
                     }
-                }));
+                }
             }
-            else
+            catch (Exception ex)
             {
-                int rowIndex = _processedDataTable.Rows.Count;
-                _processedDataTable.Rows.Add(time, TransactionDateTime, orderNo, hn, patientName, FinancialClass, OrderControl, status, apiResponse);
-
-                if (hl7Data != null)
-                {
-                    _rowHL7Data[rowIndex] = hl7Data;
-                }
-                UpdateStatusSummary();
-
-                if (dataGridView.Rows.Count > 0)
-                {
-                    dataGridView.FirstDisplayedScrollingRowIndex = dataGridView.Rows.Count - 1;
-                }
-
-                var lastRow = dataGridView.Rows[dataGridView.Rows.Count - 1];
-                if (status == "Success")
-                {
-                    lastRow.DefaultCellStyle.BackColor = System.Drawing.Color.LightGreen;
-                }
-                else if (status == "Failed")
-                {
-                    lastRow.DefaultCellStyle.BackColor = System.Drawing.Color.LightCoral;
-                }
+                _logger?.LogError("Error adding row to grid", ex);
             }
         }
-
         private void Form1_FormClosing(object sender, FormClosingEventArgs e)
         {
             StopBackgroundService();
