@@ -82,9 +82,10 @@ namespace ConHIS_Service_XPHL7
             _processedDataTable.Columns.Add("API Response", typeof(string));
 
             _filteredDataView = new DataView(_processedDataTable);
-
-            // ⭐ ผูก DataSource ครั้งเดียว
             dataGridView.DataSource = _filteredDataView;
+
+            // ⭐ เพิ่ม event handler สำหรับ sort
+            dataGridView.ColumnHeaderMouseClick += DataGridView_ColumnHeaderMouseClick;
 
             // ⭐ เชื่อม event ครั้งเดียวเท่านั้น
             dataGridView.CellClick += DataGridView_CellClick;
@@ -1077,7 +1078,17 @@ namespace ConHIS_Service_XPHL7
                 }
             }
         }
+        private void DataGridView_ColumnHeaderMouseClick(object sender, DataGridViewCellMouseEventArgs e)
+        {
+            _logger?.LogInfo($"[Sort] Column '{dataGridView.Columns[e.ColumnIndex].Name}' clicked for sorting");
 
+            // ⭐ เรียก ApplyRowColors หลังจาก sort เสร็จ
+            this.BeginInvoke(new Action(() =>
+            {
+                _logger?.LogInfo("[Sort] Applying colors after sort");
+                ApplyRowColors();
+            }));
+        }
         private void ApplyRowColors()
         {
             if (dataGridView.InvokeRequired)
@@ -1088,31 +1099,79 @@ namespace ConHIS_Service_XPHL7
 
             try
             {
-                // ⭐ Clear DefaultCellStyle สำหรับทุกแถว
-                foreach (DataGridViewRow row in dataGridView.Rows)
-                {
-                    row.DefaultCellStyle.BackColor = dataGridView.DefaultCellStyle.BackColor;
-                }
+                _logger?.LogInfo($"[ApplyRowColors] Starting - Rows.Count = {dataGridView.Rows.Count}");
 
-                // ⭐ วนลูปผ่าน DataGridView rows และอัปเดตสี
-                foreach (DataGridViewRow row in dataGridView.Rows)
+                // ⭐ หา Status column index
+                int statusColumnIndex = -1;
+                for (int i = 0; i < dataGridView.Columns.Count; i++)
                 {
-                    if (row.Cells["Status"].Value != null)
+                    if (dataGridView.Columns[i].Name == "Status")
                     {
-                        string status = row.Cells["Status"].Value.ToString();
-
-                        if (status == "Success")
-                        {
-                            row.DefaultCellStyle.BackColor = System.Drawing.Color.LightGreen;
-                        }
-                        else if (status == "Failed")
-                        {
-                            row.DefaultCellStyle.BackColor = System.Drawing.Color.LightCoral;
-                        }
+                        statusColumnIndex = i;
+                        break;
                     }
                 }
 
-                // ⭐ Refresh DataGridView เพื่อให้สี update ทันที
+                if (statusColumnIndex == -1)
+                {
+                    _logger?.LogWarning("[ApplyRowColors] Status column not found!");
+                    return;
+                }
+
+                _logger?.LogInfo($"[ApplyRowColors] Status column index: {statusColumnIndex}");
+
+                // ⭐ Apply colors based on Status column by index
+                int successCount = 0;
+                int failedCount = 0;
+
+                foreach (DataGridViewRow row in dataGridView.Rows)
+                {
+                    try
+                    {
+                        if (statusColumnIndex < row.Cells.Count && row.Cells[statusColumnIndex].Value != null)
+                        {
+                            string status = row.Cells[statusColumnIndex].Value.ToString().Trim();
+
+                            _logger?.LogInfo($"[ApplyRowColors] Row {row.Index}: Status = '{status}'");
+
+                            // ⭐ ลบการตั้งค่าเดิม
+                            row.DefaultCellStyle.BackColor = System.Drawing.Color.White;
+
+                            if (status == "Success")
+                            {
+                                row.DefaultCellStyle.BackColor = System.Drawing.Color.LightGreen;
+                                row.DefaultCellStyle.SelectionBackColor = System.Drawing.Color.Green;
+                                successCount++;
+                                _logger?.LogInfo($"[ApplyRowColors] Row {row.Index}: Applied Success color (LightGreen)");
+                            }
+                            else if (status == "Failed")
+                            {
+                                row.DefaultCellStyle.BackColor = System.Drawing.Color.LightCoral;
+                                row.DefaultCellStyle.SelectionBackColor = System.Drawing.Color.Red;
+                                failedCount++;
+                                _logger?.LogInfo($"[ApplyRowColors] Row {row.Index}: Applied Failed color (LightCoral)");
+                            }
+                            else
+                            {
+                                row.DefaultCellStyle.BackColor = System.Drawing.Color.White;
+                                _logger?.LogInfo($"[ApplyRowColors] Row {row.Index}: No color applied (status = '{status}')");
+                            }
+                        }
+                        else
+                        {
+                            _logger?.LogWarning($"[ApplyRowColors] Row {row.Index}: Status cell is null or out of range");
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger?.LogError($"[ApplyRowColors] Error on row {row.Index}: {ex.Message}", ex);
+                    }
+                }
+
+                _logger?.LogInfo($"[ApplyRowColors] Completed - Success: {successCount}, Failed: {failedCount}");
+
+                // ⭐ Force refresh
+                dataGridView.Invalidate();
                 dataGridView.Refresh();
             }
             catch (Exception ex)
