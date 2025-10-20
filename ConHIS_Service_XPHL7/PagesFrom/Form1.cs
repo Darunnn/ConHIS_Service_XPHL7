@@ -1107,12 +1107,11 @@ namespace ConHIS_Service_XPHL7
             UpdateStatus($"Service Running - Checking every {_intervalSeconds} seconds");
             _logger.LogInfo($"Background service started with {_intervalSeconds}s interval");
         }
-
         private async void StopBackgroundService()
         {
             _logger.LogInfo("StopBackgroundService: Starting stop process");
 
-            // ⭐ หยุด Timer ก่อน
+            // ⭐ Step 1: หยุด Timer ทันที
             if (_backgroundTimer != null)
             {
                 _backgroundTimer.Dispose();
@@ -1120,24 +1119,38 @@ namespace ConHIS_Service_XPHL7
                 _logger.LogInfo("StopBackgroundService: Timer disposed");
             }
 
-            // ⭐ ยกเลิก Background Task ที่กำลังทำงาน
+            // ⭐ Step 2: ยกเลิก Background Task ที่กำลังทำงาน
             if (_backgroundCancellationTokenSource != null)
             {
                 _backgroundCancellationTokenSource.Cancel();
                 _logger.LogInfo("StopBackgroundService: Cancellation requested");
 
-                // รอ 1 วินาที ให้ Task ได้รับการ Cancel
-                await Task.Delay(1000);
+                // รอให้ task รับการ Cancel - สูงสุด 5 วินาที
+                int timeoutMs = 5000;
+                int elapsedMs = 0;
+                int checkIntervalMs = 100;
 
+                while (_isProcessing && elapsedMs < timeoutMs)
+                {
+                    await Task.Delay(checkIntervalMs);
+                    elapsedMs += checkIntervalMs;
+                }
+
+                if (_isProcessing)
+                {
+                    _logger.LogWarning("StopBackgroundService: Task did not stop within timeout, forcing stop");
+                }
+
+                // ⭐ Step 3: Dispose CancellationTokenSource
                 _backgroundCancellationTokenSource.Dispose();
                 _backgroundCancellationTokenSource = null;
             }
 
-            // ⭐ บังคับให้ _isProcessing = false
+            // ⭐ Step 4: บังคับให้ _isProcessing = false
             _isProcessing = false;
             _logger.LogInfo("StopBackgroundService: _isProcessing set to false");
 
-            // ⭐ โหลดข้อมูลใหม่จาก Database เพื่อแสดงผลที่อัพเดทแล้ว
+            // ⭐ Step 5: โหลดข้อมูลใหม่จาก Database เพื่อแสดงผลที่อัพเดทแล้ว
             await LoadDataBySelectedDate();
 
             startStopButton.Text = "Start Service";
@@ -1163,22 +1176,14 @@ namespace ConHIS_Service_XPHL7
                 UpdateLastCheck();
                 _logger.LogInfo("Background check: Starting pending orders check");
 
-                // ⭐ ตรวจสอบว่าถูก Cancel หรือไม่
-                if (cancellationToken.IsCancellationRequested)
-                {
-                    _logger.LogInfo("Background check cancelled before fetching pending data");
-                    return;
-                }
+                // ⭐ Check cancel ก่อนดึงข้อมูล
+                cancellationToken.ThrowIfCancellationRequested();
 
                 var pending = await Task.Run(() => _databaseService.GetPendingDispenseData(), cancellationToken);
                 _logger.LogInfo($"Background check: Found {pending.Count} pending orders");
 
-                // ⭐ ตรวจสอบอีกครั้งก่อนแสดงข้อมูล
-                if (cancellationToken.IsCancellationRequested)
-                {
-                    _logger.LogInfo("Background check cancelled after fetching pending data");
-                    return;
-                }
+                // ⭐ Check cancel อีกครั้ง
+                cancellationToken.ThrowIfCancellationRequested();
 
                 this.Invoke(new Action(() =>
                 {
@@ -1200,6 +1205,13 @@ namespace ConHIS_Service_XPHL7
                             },
                             result =>
                             {
+                                // ⭐ Check cancel ระหว่างแสดงผล
+                                if (cancellationToken.IsCancellationRequested)
+                                {
+                                    _logger.LogInfo("Processing cancelled by user");
+                                    return;
+                                }
+
                                 var hl7Message = result.ParsedMessage;
 
                                 string orderNo = hl7Message?.CommonOrder?.PlacerOrderNumber ?? "N/A";
@@ -1239,7 +1251,8 @@ namespace ConHIS_Service_XPHL7
                                     result.ApiResponse ?? result.Message ?? "N/A",
                                     hl7Message
                                 );
-                            }
+                            },
+                            cancellationToken  // ⭐ ส่ง CancellationToken ให้ processor
                         );
                     }, cancellationToken);
 
@@ -1307,14 +1320,14 @@ namespace ConHIS_Service_XPHL7
 
         private async void BackgroundTimerCallback(object state)
         {
-            // ⭐ ถ้ากำลังประมวลผลอยู่หรือ Timer ถูก Dispose แล้ว ให้หยุด
+            // ⭐ ถ้ากำลังประมวลผลอยู่ให้ข้าม
             if (_isProcessing || _backgroundTimer == null)
             {
                 return;
             }
 
             // ⭐ ถ้า CancellationTokenSource ถูก Dispose แล้ว ให้หยุด
-            if (_backgroundCancellationTokenSource == null || _backgroundCancellationTokenSource.Token.CanBeCanceled == false)
+            if (_backgroundCancellationTokenSource == null || _backgroundCancellationTokenSource.IsCancellationRequested)
             {
                 return;
             }
@@ -1412,31 +1425,6 @@ namespace ConHIS_Service_XPHL7
                 panel.BackColor = System.Drawing.Color.White;
                 panel.BorderStyle = System.Windows.Forms.BorderStyle.FixedSingle;
             }
-        }
-
-        private void TotalPanel_Paint(object sender, PaintEventArgs e)
-        {
-            DrawPanelTopBar(e, System.Drawing.Color.Gray);
-        }
-
-        private void SuccessPanel_Paint(object sender, PaintEventArgs e)
-        {
-            DrawPanelTopBar(e, System.Drawing.Color.Green);
-        }
-
-        private void FailedPanel_Paint(object sender, PaintEventArgs e)
-        {
-            DrawPanelTopBar(e, System.Drawing.Color.Red);
-        }
-
-        private void PendingPanel_Paint(object sender, PaintEventArgs e)
-        {
-            DrawPanelTopBar(e, System.Drawing.Color.Orange);
-        }
-
-        private void RejectPanel_Paint(object sender, PaintEventArgs e)
-        {
-            DrawPanelTopBar(e, System.Drawing.Color.DarkGray);
         }
 
         private void DrawPanelTopBar(PaintEventArgs e, System.Drawing.Color barColor)

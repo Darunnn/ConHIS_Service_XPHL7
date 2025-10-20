@@ -5,6 +5,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
+using System.Threading;
 
 namespace ConHIS_Service_XPHL7.Services
 {
@@ -41,29 +42,12 @@ namespace ConHIS_Service_XPHL7.Services
             public string Message { get; set; }
         }
 
-        public void RollbackAllPendingUpdates()
-        {
-            lock (_pendingUpdateLock)
-            {
-                _logger.LogInfo($"RollbackAllPendingUpdates: Rolling back {_pendingUpdatedIds.Count} records");
-                foreach (var id in _pendingUpdatedIds)
-                {
-                    _databaseService.RollbackReceiveStatus(id);
-                    _logger.LogInfo($"RollbackAllPendingUpdates: Rolled back ID {id}");
-                }
-                _pendingUpdatedIds.Clear();
-            }
-        }
+      
 
-        public void ClearPendingUpdates()
-        {
-            lock (_pendingUpdateLock)
-            {
-                _pendingUpdatedIds.Clear();
-            }
-        }
-
-        public void ProcessPendingOrders(Action<string> logAction, Action<ProcessResult> onProcessed = null)
+        public void ProcessPendingOrders(
+     Action<string> logAction,
+     Action<ProcessResult> onProcessed = null,
+     CancellationToken cancellationToken = default)  // ⭐ เพิ่ม parameter
         {
             _logger.LogInfo("Start ProcessPendingOrders");
 
@@ -75,26 +59,30 @@ namespace ConHIS_Service_XPHL7.Services
 
             try
             {
+                // ⭐ Check cancel ตั้งแต่ต้น
+                cancellationToken.ThrowIfCancellationRequested();
+
                 var pendingData = _databaseService.GetPendingDispenseData();
                 _logger.LogInfo($"Found {pendingData.Count} pending orders");
                 logAction($"Found {pendingData.Count} pending orders");
 
                 foreach (var data in pendingData)
                 {
+                    // ⭐ Check cancel ที่จุดเริ่มต้นของแต่ละ loop
+                    cancellationToken.ThrowIfCancellationRequested();
+
                     try
                     {
                         _logger.LogInfo($"Processing order {data.PrescId}");
-                        ProcessSingleOrder(data, logAction, onProcessed);
+                        ProcessSingleOrder(data, logAction, onProcessed, cancellationToken);  // ⭐ ส่ง token
                     }
                     catch (OperationCanceledException)
                     {
-                        // ⭐ ถ้า Cancel ให้ throw ออกไป ไม่ update เป็น F
+                        // ⭐ ถ้า Cancel ให้หยุดทันที ไม่ update เป็น F
                         _logger.LogInfo($"Processing cancelled for order {data.PrescId}");
-                        throw;
                     }
                     catch (Exception ex)
                     {
-                        // ⭐ ถ้า Error ปกติให้ update เป็น F แล้วต่อเรื่อย
                         _logger.LogError($"Error processing order {data.PrescId}", ex);
                         logAction($"Error processing order {data.PrescId}: {ex.Message}");
 
@@ -110,8 +98,7 @@ namespace ConHIS_Service_XPHL7.Services
             }
             catch (OperationCanceledException)
             {
-                _logger.LogInfo("ProcessPendingOrders: Cancelled by user or connection lost");
-                throw;
+                _logger.LogInfo("ProcessPendingOrders: Cancelled by user");
             }
             catch (Exception ex)
             {
@@ -120,8 +107,16 @@ namespace ConHIS_Service_XPHL7.Services
             }
         }
 
-        private void ProcessSingleOrder(DrugDispenseipd data, Action<string> logAction, Action<ProcessResult> onProcessed)
+     
+        private void ProcessSingleOrder(
+            DrugDispenseipd data,
+            Action<string> logAction,
+            Action<ProcessResult> onProcessed,
+            CancellationToken cancellationToken)  // ⭐ เพิ่ม parameter
         {
+            // ⭐ Check cancel ตั้งแต่ต้น
+            cancellationToken.ThrowIfCancellationRequested();
+
             // Convert byte array to string
             string hl7String;
             try
@@ -138,10 +133,13 @@ namespace ConHIS_Service_XPHL7.Services
                 hl7String = Encoding.UTF8.GetString(data.Hl7Data);
             }
 
-            // Parse HL7 and raw HL7
+            // Parse HL7
             HL7Message hl7Message = null;
             try
             {
+                // ⭐ Check cancel ก่อน parsing
+                cancellationToken.ThrowIfCancellationRequested();
+
                 hl7Message = _hl7Service.ParseHL7Message(hl7String);
                 var orderNo = hl7Message?.CommonOrder?.PlacerOrderNumber;
                 _logger.LogInfo($"HL7 raw data saved to hl7_raw/hl7_data_raw_{data.PrescId}.txt");
@@ -149,12 +147,17 @@ namespace ConHIS_Service_XPHL7.Services
                 _logger.LogInfo($"Parsed HL7 message for prescription ID: {data.PrescId}");
                 _logger.LogParsedHL7Data(data.DrugDispenseipdId.ToString(), hl7Message, "hl7_parsed");
             }
+            catch (OperationCanceledException)
+            {
+                // ⭐ ถ้า Cancel ให้หยุดทันที ไม่ update เป็น F
+                _logger.LogInfo($"Processing cancelled during HL7 parsing for order {data.PrescId}");
+                return;
+            }
             catch (Exception ex)
             {
                 _logger.LogWarning($"Failed to write HL7 raw data file for PrescId {data.PrescId}: {ex.Message}");
                 var errorMsg = $"Error parsing HL7 for prescription ID: {data.PrescId} - {ex.Message}";
 
-                // ⭐ ถ้าเป็น Error ปกติให้ update เป็น F
                 _databaseService.UpdateReceiveStatus(data.DrugDispenseipdId, 'F');
                 _logger.LogError(errorMsg, ex);
                 logAction(errorMsg);
@@ -169,6 +172,9 @@ namespace ConHIS_Service_XPHL7.Services
                 return;
             }
 
+            // ⭐ Check cancel ก่อน validation
+            cancellationToken.ThrowIfCancellationRequested();
+
             // Check message format
             if (hl7Message == null || hl7Message.MessageHeader == null)
             {
@@ -177,7 +183,6 @@ namespace ConHIS_Service_XPHL7.Services
                 if (hl7Message != null && hl7Message.MessageHeader == null) errorFields.Add("MSH segment");
                 var errorMsg = $"Invalid HL7 format for prescription ID: {data.PrescId}. Error fields: {string.Join(", ", errorFields)}";
 
-                // ⭐ ถ้าเป็น Error ปกติให้ update เป็น F
                 _databaseService.UpdateReceiveStatus(data.DrugDispenseipdId, 'F');
                 _logger.LogError(errorMsg);
                 logAction(errorMsg);
@@ -192,6 +197,9 @@ namespace ConHIS_Service_XPHL7.Services
                 return;
             }
 
+            // ⭐ Check cancel ก่อน determine order type
+            cancellationToken.ThrowIfCancellationRequested();
+
             // Determine order type
             var orderControl = !string.IsNullOrEmpty(data.RecieveOrderType) ? data.RecieveOrderType : hl7Message.CommonOrder?.OrderControl;
             _logger.LogInfo($"OrderControl: {orderControl} for prescription ID: {data.PrescId}");
@@ -201,39 +209,32 @@ namespace ConHIS_Service_XPHL7.Services
 
             try
             {
+                // ⭐ Check cancel ก่อน API call
+                cancellationToken.ThrowIfCancellationRequested();
+
                 if (orderControl == "NW")
                 {
                     apiResponse = ProcessNewOrder(data, hl7Message);
                     success = true;
 
-                    // ⭐ ถ้าสำเร็จให้ update เป็น Y แล้ว track ID
                     _databaseService.UpdateReceiveStatus(data.DrugDispenseipdId, 'Y');
                     lock (_pendingUpdateLock)
                     {
                         _pendingUpdatedIds.Add(data.DrugDispenseipdId);
                     }
-                    _logger.LogInfo($"Updated receive status for prescription ID: {data.PrescId}");
                 }
                 else if (orderControl == "RP")
                 {
                     apiResponse = ProcessReplaceOrder(data, hl7Message);
                     success = true;
 
-                    // ⭐ ถ้าสำเร็จให้ update เป็น Y แล้ว track ID
                     _databaseService.UpdateReceiveStatus(data.DrugDispenseipdId, 'Y');
                     lock (_pendingUpdateLock)
                     {
                         _pendingUpdatedIds.Add(data.DrugDispenseipdId);
                     }
-                    _logger.LogInfo($"Updated receive status for prescription ID: {data.PrescId}");
-                }
-                else
-                {
-                    apiResponse = $"Unknown order control: {orderControl}";
-                    _logger.LogWarning(apiResponse);
                 }
 
-                // ส่งผลลัพธ์กลับไปแสดงบน Grid
                 onProcessed?.Invoke(new ProcessResult
                 {
                     Success = success,
@@ -245,13 +246,11 @@ namespace ConHIS_Service_XPHL7.Services
             }
             catch (OperationCanceledException)
             {
-                // ⭐ ถ้า Cancel ให้ throw ออกไป ไม่ update สถานะ
+                // ⭐ ถ้า Cancel ให้หยุดทันที ไม่ update status
                 _logger.LogInfo($"Processing cancelled for prescription ID: {data.PrescId}");
-                throw;
             }
             catch (Exception ex)
             {
-                // ⭐ ถ้า Error ปกติให้ update เป็น F
                 _logger.LogError($"Error processing order: {data.PrescId}", ex);
                 _databaseService.UpdateReceiveStatus(data.DrugDispenseipdId, 'F');
 
@@ -265,7 +264,6 @@ namespace ConHIS_Service_XPHL7.Services
                 });
             }
         }
-
         private string ProcessNewOrder(DrugDispenseipd data, HL7Message hl7Message)
         {
             try
