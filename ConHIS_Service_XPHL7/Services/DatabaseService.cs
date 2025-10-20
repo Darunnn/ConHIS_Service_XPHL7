@@ -298,5 +298,33 @@ namespace ConHIS_Service_XPHL7.Services
                
             }
         }
+
+        public void RollbackReceiveStatus(int drugDispenseipdId)
+        {
+            _logger.LogInfo($"RollbackReceiveStatus: Start for ID {drugDispenseipdId}");
+            try
+            {
+                using (var conn = new MySqlConnection(_connectionString))
+                {
+                    conn.Open();
+                    _logger.LogInfo("Database connection opened for RollbackReceiveStatus");
+
+                    var sql = @"UPDATE drug_dispense_ipd 
+                       SET recieve_status = 'N', recieve_status_datetime = NULL
+                       WHERE drug_dispense_ipd_id = @id";
+
+                    using (var cmd = new MySqlCommand(sql, conn))
+                    {
+                        cmd.Parameters.AddWithValue("@id", drugDispenseipdId);
+                        cmd.ExecuteNonQuery();
+                        _logger.LogInfo($"RollbackReceiveStatus: Rolled back ID {drugDispenseipdId} to status 'N'");
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError($"Error rolling back receive status for ID {drugDispenseipdId}", ex);
+            }
+        }
     }
 }

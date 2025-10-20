@@ -25,6 +25,8 @@ namespace ConHIS_Service_XPHL7
         private SimpleHL7FileProcessor _hl7FileProcessor;
 
         // Background service components
+        private CancellationTokenSource _backgroundCancellationTokenSource = null;
+
         private Timer _backgroundTimer;
         private bool _isProcessing = false;
         private readonly int _intervalSeconds = 60;
@@ -1087,13 +1089,18 @@ namespace ConHIS_Service_XPHL7
         {
             if (!_isProcessing)
             {
+                // ⭐ Manual check ใช้ CancellationToken ธรรมชาติ (ไม่สามารถ Cancel ได้)
                 await CheckPendingOrders(isManual: true);
             }
         }
 
         private void StartBackgroundService()
         {
-            var intervalMs = _intervalSeconds * 1000;
+            var intervalMs = _intervalSeconds * 500;
+
+            
+            _backgroundCancellationTokenSource = new CancellationTokenSource();
+
             _backgroundTimer = new Timer(BackgroundTimerCallback, null, 0, intervalMs);
 
             startStopButton.Text = "Stop Service";
@@ -1101,17 +1108,44 @@ namespace ConHIS_Service_XPHL7
             _logger.LogInfo($"Background service started with {_intervalSeconds}s interval");
         }
 
-        private void StopBackgroundService()
+        private async void StopBackgroundService()
         {
-            _backgroundTimer?.Dispose();
-            _backgroundTimer = null;
+            _logger.LogInfo("StopBackgroundService: Starting stop process");
+
+            // ⭐ หยุด Timer ก่อน
+            if (_backgroundTimer != null)
+            {
+                _backgroundTimer.Dispose();
+                _backgroundTimer = null;
+                _logger.LogInfo("StopBackgroundService: Timer disposed");
+            }
+
+            // ⭐ ยกเลิก Background Task ที่กำลังทำงาน
+            if (_backgroundCancellationTokenSource != null)
+            {
+                _backgroundCancellationTokenSource.Cancel();
+                _logger.LogInfo("StopBackgroundService: Cancellation requested");
+
+                // รอ 1 วินาที ให้ Task ได้รับการ Cancel
+                await Task.Delay(1000);
+
+                _backgroundCancellationTokenSource.Dispose();
+                _backgroundCancellationTokenSource = null;
+            }
+
+            // ⭐ บังคับให้ _isProcessing = false
+            _isProcessing = false;
+            _logger.LogInfo("StopBackgroundService: _isProcessing set to false");
+
+            // ⭐ โหลดข้อมูลใหม่จาก Database เพื่อแสดงผลที่อัพเดทแล้ว
+            await LoadDataBySelectedDate();
 
             startStopButton.Text = "Start Service";
             UpdateStatus("Service Stopped");
-            _logger.LogInfo("Background service stopped");
+            _logger.LogInfo("StopBackgroundService: Completed");
         }
 
-        private async Task CheckPendingOrders(bool isManual)
+        private async Task CheckPendingOrders(bool isManual, CancellationToken cancellationToken = default)
         {
             if (_isProcessing) return;
 
@@ -1129,8 +1163,22 @@ namespace ConHIS_Service_XPHL7
                 UpdateLastCheck();
                 _logger.LogInfo("Background check: Starting pending orders check");
 
-                var pending = await Task.Run(() => _databaseService.GetPendingDispenseData());
+                // ⭐ ตรวจสอบว่าถูก Cancel หรือไม่
+                if (cancellationToken.IsCancellationRequested)
+                {
+                    _logger.LogInfo("Background check cancelled before fetching pending data");
+                    return;
+                }
+
+                var pending = await Task.Run(() => _databaseService.GetPendingDispenseData(), cancellationToken);
                 _logger.LogInfo($"Background check: Found {pending.Count} pending orders");
+
+                // ⭐ ตรวจสอบอีกครั้งก่อนแสดงข้อมูล
+                if (cancellationToken.IsCancellationRequested)
+                {
+                    _logger.LogInfo("Background check cancelled after fetching pending data");
+                    return;
+                }
 
                 this.Invoke(new Action(() =>
                 {
@@ -1193,7 +1241,7 @@ namespace ConHIS_Service_XPHL7
                                 );
                             }
                         );
-                    });
+                    }, cancellationToken);
 
                     _logger.LogInfo("Background check: Completed processing pending orders");
 
@@ -1224,6 +1272,14 @@ namespace ConHIS_Service_XPHL7
                     }));
                 }
             }
+            catch (OperationCanceledException)
+            {
+                _logger.LogInfo("Background check: Operation cancelled by user");
+                this.Invoke(new Action(() =>
+                {
+                    UpdateStatus("Service stopped - Current operation cancelled");
+                }));
+            }
             catch (Exception ex)
             {
                 _logger.LogError("Background check error", ex);
@@ -1251,10 +1307,19 @@ namespace ConHIS_Service_XPHL7
 
         private async void BackgroundTimerCallback(object state)
         {
-            if (!_isProcessing)
+            // ⭐ ถ้ากำลังประมวลผลอยู่หรือ Timer ถูก Dispose แล้ว ให้หยุด
+            if (_isProcessing || _backgroundTimer == null)
             {
-                await CheckPendingOrders(isManual: false);
+                return;
             }
+
+            // ⭐ ถ้า CancellationTokenSource ถูก Dispose แล้ว ให้หยุด
+            if (_backgroundCancellationTokenSource == null || _backgroundCancellationTokenSource.Token.CanBeCanceled == false)
+            {
+                return;
+            }
+
+            await CheckPendingOrders(isManual: false, _backgroundCancellationTokenSource.Token);
         }
         #endregion
 
