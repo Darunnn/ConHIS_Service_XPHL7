@@ -876,7 +876,9 @@ namespace ConHIS_Service_XPHL7
                     _filteredDataView.RowFilter = $"[Status] = '{_currentStatusFilter}'";
                 }
 
+                // ⭐ เรียก ApplyRowColors หลังจาก apply filter
                 ApplyRowColors();
+
                 int resultCount = _filteredDataView.Count;
                 string statusInfo = _currentStatusFilter == "All" ? "all statuses" : $"status '{_currentStatusFilter}'";
                 UpdateStatus($"Showing {resultCount} record(s) with {statusInfo}");
@@ -886,10 +888,10 @@ namespace ConHIS_Service_XPHL7
             catch (Exception ex)
             {
                 _logger.LogError("Error applying status filter", ex);
-                
             }
         }
 
+        // ⭐ ปรับปรุง ApplyFilter เพื่อ apply สีหลังจาก filter
         private void ApplyFilter()
         {
             try
@@ -919,6 +921,8 @@ namespace ConHIS_Service_XPHL7
                 _logger.LogInfo($"Expression: {filterExpression}");
 
                 _filteredDataView.RowFilter = filterExpression;
+
+                // ⭐ เรียก ApplyRowColors หลังจาก apply filter
                 ApplyRowColors();
 
                 int resultCount = _filteredDataView.Count;
@@ -943,7 +947,6 @@ namespace ConHIS_Service_XPHL7
             catch (Exception ex)
             {
                 _logger.LogError("Error applying filter", ex);
-               
             }
         }
         #endregion
@@ -1085,6 +1088,13 @@ namespace ConHIS_Service_XPHL7
 
             try
             {
+                // ⭐ Clear DefaultCellStyle สำหรับทุกแถว
+                foreach (DataGridViewRow row in dataGridView.Rows)
+                {
+                    row.DefaultCellStyle.BackColor = dataGridView.DefaultCellStyle.BackColor;
+                }
+
+                // ⭐ วนลูปผ่าน DataGridView rows และอัปเดตสี
                 foreach (DataGridViewRow row in dataGridView.Rows)
                 {
                     if (row.Cells["Status"].Value != null)
@@ -1099,12 +1109,11 @@ namespace ConHIS_Service_XPHL7
                         {
                             row.DefaultCellStyle.BackColor = System.Drawing.Color.LightCoral;
                         }
-                        else
-                        {
-                            row.DefaultCellStyle.BackColor = dataGridView.DefaultCellStyle.BackColor;
-                        }
                     }
                 }
+
+                // ⭐ Refresh DataGridView เพื่อให้สี update ทันที
+                dataGridView.Refresh();
             }
             catch (Exception ex)
             {
