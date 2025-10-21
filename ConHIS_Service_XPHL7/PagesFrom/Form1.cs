@@ -117,7 +117,7 @@ namespace ConHIS_Service_XPHL7
 
 
 
-        // ⭐ แก้ไข UpdateConnectionStatus เพื่อแสดงเวลา
+ 
         private void UpdateConnectionStatus(bool isConnected)
         {
             _isDatabaseConnected = isConnected;
@@ -191,10 +191,15 @@ namespace ConHIS_Service_XPHL7
 
             try
             {
+                string checkTime = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss");
+
                 // ทดสอบการเชื่อมต่อ
                 bool isConnected = await Task.Run(() => _databaseService?.TestConnection() ?? false);
 
-                // อัพเดทสถานะเมื่อมีการเปลี่ยนแปลง
+                // ⭐ Log ทุกครั้งที่เช็ค (ทั้ง connected และ disconnected)
+                _logger?.LogInfo($"[{checkTime}] Connection Check: {(isConnected ? "✓ Connected" : "✗ Disconnected")}");
+
+                // ⭐ อัพเดทหน้าฟอร์มเฉพาะเมื่อสถานะเปลี่ยน
                 if (isConnected != _isDatabaseConnected)
                 {
                     if (isConnected)
@@ -270,30 +275,7 @@ namespace ConHIS_Service_XPHL7
                         }));
                     }
                 }
-                else if (isConnected)
-                {
-                    // ✅ ยังคงเชื่อมต่ออยู่ - อัพเดทเวลาตรวจสอบ
-                    this.Invoke(new Action(() =>
-                    {
-                        string checkTime = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss");
-                        connectionStatusLabel.Text = $"Database: ✓ Connected (Last Checked: {checkTime})";
-                        connectionStatusLabel.ForeColor = System.Drawing.Color.Green;
-                    }));
-                }
-                else
-                {
-                    // ❌ ยังคงขาดการเชื่อมต่ออยู่ - อัพเดทเวลา
-                    this.Invoke(new Action(() =>
-                    {
-                        string checkTime = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss");
-                        string lastConnectedStr = _lastDatabaseConnectionTime.HasValue
-                            ? _lastDatabaseConnectionTime.Value.ToString("yyyy-MM-dd HH:mm:ss")
-                            : "Never";
-
-                        connectionStatusLabel.Text = $"Database: ✗ Disconnected (Checking...) | Last Connected: {lastConnectedStr}";
-                        connectionStatusLabel.ForeColor = System.Drawing.Color.Red;
-                    }));
-                }
+                // ⭐ ไม่อัพเดทหน้าฟอร์มถ้าสถานะไม่เปลี่ยน (แต่ยังคง log)
             }
             catch (Exception ex)
             {
