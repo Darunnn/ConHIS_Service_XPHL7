@@ -136,7 +136,7 @@ namespace ConHIS_Service_XPHL7
                 connectionStatusLabel.Text = $"Database: ✓ Connected (Last Connected: {timeStr})";
                 connectionStatusLabel.ForeColor = System.Drawing.Color.Green;
 
-                _logger?.LogInfo($"✓ Database connected at {timeStr}");
+              
             }
             else
             {
@@ -153,7 +153,7 @@ namespace ConHIS_Service_XPHL7
                 connectionStatusLabel.Text = $"Database: ✗ Disconnected ({disconnectedStr}) | {lastConnectedStr}";
                 connectionStatusLabel.ForeColor = System.Drawing.Color.Red;
 
-                _logger?.LogWarning($"✗ Database disconnected at {_lastDatabaseDisconnectionTime.Value:yyyy-MM-dd HH:mm:ss}");
+              
             }
         }
 
@@ -196,8 +196,8 @@ namespace ConHIS_Service_XPHL7
                 // ทดสอบการเชื่อมต่อ
                 bool isConnected = await Task.Run(() => _databaseService?.TestConnection() ?? false);
 
-                // ⭐ Log ทุกครั้งที่เช็ค (ทั้ง connected และ disconnected)
-                _logger?.LogInfo($"[{checkTime}] Connection Check: {(isConnected ? "✓ Connected" : "✗ Disconnected")}");
+                // ⭐ บันทึก log ทุกครั้งที่เช็ค (ไม่แสดงบน console)
+                _logger?.LogConnectDatabase(isConnected, _lastDatabaseConnectionTime, _lastDatabaseDisconnectionTime);
 
                 // ⭐ อัพเดทหน้าฟอร์มเฉพาะเมื่อสถานะเปลี่ยน
                 if (isConnected != _isDatabaseConnected)
@@ -205,7 +205,7 @@ namespace ConHIS_Service_XPHL7
                     if (isConnected)
                     {
                         // ✅ เชื่อมต่อกลับมาได้
-                        _logger?.LogInfo("✓ Database connection restored");
+                      
 
                         this.Invoke(new Action(async () =>
                         {
@@ -246,7 +246,7 @@ namespace ConHIS_Service_XPHL7
                     else
                     {
                         // ❌ การเชื่อมต่อขาดหาย
-                        _logger?.LogWarning("✗ Database connection lost");
+                       
 
                         this.Invoke(new Action(() =>
                         {

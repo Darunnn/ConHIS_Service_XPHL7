@@ -145,7 +145,6 @@ namespace ConHIS_Service_XPHL7.Utils
             var safeDispenseId = SanitizeFileName(DrugDispenseipdId);
             var safeOrderType = SanitizeFileName(RecieveOrderType);
 
-           // var timestamp = DateTime.Now.ToString("HHmmss");
             var rawLogPath = Path.Combine(rawLogDir, $"hl7_raw_{safeDispenseId}_{safeOrderType}_{safeOrderNo}.txt");
 
             try
@@ -175,7 +174,6 @@ namespace ConHIS_Service_XPHL7.Utils
             // ⭐ ทำความสะอาดชื่อไฟล์
             var safeDispenseId = SanitizeFileName(DrugDispenseipdId);
 
-            //var timestamp = DateTime.Now.ToString("HHmmss");
             var parsedLogPath = Path.Combine(parsedLogDir, $"hl7_parsed_{safeDispenseId}.txt");
 
             try
@@ -188,7 +186,52 @@ namespace ConHIS_Service_XPHL7.Utils
                 Console.WriteLine($"Failed to write HL7 parsed data file for DrugDispenseipdId {DrugDispenseipdId}: {ex}");
             }
         }
+        public void LogConnectDatabase(bool isConnected, DateTime? lastConnectedTime = null, DateTime? lastDisconnectedTime = null, string connectLogFolder = "Connection")
+        {
+            var appFolder = AppDomain.CurrentDomain.BaseDirectory ?? Environment.CurrentDirectory;
+            var connectLogBaseDir = Path.Combine(appFolder, connectLogFolder);
 
+            // 📁 สร้างโฟลเดอร์ตามวันที่ เช่น Connection/2025-10-15
+            var dateFolder = DateTime.Now.ToString("yyyy-MM-dd");
+            var connectLogDir = Path.Combine(connectLogBaseDir, dateFolder);
+            Directory.CreateDirectory(connectLogDir);
+
+            // 🧹 ทำความสะอาดโฟลเดอร์เก่า
+            CleanOldLogFolders(connectLogBaseDir);
+
+            // สร้างชื่อไฟล์ตามวันที่
+            var connectLogPath = Path.Combine(connectLogDir, $"connection_{dateFolder}.txt");
+
+            // สร้าง log message
+            var status = isConnected ? "✓ Connected" : "✗ Disconnected";
+            var timestamp = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss");
+
+            var logEntry = $"[{timestamp}] Database Status: {status}";
+
+            if (isConnected && lastConnectedTime.HasValue)
+            {
+                logEntry += $" | Last Connected: {lastConnectedTime.Value:yyyy-MM-dd HH:mm:ss}";
+            }
+            else if (!isConnected && lastDisconnectedTime.HasValue)
+            {
+                logEntry += $" | Disconnected at: {lastDisconnectedTime.Value:yyyy-MM-dd HH:mm:ss}";
+                if (lastConnectedTime.HasValue)
+                {
+                    logEntry += $" | Last Connected: {lastConnectedTime.Value:yyyy-MM-dd HH:mm:ss}";
+                }
+            }
+
+            logEntry += Environment.NewLine;
+
+            try
+            {
+                File.AppendAllText(connectLogPath, logEntry);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Failed to write connection log: {ex.Message}");
+            }
+        }
         // 🧹 ลบโฟลเดอร์ที่เก่ากว่าจำนวนวันที่กำหนด
         private void CleanOldLogFolders(string baseLogFolder)
         {
@@ -245,6 +288,7 @@ namespace ConHIS_Service_XPHL7.Utils
             CleanOldLogFolders(Path.Combine(appFolder, "hl7_raw"));
             CleanOldLogFolders(Path.Combine(appFolder, "hl7_parsed"));
             CleanOldLogFolders(Path.Combine(appFolder, "logreaderror"));
+            CleanOldLogFolders(Path.Combine(appFolder, "Connection")); // เพิ่ม
 
             // ทำความสะอาดโฟลเดอร์ log หลักด้วย
             CleanOldLogFiles(_logFolder);
@@ -361,5 +405,8 @@ namespace ConHIS_Service_XPHL7.Utils
         {
             LogToFile(message, "WARNING");
         }
+
+        // 🔌 Log การเชื่อมต่อ Database - เก็บในโฟลเดอร์ตามวันที่
+       
     }
 }
