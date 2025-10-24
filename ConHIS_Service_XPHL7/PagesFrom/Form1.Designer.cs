@@ -45,9 +45,9 @@
             this.failedLabel = new System.Windows.Forms.Label();
             this.failedCountLabel = new System.Windows.Forms.Label();
             this.pendingPanel = new System.Windows.Forms.Panel();
+            this.rejectPanel = new System.Windows.Forms.Panel();
             this.pendingLabel = new System.Windows.Forms.Label();
             this.pendingCountLabel = new System.Windows.Forms.Label();
-            this.rejectPanel = new System.Windows.Forms.Panel();
             this.rejectLabel = new System.Windows.Forms.Label();
             this.rejectCountLabel = new System.Windows.Forms.Label();
             ((System.ComponentModel.ISupportInitialize)(this.dataGridView)).BeginInit();
@@ -57,8 +57,6 @@
             this.totalPanel.SuspendLayout();
             this.successPanel.SuspendLayout();
             this.failedPanel.SuspendLayout();
-            this.pendingPanel.SuspendLayout();
-            this.rejectPanel.SuspendLayout();
             this.SuspendLayout();
             // 
             // statusLabel
@@ -82,15 +80,15 @@
             this.lastCheckLabel.Text = "Last Check: -";
             // 
             // connectionStatusLabel
-            //
+            // 
             this.connectionStatusLabel.AutoSize = true;
+            this.connectionStatusLabel.ForeColor = System.Drawing.Color.Gray;
             this.connectionStatusLabel.Location = new System.Drawing.Point(15, 52);
             this.connectionStatusLabel.Name = "connectionStatusLabel";
-            this.connectionStatusLabel.Size = new System.Drawing.Size(350, 13); // เพิ่มความกว้าง
+            this.connectionStatusLabel.Size = new System.Drawing.Size(122, 13);
             this.connectionStatusLabel.TabIndex = 2;
             this.connectionStatusLabel.Text = "Database: Connecting...";
-            this.connectionStatusLabel.ForeColor = System.Drawing.Color.Gray;
-            //
+            // 
             // startStopButton
             // 
             this.startStopButton.Location = new System.Drawing.Point(15, 18);
@@ -113,30 +111,26 @@
             this.manualCheckButton.UseVisualStyleBackColor = true;
             this.manualCheckButton.Click += new System.EventHandler(this.ManualCheckButton_Click);
             // 
-            // testHL7Button
-            // 
-            this.testHL7Button.Location = new System.Drawing.Point(205, 18);
-            this.testHL7Button.Margin = new System.Windows.Forms.Padding(2);
-            this.testHL7Button.Name = "testHL7Button";
-            this.testHL7Button.Size = new System.Drawing.Size(90, 32);
-            this.testHL7Button.TabIndex = 5;
-            this.testHL7Button.Text = "Test HL7 File";
-            this.testHL7Button.UseVisualStyleBackColor = true;
-            this.testHL7Button.Click += new System.EventHandler(this.TestHL7Button_Click);
-            // 
-            // exportButton
-            // 
-            this.exportButton.Location = new System.Drawing.Point(299, 18);
-            this.exportButton.Margin = new System.Windows.Forms.Padding(2);
-            this.exportButton.Name = "exportButton";
-            this.exportButton.Size = new System.Drawing.Size(90, 32);
-            this.exportButton.TabIndex = 7;
-            this.exportButton.Text = "Export to CSV";
-            this.exportButton.UseVisualStyleBackColor = true;
-            this.exportButton.Click += new System.EventHandler(this.ExportButton_Click);
-            // 
+            //// testHL7Button
+            //// 
+            //this.testHL7Button.Location = new System.Drawing.Point(205, 18);
+            //this.testHL7Button.Margin = new System.Windows.Forms.Padding(2);
+            //this.testHL7Button.Name = "testHL7Button";
+            //this.testHL7Button.Size = new System.Drawing.Size(90, 32);
+            //this.testHL7Button.TabIndex = 5;
+            //this.testHL7Button.Text = "Test HL7 File";
+            //this.testHL7Button.UseVisualStyleBackColor = true;
+            //this.testHL7Button.Click += new System.EventHandler(this.TestHL7Button_Click);
+            //// 
+            //// exportButton
+            //// 
+            //this.exportButton.Location = new System.Drawing.Point(0, 0);
+            //this.exportButton.Name = "exportButton";
+            //this.exportButton.Size = new System.Drawing.Size(75, 23);
+            //this.exportButton.TabIndex = 4;
+            //// 
             // settingsButton
-            
+            // 
             this.settingsButton.Location = new System.Drawing.Point(393, 18);
             this.settingsButton.Margin = new System.Windows.Forms.Padding(2);
             this.settingsButton.Name = "settingsButton";
@@ -145,13 +139,13 @@
             this.settingsButton.Text = "⚙️ Settings";
             this.settingsButton.UseVisualStyleBackColor = true;
             this.settingsButton.Click += new System.EventHandler(this.SettingsButton_Click);
-            //
+            // 
             // dataGridView
             // 
             this.dataGridView.AllowUserToAddRows = false;
             this.dataGridView.AllowUserToDeleteRows = false;
-            this.dataGridView.Anchor = ((System.Windows.Forms.AnchorStyles)((((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Bottom)
-            | System.Windows.Forms.AnchorStyles.Left)
+            this.dataGridView.Anchor = ((System.Windows.Forms.AnchorStyles)((((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Bottom) 
+            | System.Windows.Forms.AnchorStyles.Left) 
             | System.Windows.Forms.AnchorStyles.Right)));
             this.dataGridView.ColumnHeadersHeightSizeMode = System.Windows.Forms.DataGridViewColumnHeadersHeightSizeMode.AutoSize;
             this.dataGridView.Location = new System.Drawing.Point(15, 340);
@@ -166,12 +160,12 @@
             // 
             // groupBox1
             // 
-            this.groupBox1.Anchor = ((System.Windows.Forms.AnchorStyles)(((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Left)
+            this.groupBox1.Anchor = ((System.Windows.Forms.AnchorStyles)(((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Left) 
             | System.Windows.Forms.AnchorStyles.Right)));
             this.groupBox1.Controls.Add(this.startStopButton);
-            this.groupBox1.Controls.Add(this.exportButton);
+           // this.groupBox1.Controls.Add(this.exportButton);
             this.groupBox1.Controls.Add(this.manualCheckButton);
-            this.groupBox1.Controls.Add(this.testHL7Button);
+           // this.groupBox1.Controls.Add(this.testHL7Button);
             this.groupBox1.Controls.Add(this.settingsButton);
             this.groupBox1.Location = new System.Drawing.Point(15, 75);
             this.groupBox1.Name = "groupBox1";
@@ -182,7 +176,7 @@
             // 
             // groupBox2
             // 
-            this.groupBox2.Anchor = ((System.Windows.Forms.AnchorStyles)(((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Left)
+            this.groupBox2.Anchor = ((System.Windows.Forms.AnchorStyles)(((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Left) 
             | System.Windows.Forms.AnchorStyles.Right)));
             this.groupBox2.Controls.Add(this.dateLabel);
             this.groupBox2.Controls.Add(this.dateTimePicker);
@@ -254,13 +248,13 @@
             // 
             // groupBox3
             // 
-            this.groupBox3.Anchor = ((System.Windows.Forms.AnchorStyles)(((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Left)
+            this.groupBox3.Anchor = ((System.Windows.Forms.AnchorStyles)(((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Left) 
             | System.Windows.Forms.AnchorStyles.Right)));
             this.groupBox3.Controls.Add(this.totalPanel);
             this.groupBox3.Controls.Add(this.successPanel);
             this.groupBox3.Controls.Add(this.failedPanel);
-            this.groupBox3.Controls.Add(this.pendingPanel);
-            this.groupBox3.Controls.Add(this.rejectPanel);
+           // this.groupBox3.Controls.Add(this.pendingPanel);
+           // this.groupBox3.Controls.Add(this.rejectPanel);
             this.groupBox3.Location = new System.Drawing.Point(15, 210);
             this.groupBox3.Name = "groupBox3";
             this.groupBox3.Size = new System.Drawing.Size(1170, 90);
@@ -370,75 +364,49 @@
             this.failedCountLabel.Text = "0";
             this.failedCountLabel.TextAlign = System.Drawing.ContentAlignment.MiddleLeft;
             // 
-            // pendingPanel
-            // 
-            this.pendingPanel.BackColor = System.Drawing.Color.White;
-            this.pendingPanel.BorderStyle = System.Windows.Forms.BorderStyle.FixedSingle;
-            this.pendingPanel.Controls.Add(this.pendingLabel);
-            this.pendingPanel.Controls.Add(this.pendingCountLabel);
-            this.pendingPanel.Cursor = System.Windows.Forms.Cursors.Hand;
-            this.pendingPanel.Location = new System.Drawing.Point(695, 20);
-            this.pendingPanel.Name = "pendingPanel";
-            this.pendingPanel.Size = new System.Drawing.Size(220, 55);
-            this.pendingPanel.TabIndex = 3;
-            this.pendingPanel.Click += new System.EventHandler(this.PendingPanel_Click);
-            // 
-            // pendingLabel
-            // 
-            this.pendingLabel.Font = new System.Drawing.Font("Tahoma", 7.5F);
-            this.pendingLabel.ForeColor = System.Drawing.Color.Gray;
-            this.pendingLabel.Location = new System.Drawing.Point(5, 8);
-            this.pendingLabel.Name = "pendingLabel";
-            this.pendingLabel.Size = new System.Drawing.Size(145, 15);
-            this.pendingLabel.TabIndex = 0;
-            this.pendingLabel.Text = "จำนวนรายการเตือนเน้นยื";
-            // 
-            // pendingCountLabel
-            // 
-            this.pendingCountLabel.Font = new System.Drawing.Font("Tahoma", 18F, System.Drawing.FontStyle.Bold);
-            this.pendingCountLabel.ForeColor = System.Drawing.Color.Orange;
-            this.pendingCountLabel.Location = new System.Drawing.Point(5, 23);
-            this.pendingCountLabel.Name = "pendingCountLabel";
-            this.pendingCountLabel.Size = new System.Drawing.Size(145, 28);
-            this.pendingCountLabel.TabIndex = 1;
-            this.pendingCountLabel.Text = "0";
-            this.pendingCountLabel.TextAlign = System.Drawing.ContentAlignment.MiddleLeft;
-            // 
-            // rejectPanel
-            // 
-            this.rejectPanel.BackColor = System.Drawing.Color.White;
-            this.rejectPanel.BorderStyle = System.Windows.Forms.BorderStyle.FixedSingle;
-            this.rejectPanel.Controls.Add(this.rejectLabel);
-            this.rejectPanel.Controls.Add(this.rejectCountLabel);
-            this.rejectPanel.Cursor = System.Windows.Forms.Cursors.Hand;
-            this.rejectPanel.Location = new System.Drawing.Point(920, 20);
-            this.rejectPanel.Name = "rejectPanel";
-            this.rejectPanel.Size = new System.Drawing.Size(220, 55);
-            this.rejectPanel.TabIndex = 4;
-            this.rejectPanel.Click += new System.EventHandler(this.RejectPanel_Click);
-            // 
-            // rejectLabel
-            // 
-            this.rejectLabel.Font = new System.Drawing.Font("Tahoma", 7.5F);
-            this.rejectLabel.ForeColor = System.Drawing.Color.Gray;
-            this.rejectLabel.Location = new System.Drawing.Point(5, 8);
-            this.rejectLabel.Name = "rejectLabel";
-            this.rejectLabel.Size = new System.Drawing.Size(145, 15);
-            this.rejectLabel.TabIndex = 0;
-            this.rejectLabel.Text = "จำนวนรายการส่งคืนระบบ";
-            // 
-            // rejectCountLabel
-            // 
-            this.rejectCountLabel.Font = new System.Drawing.Font("Tahoma", 18F, System.Drawing.FontStyle.Bold);
-            this.rejectCountLabel.ForeColor = System.Drawing.Color.DarkGray;
-            this.rejectCountLabel.Location = new System.Drawing.Point(5, 23);
-            this.rejectCountLabel.Name = "rejectCountLabel";
-            this.rejectCountLabel.Size = new System.Drawing.Size(145, 28);
-            this.rejectCountLabel.TabIndex = 1;
-            this.rejectCountLabel.Text = "0";
-            this.rejectCountLabel.TextAlign = System.Drawing.ContentAlignment.MiddleLeft;
-            // 
-            // Form1
+            //// pendingPanel
+            //// 
+            //this.pendingPanel.Location = new System.Drawing.Point(0, 0);
+            //this.pendingPanel.Name = "pendingPanel";
+            //this.pendingPanel.Size = new System.Drawing.Size(200, 100);
+            //this.pendingPanel.TabIndex = 3;
+            //// 
+            //// rejectPanel
+            //// 
+            //this.rejectPanel.Location = new System.Drawing.Point(0, 0);
+            //this.rejectPanel.Name = "rejectPanel";
+            //this.rejectPanel.Size = new System.Drawing.Size(200, 100);
+            //this.rejectPanel.TabIndex = 4;
+            //// 
+            //// pendingLabel
+            //// 
+            //this.pendingLabel.Location = new System.Drawing.Point(0, 0);
+            //this.pendingLabel.Name = "pendingLabel";
+            //this.pendingLabel.Size = new System.Drawing.Size(100, 23);
+            //this.pendingLabel.TabIndex = 0;
+            //// 
+            //// pendingCountLabel
+            //// 
+            //this.pendingCountLabel.Location = new System.Drawing.Point(0, 0);
+            //this.pendingCountLabel.Name = "pendingCountLabel";
+            //this.pendingCountLabel.Size = new System.Drawing.Size(100, 23);
+            //this.pendingCountLabel.TabIndex = 0;
+            //// 
+            //// rejectLabel
+            //// 
+            //this.rejectLabel.Location = new System.Drawing.Point(0, 0);
+            //this.rejectLabel.Name = "rejectLabel";
+            //this.rejectLabel.Size = new System.Drawing.Size(100, 23);
+            //this.rejectLabel.TabIndex = 0;
+            //// 
+            //// rejectCountLabel
+            //// 
+            //this.rejectCountLabel.Location = new System.Drawing.Point(0, 0);
+            //this.rejectCountLabel.Name = "rejectCountLabel";
+            //this.rejectCountLabel.Size = new System.Drawing.Size(100, 23);
+            //this.rejectCountLabel.TabIndex = 0;
+            //// 
+            // Form
             // 
             this.AutoScaleDimensions = new System.Drawing.SizeF(6F, 13F);
             this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
@@ -451,7 +419,7 @@
             this.Controls.Add(this.lastCheckLabel);
             this.Controls.Add(this.statusLabel);
             this.MinimumSize = new System.Drawing.Size(900, 600);
-            this.Name = "Form1";
+            this.Name = "Form";
             this.StartPosition = System.Windows.Forms.FormStartPosition.CenterScreen;
             this.Text = "ConHIS Service - Drug Dispense Monitor";
             ((System.ComponentModel.ISupportInitialize)(this.dataGridView)).EndInit();
@@ -462,8 +430,6 @@
             this.totalPanel.ResumeLayout(false);
             this.successPanel.ResumeLayout(false);
             this.failedPanel.ResumeLayout(false);
-            this.pendingPanel.ResumeLayout(false);
-            this.rejectPanel.ResumeLayout(false);
             this.ResumeLayout(false);
             this.PerformLayout();
 

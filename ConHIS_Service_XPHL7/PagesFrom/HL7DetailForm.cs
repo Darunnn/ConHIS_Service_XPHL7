@@ -127,7 +127,7 @@ namespace ConHIS_Service_XPHL7
                 {
                     saveFileDialog.Filter = "Text files (*.txt)|*.txt|Log files (*.log)|*.log|All files (*.*)|*.*";
                     string dateStr = _filterDate.HasValue ? $"_{_filterDate.Value:yyyyMMdd}" : "";
-                    saveFileDialog.FileName = $"OrderLog_{_orderNo}_{_status}{dateStr}_{DateTime.Now:yyyyMMdd_HHmmss}.txt";
+                    saveFileDialog.FileName = $"OrderLog_{_orderNo}_{_status}{dateStr}_{DateTime.Now:yyyyMMdd_HHmmss}.log";
                     saveFileDialog.InitialDirectory = Environment.GetFolderPath(Environment.SpecialFolder.Desktop);
 
                     if (saveFileDialog.ShowDialog() == DialogResult.OK)
@@ -291,7 +291,7 @@ namespace ConHIS_Service_XPHL7
                 int totalLogFiles = 0;
                 if (logsExists)
                 {
-                    var rawFiles = Directory.GetFiles(logDirectory, "hl7_data_raw_*.txt");
+                    var rawFiles = Directory.GetFiles(logDirectory, "hl7_data_raw_*.log");
                     totalLogFiles += rawFiles.Length;
 
                     // Debug: แสดงไฟล์ที่พบ
@@ -311,12 +311,12 @@ namespace ConHIS_Service_XPHL7
                     // ถ้ามีการกรองวันที่ ให้นับเฉพาะไฟล์ที่ตรงกับวันที่
                     if (_filterDate.HasValue)
                     {
-                        string datePattern = $"hl7_error_{_filterDate.Value:yyyy-MM-dd}*.txt";
+                        string datePattern = $"hl7_error_{_filterDate.Value:yyyy-MM-dd}*.log";
                         totalLogFiles += Directory.GetFiles(errorLogDirectory, datePattern).Length;
                     }
                     else
                     {
-                        totalLogFiles += Directory.GetFiles(errorLogDirectory, "hl7_error_*.txt").Length;
+                        totalLogFiles += Directory.GetFiles(errorLogDirectory, "hl7_error_*.log").Length;
                     }
                 }
 
@@ -438,20 +438,20 @@ namespace ConHIS_Service_XPHL7
 
                 var allLogFiles = new List<string>();
 
-                // Get hl7_raw log files (hl7_data_raw_*.txt)
+                // Get hl7_raw log files (hl7_data_raw_*.log)
                 if (!string.IsNullOrEmpty(logDirectory) && Directory.Exists(logDirectory) &&
                     (_status == "Success" || string.IsNullOrEmpty(_status) || (_status != "Failed")))
                 {
-                    var normalLogs = GetLogFilesWithDateFolder(logDirectory, "hl7_data_raw_*.txt", _filterDate);
+                    var normalLogs = GetLogFilesWithDateFolder(logDirectory, "hl7_data_raw_*.log", _filterDate);
                     allLogFiles.AddRange(normalLogs);
                     _logManager.LogInfo($"Found {normalLogs.Count} hl7_raw log files in: {logDirectory}");
                 }
 
-                // Get error log files (hl7_error_*.txt)
+                // Get error log files (hl7_error_*.log)
                 if (!string.IsNullOrEmpty(errorLogDirectory) && Directory.Exists(errorLogDirectory) &&
                     (_status == "Failed" || string.IsNullOrEmpty(_status) || (_status != "Success")))
                 {
-                    var errorLogs = GetLogFilesWithDateFolder(errorLogDirectory, "hl7_error_*.txt", _filterDate);
+                    var errorLogs = GetLogFilesWithDateFolder(errorLogDirectory, "hl7_error_*.log", _filterDate);
                     allLogFiles.AddRange(errorLogs);
                     _logManager.LogInfo($"Found {errorLogs.Count} error log files in: {errorLogDirectory}");
                 }
@@ -486,11 +486,11 @@ namespace ConHIS_Service_XPHL7
                             continue;
                         }
 
-                        // สำหรับไฟล์ hl7_data_raw_*.txt ให้เช็คว่าชื่อไฟล์ตรงกับ Order No หรือไม่
+                        // สำหรับไฟล์ hl7_data_raw_*.log ให้เช็คว่าชื่อไฟล์ตรงกับ Order No หรือไม่
                         if (isRawLog)
                         {
-                            // ดึง Order No จากชื่อไฟล์: hl7_data_raw_681001000302_NW.txt -> 681001000302
-                            var fileNameMatch = Regex.Match(Path.GetFileName(logFile), @"hl7_data_raw_(.+?)(?:_[A-Z]{2})?\.txt");
+                            // ดึง Order No จากชื่อไฟล์: hl7_data_raw_681001000302_NW.log -> 681001000302
+                            var fileNameMatch = Regex.Match(Path.GetFileName(logFile), @"hl7_data_raw_(.+?)(?:_[A-Z]{2})?\.log");
                             if (fileNameMatch.Success)
                             {
                                 string fileOrderInfo = fileNameMatch.Groups[1].Value;

@@ -6,9 +6,9 @@ namespace ConHIS_Service_XPHL7.Configuration
     public class AppConfig
     {
         private const string ConnFolder = "Connection";
-        private const string ConnFile = "connectdatabase.txt";
+        private const string ConnFile = "connectdatabase.ini";
         private const string ConfigFolder = "Config";
-        private const string ConfigFile = "appsettings.txt";
+        private const string ConfigFile = "appsettings.ini";
 
         public string ConnectionString { get; private set; }
         public static string ApiEndpoint { get; private set; }

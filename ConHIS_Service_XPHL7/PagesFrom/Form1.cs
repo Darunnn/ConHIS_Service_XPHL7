@@ -7,6 +7,7 @@ using System;
 using System.Collections.Generic;
 using System.Data;
 using System.IO;
+using System.Runtime.InteropServices;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
@@ -18,15 +19,23 @@ namespace ConHIS_Service_XPHL7
 {
     public partial class Form : System.Windows.Forms.Form
     {
+        #region ตัวแปร
         private AppConfig _appConfig;
         private DatabaseService _databaseService;
         private LogManager _logger;
         private DrugDispenseProcessor _processor;
         private SimpleHL7FileProcessor _hl7FileProcessor;
-       
+
+        // Windows API สำหรับปิด MessageBox อัตโนมัติ
+        [DllImport("user32.dll", SetLastError = true)]
+        static extern IntPtr FindWindow(string lpClassName, string lpWindowName);
+        [DllImport("user32.dll", CharSet = CharSet.Auto)]
+        static extern IntPtr SendMessage(IntPtr hWnd, UInt32 Msg, IntPtr wParam, IntPtr lParam);
+        private const UInt32 WM_CLOSE = 0x0010;
+        private bool _wasServiceRunningBeforeDisconnection = false;
+
         // Background service components
         private CancellationTokenSource _backgroundCancellationTokenSource = null;
-
         private Timer _backgroundTimer;
         private bool _isProcessing = false;
         private readonly int _intervalSeconds = 60;
@@ -39,6 +48,7 @@ namespace ConHIS_Service_XPHL7
         private DateTime? _lastDatabaseConnectionTime = null;
         private bool _hasNotifiedDisconnection = false;
         private bool _hasNotifiedReconnection = false;
+
         // DataTable for DataGridView
         private DataTable _processedDataTable;
         private DataView _filteredDataView;
@@ -47,9 +57,9 @@ namespace ConHIS_Service_XPHL7
         private System.Collections.Generic.Dictionary<int, HL7Message> _rowHL7Data = new System.Collections.Generic.Dictionary<int, HL7Message>();
 
         // Connection status
-
         private bool _isDatabaseConnected = false;
         private bool _isInitializing = false;
+        #endregion
         public Form()
         {
             InitializeComponent();
@@ -115,9 +125,6 @@ namespace ConHIS_Service_XPHL7
             }
         }
 
-
-
- 
         private void UpdateConnectionStatus(bool isConnected)
         {
             _isDatabaseConnected = isConnected;
@@ -162,6 +169,7 @@ namespace ConHIS_Service_XPHL7
         {
             _hasNotifiedDisconnection = false;
             _hasNotifiedReconnection = false;
+            _wasServiceRunningBeforeDisconnection = false;
         }
 
         // ⭐ เริ่ม Connection Monitor
@@ -196,17 +204,15 @@ namespace ConHIS_Service_XPHL7
                 // ทดสอบการเชื่อมต่อ
                 bool isConnected = await Task.Run(() => _databaseService?.TestConnection() ?? false);
 
-                // ⭐ บันทึก log ทุกครั้งที่เช็ค (ไม่แสดงบน console)
+                // บันทึก log
                 _logger?.LogConnectDatabase(isConnected, _lastDatabaseConnectionTime, _lastDatabaseDisconnectionTime);
 
-                // ⭐ อัพเดทหน้าฟอร์มเฉพาะเมื่อสถานะเปลี่ยน
+                // อัพเดทเฉพาะเมื่อสถานะเปลี่ยน
                 if (isConnected != _isDatabaseConnected)
                 {
                     if (isConnected)
                     {
                         // ✅ เชื่อมต่อกลับมาได้
-                      
-
                         this.Invoke(new Action(async () =>
                         {
                             try
@@ -221,18 +227,26 @@ namespace ConHIS_Service_XPHL7
                                 if (!_hasNotifiedReconnection)
                                 {
                                     _hasNotifiedReconnection = true;
-                                    _hasNotifiedDisconnection = false; // Reset flag
+                                    _hasNotifiedDisconnection = false;
 
-                                    // ใช้ BeginInvoke เพื่อไม่บล็อก UI
+                                    // ⭐ เช็คว่า Service กำลังทำงานอยู่ก่อนหน้านี้หรือไม่
+                                    bool shouldResumeService = _wasServiceRunningBeforeDisconnection;
+
+                                    string serviceMessage = shouldResumeService
+                                        ? "\n\n⚡ Service will resume automatically in 3 seconds..."
+                                        : "";
+
+                                    // ⭐ แสดง MessageBox ที่ปิดอัตโนมัติหลัง 3 วินาที
                                     this.BeginInvoke(new Action(() =>
                                     {
-                                        MessageBox.Show(
-                                            $"Database connection has been restored!\n\n" +
-                                            $"Reconnected at: {_lastDatabaseConnectionTime.Value:yyyy-MM-dd HH:mm:ss}\n" +
-                                            $"Data has been refreshed automatically.",
+                                        ShowAutoCloseMessageBox(
+                                            $"✅ Database connection has been restored!\n\n" +
+                                            $"📅 Reconnected at: {_lastDatabaseConnectionTime.Value:yyyy-MM-dd HH:mm:ss}\n" +
+                                            $"🔄 Data has been refreshed automatically." +
+                                            serviceMessage,
                                             "Connection Restored",
-                                            MessageBoxButtons.OK,
-                                            MessageBoxIcon.Information
+                                            3000, // 3 วินาที
+                                            shouldResumeService // ⭐ บอกว่าต้อง Resume Service หรือไม่
                                         );
                                     }));
                                 }
@@ -246,36 +260,49 @@ namespace ConHIS_Service_XPHL7
                     else
                     {
                         // ❌ การเชื่อมต่อขาดหาย
-                       
-
                         this.Invoke(new Action(() =>
                         {
                             UpdateConnectionStatus(false);
+
+                            // ⭐ บันทึกสถานะว่า Service กำลังทำงานอยู่หรือไม่ (เช็คจาก _backgroundTimer)
+                            _wasServiceRunningBeforeDisconnection = (_backgroundTimer != null);
+
+                            // ⭐ ถ้า Service กำลังทำงานอยู่ ให้หยุดชั่วคราว
+                            if (_wasServiceRunningBeforeDisconnection)
+                            {
+                                _logger?.LogWarning("Service is running - Auto-stopping due to database disconnection");
+                                StopBackgroundService(); // ⭐ เรียก StopBackgroundService
+                                _logger?.LogInfo("Service stopped temporarily");
+                            }
+
                             UpdateStatus("✗ Database connection lost - Reconnecting...");
 
                             // แจ้งเตือนครั้งเดียวเมื่อขาดการเชื่อมต่อ
                             if (!_hasNotifiedDisconnection)
                             {
                                 _hasNotifiedDisconnection = true;
-                                _hasNotifiedReconnection = false; // Reset flag
+                                _hasNotifiedReconnection = false;
 
-                                // ใช้ BeginInvoke เพื่อไม่บล็อก UI
+                                string serviceMessage = _wasServiceRunningBeforeDisconnection
+                                    ? "\n\n⏸️ Service has been stopped temporarily and will auto-resume when reconnected."
+                                    : "";
+
                                 this.BeginInvoke(new Action(() =>
                                 {
-                                    MessageBox.Show(
-                                        $"Database connection has been lost!\n\n" +
-                                        $"Lost at: {_lastDatabaseDisconnectionTime.Value:yyyy-MM-dd HH:mm:ss}\n" +
-                                        $"System will attempt to reconnect automatically every {_connectionCheckIntervalSeconds} seconds.",
+                                    ShowAutoCloseMessageBox(
+                                        $"❌ Database connection has been lost!\n\n" +
+                                        $"📅 Lost at: {_lastDatabaseDisconnectionTime.Value:yyyy-MM-dd HH:mm:ss}\n" +
+                                        $"🔄 System will attempt to reconnect every {_connectionCheckIntervalSeconds} seconds." +
+                                        serviceMessage,
                                         "Connection Lost",
-                                        MessageBoxButtons.OK,
-                                        MessageBoxIcon.Warning
+                                        3000, // 3 วินาที
+                                        false // ไม่ Resume Service เมื่อขาดการเชื่อมต่อ
                                     );
                                 }));
                             }
                         }));
                     }
                 }
-                // ⭐ ไม่อัพเดทหน้าฟอร์มถ้าสถานะไม่เปลี่ยน (แต่ยังคง log)
             }
             catch (Exception ex)
             {
@@ -291,9 +318,6 @@ namespace ConHIS_Service_XPHL7
                 _isCheckingConnection = false;
             }
         }
-
-        // ⭐ เพิ่ม Manual Connection Test Button Handler
-
 
         private void InitializePanelPaintEvents()
         {
@@ -562,151 +586,151 @@ namespace ConHIS_Service_XPHL7
         }
 
         #region Test HL7 File
-        private async void TestHL7Button_Click(object sender, EventArgs e)
-        {
-            try
-            {
-                using (var openFileDialog = new OpenFileDialog())
-                {
-                    openFileDialog.Title = "Select HL7 File to Test";
-                    openFileDialog.Filter = "Text files (*.txt)|*.txt|All files (*.*)|*.*";
+        //private async void TestHL7Button_Click(object sender, EventArgs e)
+        //{
+        //    try
+        //    {
+        //        using (var openFileDialog = new OpenFileDialog())
+        //        {
+        //            openFileDialog.Title = "Select HL7 File to Test";
+        //            openFileDialog.Filter = "Text files (*.txt)|*.txt|All files (*.*)|*.*";
 
-                    var searchFolders = new[]
-                    {
-                        Path.Combine(Application.StartupPath, "TestData"),
-                        Application.StartupPath,
-                        Environment.GetFolderPath(Environment.SpecialFolder.Desktop)
-                    };
+        //            var searchFolders = new[]
+        //            {
+        //                Path.Combine(Application.StartupPath, "TestData"),
+        //                Application.StartupPath,
+        //                Environment.GetFolderPath(Environment.SpecialFolder.Desktop)
+        //            };
 
-                    string initialDirectory = Application.StartupPath;
-                    foreach (var folder in searchFolders)
-                    {
-                        if (Directory.Exists(folder))
-                        {
-                            initialDirectory = folder;
-                            break;
-                        }
-                    }
-                    openFileDialog.InitialDirectory = initialDirectory;
+        //            string initialDirectory = Application.StartupPath;
+        //            foreach (var folder in searchFolders)
+        //            {
+        //                if (Directory.Exists(folder))
+        //                {
+        //                    initialDirectory = folder;
+        //                    break;
+        //                }
+        //            }
+        //            openFileDialog.InitialDirectory = initialDirectory;
 
-                    if (openFileDialog.ShowDialog() == DialogResult.OK)
-                    {
-                        var filePath = openFileDialog.FileName;
-                        var fileName = Path.GetFileName(filePath);
+        //            if (openFileDialog.ShowDialog() == DialogResult.OK)
+        //            {
+        //                var filePath = openFileDialog.FileName;
+        //                var fileName = Path.GetFileName(filePath);
 
-                        if (string.IsNullOrEmpty(AppConfig.ApiEndpoint))
-                        {
-                            _logger.LogError("API Endpoint is not configured!");
-                            UpdateStatus("Error: API Endpoint not configured");
-                            return;
-                        }
+        //                if (string.IsNullOrEmpty(AppConfig.ApiEndpoint))
+        //                {
+        //                    _logger.LogError("API Endpoint is not configured!");
+        //                    UpdateStatus("Error: API Endpoint not configured");
+        //                    return;
+        //                }
 
-                        var sendToApi = true;
+        //                var sendToApi = true;
 
-                        UpdateStatus($"Testing HL7 file: {fileName}...");
-                        testHL7Button.Enabled = false;
-                        manualCheckButton.Enabled = false;
-                        startStopButton.Enabled = false;
-                        exportButton.Enabled = false;
+        //                UpdateStatus($"Testing HL7 file: {fileName}...");
+        //                testHL7Button.Enabled = false;
+        //                manualCheckButton.Enabled = false;
+        //                startStopButton.Enabled = false;
+        //                exportButton.Enabled = false;
 
-                        HL7TestResult result = null;
-                        await Task.Run(() =>
-                        {
-                            result = _hl7FileProcessor.ProcessAndSendHL7File(filePath, sendToApi);
-                        });
+        //                HL7TestResult result = null;
+        //                await Task.Run(() =>
+        //                {
+        //                    result = _hl7FileProcessor.ProcessAndSendHL7File(filePath, sendToApi);
+        //                });
 
-                        if (result != null)
-                        {
-                            string TransactionDateTime = result.ParsedMessage?.CommonOrder?.TransactionDateTime != null
-                                    ? ((DateTime)result.ParsedMessage?.CommonOrder?.TransactionDateTime)
-                                        .ToString("yyyy-MM-dd HH:mm:ss")
-                                    : null;
-                            string orderNo = result.ParsedMessage?.CommonOrder?.PlacerOrderNumber ?? "N/A";
-                            string hn = result.ParsedMessage?.PatientIdentification?.PatientIDExternal ??
-                                       result.ParsedMessage?.PatientIdentification?.PatientIDInternal ?? "N/A";
+        //                if (result != null)
+        //                {
+        //                    string TransactionDateTime = result.ParsedMessage?.CommonOrder?.TransactionDateTime != null
+        //                            ? ((DateTime)result.ParsedMessage?.CommonOrder?.TransactionDateTime)
+        //                                .ToString("yyyy-MM-dd HH:mm:ss")
+        //                            : null;
+        //                    string orderNo = result.ParsedMessage?.CommonOrder?.PlacerOrderNumber ?? "N/A";
+        //                    string hn = result.ParsedMessage?.PatientIdentification?.PatientIDExternal ??
+        //                               result.ParsedMessage?.PatientIdentification?.PatientIDInternal ?? "N/A";
 
-                            string patientName = "N/A";
-                            if (result.ParsedMessage?.PatientIdentification?.OfficialName != null)
-                            {
-                                var name = result.ParsedMessage.PatientIdentification.OfficialName;
-                                patientName = $"{name.Prefix ?? ""} {name.FirstName ?? ""} {name.LastName ?? ""}".Trim();
-                                if (string.IsNullOrWhiteSpace(patientName)) patientName = "N/A";
-                            }
+        //                    string patientName = "N/A";
+        //                    if (result.ParsedMessage?.PatientIdentification?.OfficialName != null)
+        //                    {
+        //                        var name = result.ParsedMessage.PatientIdentification.OfficialName;
+        //                        patientName = $"{name.Prefix ?? ""} {name.FirstName ?? ""} {name.LastName ?? ""}".Trim();
+        //                        if (string.IsNullOrWhiteSpace(patientName)) patientName = "N/A";
+        //                    }
 
-                            string FinancialClass = "N/A";
-                            if (result.ParsedMessage?.PatientVisit?.FinancialClass != null)
-                            {
-                                var financialclass = result.ParsedMessage.PatientVisit.FinancialClass;
-                                FinancialClass = $"{financialclass.ID ?? ""} {financialclass.Name ?? ""}".Trim();
-                                if (string.IsNullOrWhiteSpace(FinancialClass)) FinancialClass = "N/A";
-                            }
+        //                    string FinancialClass = "N/A";
+        //                    if (result.ParsedMessage?.PatientVisit?.FinancialClass != null)
+        //                    {
+        //                        var financialclass = result.ParsedMessage.PatientVisit.FinancialClass;
+        //                        FinancialClass = $"{financialclass.ID ?? ""} {financialclass.Name ?? ""}".Trim();
+        //                        if (string.IsNullOrWhiteSpace(FinancialClass)) FinancialClass = "N/A";
+        //                    }
 
-                            string OrderControl = result.ParsedMessage?.CommonOrder?.OrderControl ?? "N/A";
+        //                    string OrderControl = result.ParsedMessage?.CommonOrder?.OrderControl ?? "N/A";
 
-                            AddRowToGrid(
-                                DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss"),
-                                TransactionDateTime,
-                                orderNo,
-                                hn,
-                                patientName,
-                                FinancialClass,
-                                OrderControl,
-                                result.Success ? "Success" : "Failed",
-                                result.ApiResponse ?? result.ErrorMessage ?? "N/A",
-                                result.ParsedMessage
-                            );
+        //                    AddRowToGrid(
+        //                        DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss"),
+        //                        TransactionDateTime,
+        //                        orderNo,
+        //                        hn,
+        //                        patientName,
+        //                        FinancialClass,
+        //                        OrderControl,
+        //                        result.Success ? "Success" : "Failed",
+        //                        result.ApiResponse ?? result.ErrorMessage ?? "N/A",
+        //                        result.ParsedMessage
+        //                    );
 
-                            UpdateStatus(result.Success ? $"HL7 test completed - {fileName}" : $"HL7 test failed - {fileName}");
-                        }
-                        else
-                        {
-                            UpdateStatus("HL7 test failed - Check log for details");
-                        }
-                    }
-                }
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError("HL7 file test error", ex);
-                UpdateStatus($"HL7 test error: {ex.Message}");
-            }
-            finally
-            {
-                testHL7Button.Enabled = true;
-                manualCheckButton.Enabled = true;
-                startStopButton.Enabled = true;
-                exportButton.Enabled = true;
-            }
-        }
+        //                    UpdateStatus(result.Success ? $"HL7 test completed - {fileName}" : $"HL7 test failed - {fileName}");
+        //                }
+        //                else
+        //                {
+        //                    UpdateStatus("HL7 test failed - Check log for details");
+        //                }
+        //            }
+        //        }
+        //    }
+        //    catch (Exception ex)
+        //    {
+        //        _logger.LogError("HL7 file test error", ex);
+        //        UpdateStatus($"HL7 test error: {ex.Message}");
+        //    }
+        //    finally
+        //    {
+        //        testHL7Button.Enabled = true;
+        //        manualCheckButton.Enabled = true;
+        //        startStopButton.Enabled = true;
+        //        exportButton.Enabled = true;
+        //    }
+        //}
         #endregion
 
         #region Export
-        private void ExportButton_Click(object sender, EventArgs e)
-        {
+        //private void ExportButton_Click(object sender, EventArgs e)
+        //{
           
 
-            try
-            {
-                using (var saveFileDialog = new SaveFileDialog())
-                {
-                    saveFileDialog.Filter = "CSV files (*.csv)|*.csv|All files (*.*)|*.*";
-                    saveFileDialog.FileName = $"DrugDispense_{DateTime.Now:yyyyMMdd_HHmmss}.csv";
-                    saveFileDialog.InitialDirectory = Environment.GetFolderPath(Environment.SpecialFolder.Desktop);
+        //    try
+        //    {
+        //        using (var saveFileDialog = new SaveFileDialog())
+        //        {
+        //            saveFileDialog.Filter = "CSV files (*.csv)|*.csv|All files (*.*)|*.*";
+        //            saveFileDialog.FileName = $"DrugDispense_{DateTime.Now:yyyyMMdd_HHmmss}.csv";
+        //            saveFileDialog.InitialDirectory = Environment.GetFolderPath(Environment.SpecialFolder.Desktop);
 
-                    if (saveFileDialog.ShowDialog() == DialogResult.OK)
-                    {
-                        ExportToCSV(saveFileDialog.FileName);
+        //            if (saveFileDialog.ShowDialog() == DialogResult.OK)
+        //            {
+        //                ExportToCSV(saveFileDialog.FileName);
                        
-                        _logger.LogInfo($"Data exported to: {saveFileDialog.FileName}");
-                    }
-                }
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError("Export error", ex);
+        //                _logger.LogInfo($"Data exported to: {saveFileDialog.FileName}");
+        //            }
+        //        }
+        //    }
+        //    catch (Exception ex)
+        //    {
+        //        _logger.LogError("Export error", ex);
                 
-            }
-        }
+        //    }
+        //}
 
         private void ExportToCSV(string filePath)
         {
@@ -1430,6 +1454,57 @@ namespace ConHIS_Service_XPHL7
             }
 
             await CheckPendingOrders(isManual: false, _backgroundCancellationTokenSource.Token);
+        }
+
+        private void ShowAutoCloseMessageBox(string message, string title, int timeoutMs, bool shouldResumeService)
+        {
+            System.Threading.Timer timer = null;
+
+            timer = new System.Threading.Timer(async (obj) =>
+            {
+                try
+                {
+                    // ปิด MessageBox อัตโนมัติ
+                    IntPtr hwnd = FindWindow(null, title);
+                    if (hwnd != IntPtr.Zero)
+                    {
+                        SendMessage(hwnd, WM_CLOSE, IntPtr.Zero, IntPtr.Zero);
+                    }
+
+                    // ⭐ ถ้า Service ทำงานอยู่ก่อนหน้านี้ ให้เริ่มใหม่อัตโนมัติ
+                    if (shouldResumeService)
+                    {
+                        await Task.Delay(500); // รอให้ MessageBox ปิดสนิท
+
+                        this.Invoke(new Action(() =>
+                        {
+                            // ตรวจสอบว่า Service ยังไม่ได้เริ่มใหม่
+                            if (_backgroundTimer == null)
+                            {
+                                _logger?.LogInfo("Auto-resuming service after database reconnection...");
+                                StartBackgroundService(); // ⭐ เรียก StartBackgroundService
+                                _logger?.LogInfo("Service auto-resumed successfully");
+                            }
+                        }));
+                    }
+                }
+                catch (Exception ex)
+                {
+                    _logger?.LogError("Error in auto-close MessageBox timer", ex);
+                }
+                finally
+                {
+                    timer?.Dispose();
+                }
+            }, null, timeoutMs, System.Threading.Timeout.Infinite);
+
+            // แสดง MessageBox (จะถูกปิดโดย Timer หรือถ้าผู้ใช้คลิก OK)
+            MessageBox.Show(
+                message,
+                title,
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Information
+            );
         }
         #endregion
 

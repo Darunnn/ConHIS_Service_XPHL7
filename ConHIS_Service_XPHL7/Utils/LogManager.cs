@@ -112,7 +112,7 @@ namespace ConHIS_Service_XPHL7.Utils
 
         public void LogToFile(string message, string logType = "INFO")
         {
-            var logFileName = $"{DateTime.Now:yyyy-MM-dd}.txt";
+            var logFileName = $"{DateTime.Now:yyyy-MM-dd}.log";
             var logPath = Path.Combine(_logFolder, logFileName);
             var logEntry = $"[{DateTime.Now:HH:mm:ss}] [{logType}] {message}{Environment.NewLine}";
 
@@ -145,7 +145,7 @@ namespace ConHIS_Service_XPHL7.Utils
             var safeDispenseId = SanitizeFileName(DrugDispenseipdId);
             var safeOrderType = SanitizeFileName(RecieveOrderType);
 
-            var rawLogPath = Path.Combine(rawLogDir, $"hl7_raw_{safeDispenseId}_{safeOrderType}_{safeOrderNo}.txt");
+            var rawLogPath = Path.Combine(rawLogDir, $"hl7_raw_{safeDispenseId}_{safeOrderType}_{safeOrderNo}.log");
 
             try
             {
@@ -174,7 +174,7 @@ namespace ConHIS_Service_XPHL7.Utils
             // ⭐ ทำความสะอาดชื่อไฟล์
             var safeDispenseId = SanitizeFileName(DrugDispenseipdId);
 
-            var parsedLogPath = Path.Combine(parsedLogDir, $"hl7_parsed_{safeDispenseId}.txt");
+            var parsedLogPath = Path.Combine(parsedLogDir, $"hl7_parsed_{safeDispenseId}.log");
 
             try
             {
@@ -200,7 +200,7 @@ namespace ConHIS_Service_XPHL7.Utils
             CleanOldLogFolders(connectLogBaseDir);
 
             // สร้างชื่อไฟล์ตามวันที่
-            var connectLogPath = Path.Combine(connectLogDir, $"connection_{dateFolder}.txt");
+            var connectLogPath = Path.Combine(connectLogDir, $"connection_{dateFolder}.log");
 
             // สร้าง log message
             var status = isConnected ? "✓ Connected" : "✗ Disconnected";
@@ -306,7 +306,7 @@ namespace ConHIS_Service_XPHL7.Utils
                     return;
 
                 var cutoffDate = DateTime.Now.AddDays(-_logRetentionDays);
-                var files = Directory.GetFiles(logFolder, "*.txt");
+                var files = Directory.GetFiles(logFolder, "*.log");
 
                 foreach (var file in files)
                 {
@@ -372,7 +372,7 @@ namespace ConHIS_Service_XPHL7.Utils
             CleanOldLogFolders(errorLogBaseDir);
 
             var safeDispenseId = SanitizeFileName(DrugDispenseipdId);
-            var errorLogPath = Path.Combine(errorLogDir, $"hl7_error_{safeDispenseId}.txt");
+            var errorLogPath = Path.Combine(errorLogDir, $"hl7_error_{safeDispenseId}.log");
             var logEntry = $"[{DateTime.Now:yyyy-MM-dd HH:mm:ss}] {errorMessage}{Environment.NewLine}";
 
             try
