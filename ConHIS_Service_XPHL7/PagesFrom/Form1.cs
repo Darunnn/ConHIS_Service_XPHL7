@@ -25,7 +25,8 @@ namespace ConHIS_Service_XPHL7
         private LogManager _logger;
         private DrugDispenseProcessor _processor;
         private SimpleHL7FileProcessor _hl7FileProcessor;
-
+        private DateTime? _lastFoundTime = null;
+        private DateTime? _lastSuccessTime = null;
         // Windows API สำหรับปิด MessageBox อัตโนมัติ
         [DllImport("user32.dll", SetLastError = true)]
         static extern IntPtr FindWindow(string lpClassName, string lpWindowName);
@@ -106,14 +107,14 @@ namespace ConHIS_Service_XPHL7
             {
                 if (dataGridView.Columns.Count >= 9)
                 {
-                    dataGridView.Columns["Time Check"].Width = 150;
-                    dataGridView.Columns["Transaction DateTime"].Width = 150;
-                    dataGridView.Columns["Order No"].Width = 100;
-                    dataGridView.Columns["HN"].Width = 80;
-                    dataGridView.Columns["Patient Name"].Width = 150;
-                    dataGridView.Columns["FinancialClass"].Width = 150;
-                    dataGridView.Columns["OrderControl"].Width = 80;
-                    dataGridView.Columns["Status"].Width = 100;
+                    dataGridView.Columns["Time Check"].Width = 165;
+                    dataGridView.Columns["Transaction DateTime"].Width = 165;
+                    dataGridView.Columns["Order No"].Width = 110;
+                    dataGridView.Columns["HN"].Width = 90;
+                    dataGridView.Columns["Patient Name"].Width = 165;
+                    dataGridView.Columns["FinancialClass"].Width = 165;
+                    dataGridView.Columns["OrderControl"].Width = 90;
+                    dataGridView.Columns["Status"].Width = 110;
 
                     dataGridView.Columns["API Response"].Visible = false;
                     AddViewButtonColumn();
@@ -124,45 +125,7 @@ namespace ConHIS_Service_XPHL7
                 _logger?.LogError("Error setting column widths", ex);
             }
         }
-
-        private void UpdateConnectionStatus(bool isConnected)
-        {
-            _isDatabaseConnected = isConnected;
-
-            if (connectionStatusLabel.InvokeRequired)
-            {
-                connectionStatusLabel.Invoke(new Action(() => UpdateConnectionStatus(isConnected)));
-                return;
-            }
-
-            if (isConnected)
-            {
-                _lastDatabaseConnectionTime = DateTime.Now;
-                string timeStr = _lastDatabaseConnectionTime.Value.ToString("yyyy-MM-dd HH:mm:ss");
-
-                connectionStatusLabel.Text = $"Database: ✓ Connected (Last Connected: {timeStr})";
-                connectionStatusLabel.ForeColor = System.Drawing.Color.Green;
-
-              
-            }
-            else
-            {
-                _lastDatabaseDisconnectionTime = DateTime.Now;
-
-                string lastConnectedStr = _lastDatabaseConnectionTime.HasValue
-                    ? $"Last Connected: {_lastDatabaseConnectionTime.Value:yyyy-MM-dd HH:mm:ss}"
-                    : "Never Connected";
-
-                string disconnectedStr = _lastDatabaseDisconnectionTime.HasValue
-                    ? $"Disconnected at: {_lastDatabaseDisconnectionTime.Value:yyyy-MM-dd HH:mm:ss}"
-                    : "";
-
-                connectionStatusLabel.Text = $"Database: ✗ Disconnected ({disconnectedStr}) | {lastConnectedStr}";
-                connectionStatusLabel.ForeColor = System.Drawing.Color.Red;
-
-              
-            }
-        }
+       
 
         // ⭐ เพิ่ม Method สำหรับ Reset Notification Flags
         private void ResetNotificationFlags()
@@ -1297,21 +1260,27 @@ namespace ConHIS_Service_XPHL7
                 UpdateLastCheck();
                 _logger.LogInfo("Background check: Starting pending orders check");
 
-                // ⭐ Check cancel ก่อนดึงข้อมูล
                 cancellationToken.ThrowIfCancellationRequested();
 
                 var pending = await Task.Run(() => _databaseService.GetPendingDispenseData(), cancellationToken);
                 _logger.LogInfo($"Background check: Found {pending.Count} pending orders");
 
-                // ⭐ Check cancel อีกครั้ง
+                // ⭐ อัพเดทเวลาเจอไฟล์
+                if (pending.Count > 0)
+                {
+                    UpdateLastFound(pending.Count);
+                }
+
                 cancellationToken.ThrowIfCancellationRequested();
+
+                int remainingCount = pending.Count;
 
                 this.Invoke(new Action(() =>
                 {
-                    this.Text = $"ConHIS Service - Pending: {pending.Count}";
-                    if (pending.Count > 0)
+                    this.Text = $"ConHIS Service - Pending: {remainingCount}";
+                    if (remainingCount > 0)
                     {
-                        UpdateStatus($"Processing {pending.Count} pending orders...");
+                        UpdateStatus($"Processing {remainingCount} pending orders...");
                     }
                 }));
 
@@ -1326,7 +1295,6 @@ namespace ConHIS_Service_XPHL7
                             },
                             result =>
                             {
-                                // ⭐ Check cancel ระหว่างแสดงผล
                                 if (cancellationToken.IsCancellationRequested)
                                 {
                                     _logger.LogInfo("Processing cancelled by user");
@@ -1334,6 +1302,23 @@ namespace ConHIS_Service_XPHL7
                                 }
 
                                 var hl7Message = result.ParsedMessage;
+
+                                remainingCount--;
+
+                                this.Invoke(new Action(() =>
+                                {
+                                    this.Text = $"ConHIS Service - Pending: {remainingCount}";
+                                    if (remainingCount > 0)
+                                    {
+                                        UpdateStatus($"Processing... {remainingCount} orders remaining");
+                                    }
+                                }));
+
+                                // ⭐ อัพเดทเวลา Success ถ้าส่งสำเร็จ
+                                if (result.Success)
+                                {
+                                    UpdateLastSuccess();
+                                }
 
                                 string orderNo = hl7Message?.CommonOrder?.PlacerOrderNumber ?? "N/A";
                                 string hn = hl7Message?.PatientIdentification?.PatientIDExternal ??
@@ -1373,7 +1358,7 @@ namespace ConHIS_Service_XPHL7
                                     hl7Message
                                 );
                             },
-                            cancellationToken  // ⭐ ส่ง CancellationToken ให้ processor
+                            cancellationToken
                         );
                     }, cancellationToken);
 
@@ -1381,6 +1366,8 @@ namespace ConHIS_Service_XPHL7
 
                     this.Invoke(new Action(() =>
                     {
+                        this.Text = "ConHIS Service - Drug Dispense Monitor";
+
                         if (_backgroundTimer != null)
                         {
                             UpdateStatus($"Service Running - Last processed {pending.Count} orders");
@@ -1395,6 +1382,8 @@ namespace ConHIS_Service_XPHL7
                 {
                     this.Invoke(new Action(() =>
                     {
+                        this.Text = "ConHIS Service - Drug Dispense Monitor";
+
                         if (_backgroundTimer != null)
                         {
                             UpdateStatus("Service Running - No pending orders");
@@ -1411,6 +1400,7 @@ namespace ConHIS_Service_XPHL7
                 _logger.LogInfo("Background check: Operation cancelled by user");
                 this.Invoke(new Action(() =>
                 {
+                    this.Text = "ConHIS Service - Drug Dispense Monitor";
                     UpdateStatus("Service stopped - Current operation cancelled");
                 }));
             }
@@ -1420,6 +1410,7 @@ namespace ConHIS_Service_XPHL7
 
                 this.Invoke(new Action(() =>
                 {
+                    this.Text = "ConHIS Service - Drug Dispense Monitor";
                     UpdateStatus($"Error: {ex.Message}");
                 }));
             }
@@ -1520,7 +1511,6 @@ namespace ConHIS_Service_XPHL7
             statusLabel.Text = $"Status: {status}";
             _logger.LogInfo($"Status: {status}");
         }
-
         private void UpdateLastCheck()
         {
             var now = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss");
@@ -1536,6 +1526,82 @@ namespace ConHIS_Service_XPHL7
 
             lastCheckLabel.Text = $"Last Check: {now}";
         }
+        private void UpdateLastFound(int foundCount)
+        {
+            if (foundCount > 0)
+            {
+                _lastFoundTime = DateTime.Now;
+
+                if (lastFoundLabel.InvokeRequired)
+                {
+                    lastFoundLabel.Invoke(new Action(() =>
+                    {
+                        lastFoundLabel.Text = $"Last Found: {_lastFoundTime.Value:yyyy-MM-dd HH:mm:ss}";
+                        lastFoundLabel.ForeColor = System.Drawing.Color.Blue;
+                    }));
+                    return;
+                }
+
+                lastFoundLabel.Text = $"Last Found: {_lastFoundTime.Value:yyyy-MM-dd HH:mm:ss}";
+                lastFoundLabel.ForeColor = System.Drawing.Color.Blue;
+            }
+        }
+        private void UpdateLastSuccess()
+        {
+            _lastSuccessTime = DateTime.Now;
+
+            if (lastSuccessLabel.InvokeRequired)
+            {
+                lastSuccessLabel.Invoke(new Action(() =>
+                {
+                    lastSuccessLabel.Text = $"Last Success: {_lastSuccessTime.Value:yyyy-MM-dd HH:mm:ss}";
+                    lastSuccessLabel.ForeColor = System.Drawing.Color.Green;
+                }));
+                return;
+            }
+
+            lastSuccessLabel.Text = $"Last Success: {_lastSuccessTime.Value:yyyy-MM-dd HH:mm:ss}";
+            lastSuccessLabel.ForeColor = System.Drawing.Color.Green;
+        }
+        private void UpdateConnectionStatus(bool isConnected)
+        {
+            _isDatabaseConnected = isConnected;
+
+            if (connectionStatusLabel.InvokeRequired)
+            {
+                connectionStatusLabel.Invoke(new Action(() => UpdateConnectionStatus(isConnected)));
+                return;
+            }
+
+            if (isConnected)
+            {
+                _lastDatabaseConnectionTime = DateTime.Now;
+                string timeStr = _lastDatabaseConnectionTime.Value.ToString("yyyy-MM-dd HH:mm:ss");
+
+                connectionStatusLabel.Text = $"Database: ✓ Connected (Last Connected: {timeStr})";
+                connectionStatusLabel.ForeColor = System.Drawing.Color.Green;
+
+
+            }
+            else
+            {
+                _lastDatabaseDisconnectionTime = DateTime.Now;
+
+                string lastConnectedStr = _lastDatabaseConnectionTime.HasValue
+                    ? $"Last Connected: {_lastDatabaseConnectionTime.Value:yyyy-MM-dd HH:mm:ss}"
+                    : "Never Connected";
+
+                string disconnectedStr = _lastDatabaseDisconnectionTime.HasValue
+                    ? $"Disconnected at: {_lastDatabaseDisconnectionTime.Value:yyyy-MM-dd HH:mm:ss}"
+                    : "";
+
+                connectionStatusLabel.Text = $"Database: ✗ Disconnected ({disconnectedStr}) | {lastConnectedStr}";
+                connectionStatusLabel.ForeColor = System.Drawing.Color.Red;
+
+
+            }
+        }
+
 
         private void UpdateStatusSummary()
         {

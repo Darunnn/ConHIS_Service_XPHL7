@@ -50,6 +50,8 @@
             this.pendingCountLabel = new System.Windows.Forms.Label();
             this.rejectLabel = new System.Windows.Forms.Label();
             this.rejectCountLabel = new System.Windows.Forms.Label();
+            this.lastFoundLabel = new System.Windows.Forms.Label();
+            this.lastSuccessLabel = new System.Windows.Forms.Label();
             ((System.ComponentModel.ISupportInitialize)(this.dataGridView)).BeginInit();
             this.groupBox1.SuspendLayout();
             this.groupBox2.SuspendLayout();
@@ -78,12 +80,32 @@
             this.lastCheckLabel.Size = new System.Drawing.Size(70, 13);
             this.lastCheckLabel.TabIndex = 1;
             this.lastCheckLabel.Text = "Last Check: -";
+            //
+            // lastFoundLabel
+            // 
+            this.lastFoundLabel.AutoSize = true;
+            this.lastFoundLabel.Location = new System.Drawing.Point(15, 51);
+            this.lastFoundLabel.Margin = new System.Windows.Forms.Padding(2, 0, 2, 0);
+            this.lastFoundLabel.Name = "lastFoundLabel";
+            this.lastFoundLabel.Size = new System.Drawing.Size(69, 13);
+            this.lastFoundLabel.TabIndex = 12;
+            this.lastFoundLabel.Text = "Last Found: -";
+            // 
+            // lastSuccessLabel
+            // 
+            this.lastSuccessLabel.AutoSize = true;
+            this.lastSuccessLabel.Location = new System.Drawing.Point(15, 71);
+            this.lastSuccessLabel.Margin = new System.Windows.Forms.Padding(2, 0, 2, 0);
+            this.lastSuccessLabel.Name = "lastSuccessLabel";
+            this.lastSuccessLabel.Size = new System.Drawing.Size(80, 13);
+            this.lastSuccessLabel.TabIndex = 13;
+            this.lastSuccessLabel.Text = "Last Success: -";
             // 
             // connectionStatusLabel
             // 
             this.connectionStatusLabel.AutoSize = true;
             this.connectionStatusLabel.ForeColor = System.Drawing.Color.Gray;
-            this.connectionStatusLabel.Location = new System.Drawing.Point(15, 52);
+            this.connectionStatusLabel.Location = new System.Drawing.Point(15, 91);
             this.connectionStatusLabel.Name = "connectionStatusLabel";
             this.connectionStatusLabel.Size = new System.Drawing.Size(122, 13);
             this.connectionStatusLabel.TabIndex = 2;
@@ -111,24 +133,20 @@
             this.manualCheckButton.UseVisualStyleBackColor = true;
             this.manualCheckButton.Click += new System.EventHandler(this.ManualCheckButton_Click);
             // 
-            //// testHL7Button
-            //// 
-            //this.testHL7Button.Location = new System.Drawing.Point(205, 18);
-            //this.testHL7Button.Margin = new System.Windows.Forms.Padding(2);
-            //this.testHL7Button.Name = "testHL7Button";
-            //this.testHL7Button.Size = new System.Drawing.Size(90, 32);
-            //this.testHL7Button.TabIndex = 5;
-            //this.testHL7Button.Text = "Test HL7 File";
-            //this.testHL7Button.UseVisualStyleBackColor = true;
-            //this.testHL7Button.Click += new System.EventHandler(this.TestHL7Button_Click);
-            //// 
-            //// exportButton
-            //// 
-            //this.exportButton.Location = new System.Drawing.Point(0, 0);
-            //this.exportButton.Name = "exportButton";
-            //this.exportButton.Size = new System.Drawing.Size(75, 23);
-            //this.exportButton.TabIndex = 4;
-            //// 
+            // testHL7Button
+            // 
+            this.testHL7Button.Location = new System.Drawing.Point(0, 0);
+            this.testHL7Button.Name = "testHL7Button";
+            this.testHL7Button.Size = new System.Drawing.Size(75, 23);
+            this.testHL7Button.TabIndex = 0;
+            // 
+            // exportButton
+            // 
+            this.exportButton.Location = new System.Drawing.Point(0, 0);
+            this.exportButton.Name = "exportButton";
+            this.exportButton.Size = new System.Drawing.Size(75, 23);
+            this.exportButton.TabIndex = 0;
+            // 
             // settingsButton
             // 
             this.settingsButton.Location = new System.Drawing.Point(393, 18);
@@ -148,14 +166,14 @@
             | System.Windows.Forms.AnchorStyles.Left) 
             | System.Windows.Forms.AnchorStyles.Right)));
             this.dataGridView.ColumnHeadersHeightSizeMode = System.Windows.Forms.DataGridViewColumnHeadersHeightSizeMode.AutoSize;
-            this.dataGridView.Location = new System.Drawing.Point(15, 340);
+            this.dataGridView.Location = new System.Drawing.Point(15, 379);
             this.dataGridView.Name = "dataGridView";
             this.dataGridView.ReadOnly = true;
             this.dataGridView.RowHeadersVisible = false;
             this.dataGridView.RowHeadersWidth = 51;
             this.dataGridView.RowTemplate.Height = 24;
             this.dataGridView.SelectionMode = System.Windows.Forms.DataGridViewSelectionMode.FullRowSelect;
-            this.dataGridView.Size = new System.Drawing.Size(1170, 395);
+            this.dataGridView.Size = new System.Drawing.Size(1170, 335);
             this.dataGridView.TabIndex = 9;
             // 
             // groupBox1
@@ -163,11 +181,9 @@
             this.groupBox1.Anchor = ((System.Windows.Forms.AnchorStyles)(((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Left) 
             | System.Windows.Forms.AnchorStyles.Right)));
             this.groupBox1.Controls.Add(this.startStopButton);
-           // this.groupBox1.Controls.Add(this.exportButton);
             this.groupBox1.Controls.Add(this.manualCheckButton);
-           // this.groupBox1.Controls.Add(this.testHL7Button);
             this.groupBox1.Controls.Add(this.settingsButton);
-            this.groupBox1.Location = new System.Drawing.Point(15, 75);
+            this.groupBox1.Location = new System.Drawing.Point(15, 114);
             this.groupBox1.Name = "groupBox1";
             this.groupBox1.Size = new System.Drawing.Size(1170, 62);
             this.groupBox1.TabIndex = 8;
@@ -184,7 +200,7 @@
             this.groupBox2.Controls.Add(this.searchTextBox);
             this.groupBox2.Controls.Add(this.searchButton);
             this.groupBox2.Controls.Add(this.refreshButton);
-            this.groupBox2.Location = new System.Drawing.Point(15, 145);
+            this.groupBox2.Location = new System.Drawing.Point(15, 184);
             this.groupBox2.Name = "groupBox2";
             this.groupBox2.Size = new System.Drawing.Size(1170, 55);
             this.groupBox2.TabIndex = 10;
@@ -253,9 +269,7 @@
             this.groupBox3.Controls.Add(this.totalPanel);
             this.groupBox3.Controls.Add(this.successPanel);
             this.groupBox3.Controls.Add(this.failedPanel);
-           // this.groupBox3.Controls.Add(this.pendingPanel);
-           // this.groupBox3.Controls.Add(this.rejectPanel);
-            this.groupBox3.Location = new System.Drawing.Point(15, 210);
+            this.groupBox3.Location = new System.Drawing.Point(15, 249);
             this.groupBox3.Name = "groupBox3";
             this.groupBox3.Size = new System.Drawing.Size(1170, 90);
             this.groupBox3.TabIndex = 11;
@@ -364,53 +378,55 @@
             this.failedCountLabel.Text = "0";
             this.failedCountLabel.TextAlign = System.Drawing.ContentAlignment.MiddleLeft;
             // 
-            //// pendingPanel
-            //// 
-            //this.pendingPanel.Location = new System.Drawing.Point(0, 0);
-            //this.pendingPanel.Name = "pendingPanel";
-            //this.pendingPanel.Size = new System.Drawing.Size(200, 100);
-            //this.pendingPanel.TabIndex = 3;
-            //// 
-            //// rejectPanel
-            //// 
-            //this.rejectPanel.Location = new System.Drawing.Point(0, 0);
-            //this.rejectPanel.Name = "rejectPanel";
-            //this.rejectPanel.Size = new System.Drawing.Size(200, 100);
-            //this.rejectPanel.TabIndex = 4;
-            //// 
-            //// pendingLabel
-            //// 
-            //this.pendingLabel.Location = new System.Drawing.Point(0, 0);
-            //this.pendingLabel.Name = "pendingLabel";
-            //this.pendingLabel.Size = new System.Drawing.Size(100, 23);
-            //this.pendingLabel.TabIndex = 0;
-            //// 
-            //// pendingCountLabel
-            //// 
-            //this.pendingCountLabel.Location = new System.Drawing.Point(0, 0);
-            //this.pendingCountLabel.Name = "pendingCountLabel";
-            //this.pendingCountLabel.Size = new System.Drawing.Size(100, 23);
-            //this.pendingCountLabel.TabIndex = 0;
-            //// 
-            //// rejectLabel
-            //// 
-            //this.rejectLabel.Location = new System.Drawing.Point(0, 0);
-            //this.rejectLabel.Name = "rejectLabel";
-            //this.rejectLabel.Size = new System.Drawing.Size(100, 23);
-            //this.rejectLabel.TabIndex = 0;
-            //// 
-            //// rejectCountLabel
-            //// 
-            //this.rejectCountLabel.Location = new System.Drawing.Point(0, 0);
-            //this.rejectCountLabel.Name = "rejectCountLabel";
-            //this.rejectCountLabel.Size = new System.Drawing.Size(100, 23);
-            //this.rejectCountLabel.TabIndex = 0;
-            //// 
+            // pendingPanel
+            // 
+            this.pendingPanel.Location = new System.Drawing.Point(0, 0);
+            this.pendingPanel.Name = "pendingPanel";
+            this.pendingPanel.Size = new System.Drawing.Size(200, 100);
+            this.pendingPanel.TabIndex = 0;
+            // 
+            // rejectPanel
+            // 
+            this.rejectPanel.Location = new System.Drawing.Point(0, 0);
+            this.rejectPanel.Name = "rejectPanel";
+            this.rejectPanel.Size = new System.Drawing.Size(200, 100);
+            this.rejectPanel.TabIndex = 0;
+            // 
+            // pendingLabel
+            // 
+            this.pendingLabel.Location = new System.Drawing.Point(0, 0);
+            this.pendingLabel.Name = "pendingLabel";
+            this.pendingLabel.Size = new System.Drawing.Size(100, 23);
+            this.pendingLabel.TabIndex = 0;
+            // 
+            // pendingCountLabel
+            // 
+            this.pendingCountLabel.Location = new System.Drawing.Point(0, 0);
+            this.pendingCountLabel.Name = "pendingCountLabel";
+            this.pendingCountLabel.Size = new System.Drawing.Size(100, 23);
+            this.pendingCountLabel.TabIndex = 0;
+            // 
+            // rejectLabel
+            // 
+            this.rejectLabel.Location = new System.Drawing.Point(0, 0);
+            this.rejectLabel.Name = "rejectLabel";
+            this.rejectLabel.Size = new System.Drawing.Size(100, 23);
+            this.rejectLabel.TabIndex = 0;
+            // 
+            // rejectCountLabel
+            // 
+            this.rejectCountLabel.Location = new System.Drawing.Point(0, 0);
+            this.rejectCountLabel.Name = "rejectCountLabel";
+            this.rejectCountLabel.Size = new System.Drawing.Size(100, 23);
+            this.rejectCountLabel.TabIndex = 0;
+            // 
             // Form
             // 
             this.AutoScaleDimensions = new System.Drawing.SizeF(6F, 13F);
             this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
             this.ClientSize = new System.Drawing.Size(1200, 750);
+            this.Controls.Add(this.lastFoundLabel);
+            this.Controls.Add(this.lastSuccessLabel);
             this.Controls.Add(this.connectionStatusLabel);
             this.Controls.Add(this.groupBox3);
             this.Controls.Add(this.groupBox2);
@@ -439,6 +455,8 @@
 
         private System.Windows.Forms.Label statusLabel;
         private System.Windows.Forms.Label lastCheckLabel;
+        private System.Windows.Forms.Label lastFoundLabel;
+        private System.Windows.Forms.Label lastSuccessLabel;
         private System.Windows.Forms.Label connectionStatusLabel;
         private System.Windows.Forms.Button startStopButton;
         private System.Windows.Forms.Button manualCheckButton;
