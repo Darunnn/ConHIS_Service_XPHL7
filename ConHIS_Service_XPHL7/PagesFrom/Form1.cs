@@ -434,7 +434,14 @@ namespace ConHIS_Service_XPHL7
 
                         string status = "N/A";
                         if (data.RecieveStatus == 'Y')
+                        {
                             status = "Success";
+                            // ⭐ อัพเดทเวลา Success ล่าสุด
+                            if (!_lastSuccessTime.HasValue || timeCheckDate > _lastSuccessTime.Value)
+                            {
+                                _lastSuccessTime = timeCheckDate;
+                            }
+                        }
                         else if (data.RecieveStatus == 'F')
                             status = "Failed";
                         else if (data.RecieveStatus == 'N')
@@ -1537,13 +1544,11 @@ namespace ConHIS_Service_XPHL7
                     lastFoundLabel.Invoke(new Action(() =>
                     {
                         lastFoundLabel.Text = $"Last Found: {_lastFoundTime.Value:yyyy-MM-dd HH:mm:ss}";
-                        lastFoundLabel.ForeColor = System.Drawing.Color.Blue;
                     }));
                     return;
                 }
 
                 lastFoundLabel.Text = $"Last Found: {_lastFoundTime.Value:yyyy-MM-dd HH:mm:ss}";
-                lastFoundLabel.ForeColor = System.Drawing.Color.Blue;
             }
         }
         private void UpdateLastSuccess()
@@ -1555,13 +1560,10 @@ namespace ConHIS_Service_XPHL7
                 lastSuccessLabel.Invoke(new Action(() =>
                 {
                     lastSuccessLabel.Text = $"Last Success: {_lastSuccessTime.Value:yyyy-MM-dd HH:mm:ss}";
-                    lastSuccessLabel.ForeColor = System.Drawing.Color.Green;
                 }));
                 return;
             }
-
             lastSuccessLabel.Text = $"Last Success: {_lastSuccessTime.Value:yyyy-MM-dd HH:mm:ss}";
-            lastSuccessLabel.ForeColor = System.Drawing.Color.Green;
         }
         private void UpdateConnectionStatus(bool isConnected)
         {
@@ -1650,7 +1652,7 @@ namespace ConHIS_Service_XPHL7
                 _logger?.LogError("Error updating status summary", ex);
             }
         }
-
+        
         private void UpdatePanelStyles(Panel panel, int count, System.Drawing.Color highlightColor)
         {
             if (count > 0)
