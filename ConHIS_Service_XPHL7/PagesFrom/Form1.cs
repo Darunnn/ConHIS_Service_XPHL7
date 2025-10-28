@@ -27,6 +27,7 @@ namespace ConHIS_Service_XPHL7
         private SimpleHL7FileProcessor _hl7FileProcessor;
         private DateTime? _lastFoundTime = null;
         private DateTime? _lastSuccessTime = null;
+        private string _lastSuccessOrderId = null;
         // Windows API สำหรับปิด MessageBox อัตโนมัติ
         [DllImport("user32.dll", SetLastError = true)]
         static extern IntPtr FindWindow(string lpClassName, string lpWindowName);
@@ -440,6 +441,7 @@ namespace ConHIS_Service_XPHL7
                             if (!_lastSuccessTime.HasValue || timeCheckDate > _lastSuccessTime.Value)
                             {
                                 _lastSuccessTime = timeCheckDate;
+                                UpdateLastSuccess(orderNo); // ⭐ เพิ่มบรรทัดนี้
                             }
                         }
                         else if (data.RecieveStatus == 'F')
@@ -1309,7 +1311,7 @@ namespace ConHIS_Service_XPHL7
                                 }
 
                                 var hl7Message = result.ParsedMessage;
-
+                                string orderNo = hl7Message?.CommonOrder?.PlacerOrderNumber ?? "N/A";
                                 remainingCount--;
 
                                 this.Invoke(new Action(() =>
@@ -1324,10 +1326,10 @@ namespace ConHIS_Service_XPHL7
                                 // ⭐ อัพเดทเวลา Success ถ้าส่งสำเร็จ
                                 if (result.Success)
                                 {
-                                    UpdateLastSuccess();
+                                    UpdateLastSuccess(orderNo); // ⭐ เพิ่ม orderNo แทน UpdateLastSuccess();
                                 }
 
-                                string orderNo = hl7Message?.CommonOrder?.PlacerOrderNumber ?? "N/A";
+                                
                                 string hn = hl7Message?.PatientIdentification?.PatientIDExternal ??
                                            hl7Message?.PatientIdentification?.PatientIDInternal ?? "N/A";
 
@@ -1551,19 +1553,29 @@ namespace ConHIS_Service_XPHL7
                 lastFoundLabel.Text = $"Last Found: {_lastFoundTime.Value:yyyy-MM-dd HH:mm:ss}";
             }
         }
-        private void UpdateLastSuccess()
+        private void UpdateLastSuccess(string orderId = null)
         {
             _lastSuccessTime = DateTime.Now;
+
+            if (!string.IsNullOrEmpty(orderId))
+            {
+                _lastSuccessOrderId = orderId;
+            }
+
+            string orderInfo = !string.IsNullOrEmpty(_lastSuccessOrderId)
+                ? $" | Order NO: {_lastSuccessOrderId}"
+                : "";
 
             if (lastSuccessLabel.InvokeRequired)
             {
                 lastSuccessLabel.Invoke(new Action(() =>
                 {
-                    lastSuccessLabel.Text = $"Last Success: {_lastSuccessTime.Value:yyyy-MM-dd HH:mm:ss}";
+                    lastSuccessLabel.Text = $"Last Success: {_lastSuccessTime.Value:yyyy-MM-dd HH:mm:ss}{orderInfo}";
                 }));
                 return;
-            } 
-            lastSuccessLabel.Text = $"Last Success: {_lastSuccessTime.Value:yyyy-MM-dd HH:mm:ss}";
+            }
+
+            lastSuccessLabel.Text = $"Last Success: {_lastSuccessTime.Value:yyyy-MM-dd HH:mm:ss}{orderInfo}";
         }
         private void UpdateConnectionStatus(bool isConnected)
         {
