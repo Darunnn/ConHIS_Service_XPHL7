@@ -32,13 +32,12 @@ namespace ConHIS_Service_XPHL7.Services
             }
             catch (Exception ex)
             {
+              
+                _logger.LogWarning($"Connection test failed: {ex.Message}");
                 return false;
             }
         }
 
-        /// <summary>
-        /// ดึงข้อมูลตามวันที่ที่เลือก (Success & Failed เท่านั้น)
-        /// </summary>
         public List<DrugDispenseipd> GetDispenseDataByDate(DateTime startDate, DateTime endDate)
         {
             var result = new List<DrugDispenseipd>();
@@ -113,9 +112,6 @@ namespace ConHIS_Service_XPHL7.Services
             return result;
         }
 
-        /// <summary>
-        /// ดึงข้อมูลตามวันที่และ Order No / HN
-        /// </summary>
         public List<DrugDispenseipd> GetDispenseDataByDateAndSearch(DateTime date, string orderNoOrHN)
         {
             var result = new List<DrugDispenseipd>();

@@ -1562,7 +1562,7 @@ namespace ConHIS_Service_XPHL7
                     lastSuccessLabel.Text = $"Last Success: {_lastSuccessTime.Value:yyyy-MM-dd HH:mm:ss}";
                 }));
                 return;
-            }
+            } 
             lastSuccessLabel.Text = $"Last Success: {_lastSuccessTime.Value:yyyy-MM-dd HH:mm:ss}";
         }
         private void UpdateConnectionStatus(bool isConnected)
@@ -1603,8 +1603,6 @@ namespace ConHIS_Service_XPHL7
 
             }
         }
-
-
         private void UpdateStatusSummary()
         {
             if (InvokeRequired)
