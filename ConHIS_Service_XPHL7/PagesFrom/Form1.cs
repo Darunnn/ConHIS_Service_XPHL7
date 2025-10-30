@@ -1077,7 +1077,7 @@ namespace ConHIS_Service_XPHL7
 
             try
             {
-                _logger?.LogInfo($"[ApplyRowColors] Starting - Rows.Count = {dataGridView.Rows.Count}");
+               
 
                 // ⭐ หา Status column index
                 int statusColumnIndex = -1;
@@ -1096,7 +1096,7 @@ namespace ConHIS_Service_XPHL7
                     return;
                 }
 
-                _logger?.LogInfo($"[ApplyRowColors] Status column index: {statusColumnIndex}");
+               
 
                 // ⭐ Apply colors based on Status column by index
                 int successCount = 0;
@@ -1110,7 +1110,7 @@ namespace ConHIS_Service_XPHL7
                         {
                             string status = row.Cells[statusColumnIndex].Value.ToString().Trim();
 
-                            _logger?.LogInfo($"[ApplyRowColors] Row {row.Index}: Status = '{status}'");
+                           
 
                             // ⭐ ลบการตั้งค่าเดิม
                             row.DefaultCellStyle.BackColor = System.Drawing.Color.White;
@@ -1120,24 +1120,24 @@ namespace ConHIS_Service_XPHL7
                                 row.DefaultCellStyle.BackColor = System.Drawing.Color.LightGreen;
                                 row.DefaultCellStyle.SelectionBackColor = System.Drawing.Color.Green;
                                 successCount++;
-                                _logger?.LogInfo($"[ApplyRowColors] Row {row.Index}: Applied Success color (LightGreen)");
+                                
                             }
                             else if (status == "Failed")
                             {
                                 row.DefaultCellStyle.BackColor = System.Drawing.Color.LightCoral;
                                 row.DefaultCellStyle.SelectionBackColor = System.Drawing.Color.Red;
                                 failedCount++;
-                                _logger?.LogInfo($"[ApplyRowColors] Row {row.Index}: Applied Failed color (LightCoral)");
+                                
                             }
                             else
                             {
                                 row.DefaultCellStyle.BackColor = System.Drawing.Color.White;
-                                _logger?.LogInfo($"[ApplyRowColors] Row {row.Index}: No color applied (status = '{status}')");
+                               
                             }
                         }
                         else
                         {
-                            _logger?.LogWarning($"[ApplyRowColors] Row {row.Index}: Status cell is null or out of range");
+                           
                         }
                     }
                     catch (Exception ex)
@@ -1146,7 +1146,7 @@ namespace ConHIS_Service_XPHL7
                     }
                 }
 
-                _logger?.LogInfo($"[ApplyRowColors] Completed - Success: {successCount}, Failed: {failedCount}");
+               
 
                 // ⭐ Force refresh
                 dataGridView.Invalidate();
