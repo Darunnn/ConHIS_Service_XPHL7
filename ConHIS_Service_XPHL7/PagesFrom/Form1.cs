@@ -426,7 +426,7 @@ namespace ConHIS_Service_XPHL7
                             // ⭐ เพิ่ม: เช็คว่า _logger ไม่ใช่ null
                             if (_logger == null)
                             {
-                                Console.WriteLine($"⚠️ WARNING: _logger is NULL for record {dispenseId}");
+                                
                             }
                             else
                             {
@@ -444,7 +444,7 @@ namespace ConHIS_Service_XPHL7
                         catch (Exception logEx)
                         {
                             _logger?.LogError($"✗ Failed to save RAW HL7 for {dispenseId}: {logEx.Message}", logEx);
-                            Console.WriteLine($"❌ RAW LOG FAILED for {dispenseId}: {logEx.Message}"); // ⭐ เพิ่ม console output
+                            
                         }
 
                         // ⭐ Step 3: Parse HL7
@@ -480,13 +480,13 @@ namespace ConHIS_Service_XPHL7
                         catch (Exception logEx)
                         {
                             _logger?.LogError($"✗ Failed to save Parsed HL7 for {dispenseId}: {logEx.Message}", logEx);
-                            Console.WriteLine($"❌ PARSED LOG FAILED for {dispenseId}: {logEx.Message}"); // ⭐ เพิ่ม
+                          
                         }
 
                         // ⭐ เพิ่ม: เตือนถ้า RAW ล้มเหลวแต่ Parsed สำเร็จ (ไม่ควรเกิดขึ้น!)
                         if (!rawLogSuccess && parsedLogSuccess)
                         {
-                            Console.WriteLine($"⚠️⚠️⚠️ ANOMALY: Record {dispenseId} - RAW log FAILED but Parsed log SUCCESS!");
+                           
                             _logger?.LogWarning($"⚠️ Anomaly detected: Record {dispenseId} - RAW failed, Parsed succeeded");
                         }
 
@@ -581,15 +581,7 @@ namespace ConHIS_Service_XPHL7
                 _logger.LogInfo($"[LoadDataBySelectedDate] Parsed logs created: {parsedLogSuccessCount}/{dispenseData.Count}");
                 _logger.LogInfo($"[LoadDataBySelectedDate] DataTable.Rows.Count = {_processedDataTable.Rows.Count}");
 
-                // ⭐ เพิ่ม: แสดงบน Console ด้วย
-                Console.WriteLine($"\n{'=',60}");
-                Console.WriteLine($"SUMMARY:");
-                Console.WriteLine($"Total records: {dispenseData.Count}");
-                Console.WriteLine($"Loaded to grid: {loadedCount}");
-                Console.WriteLine($"Skipped: {skippedCount}");
-                Console.WriteLine($"RAW logs created: {rawLogSuccessCount}");
-                Console.WriteLine($"Parsed logs created: {parsedLogSuccessCount}");
-                Console.WriteLine($"{'=',60}\n");
+              
 
                 _currentStatusFilter = "All";
                 _filteredDataView.RowFilter = string.Empty;

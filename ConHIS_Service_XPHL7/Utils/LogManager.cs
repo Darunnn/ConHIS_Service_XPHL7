@@ -47,17 +47,17 @@ namespace ConHIS_Service_XPHL7.Utils
                 {
                     if (days > 0)
                     {
-                        Console.WriteLine($"✅ Loaded LogRetentionDays from App.config: {days} days");
+                       
                         return days;
                     }
                 }
 
-                Console.WriteLine($"⚠️ LogRetentionDays not found in App.config, using default: {defaultValue} days");
+               
                 return defaultValue;
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"❌ Error reading LogRetentionDays from App.config: {ex.Message}");
+                
                 return defaultValue;
             }
         }
@@ -78,8 +78,7 @@ namespace ConHIS_Service_XPHL7.Utils
                 _logRetentionDays = days;
 
                 LogInfo($"LogRetentionDays temporarily updated to: {days} days (for this session only)");
-                Console.WriteLine($"💾 LogRetentionDays updated temporarily: {days} days");
-                Console.WriteLine($"📌 Note: This setting will reset to App.config value when program restarts");
+               
             }
             catch (Exception ex)
             {
@@ -95,7 +94,7 @@ namespace ConHIS_Service_XPHL7.Utils
         {
             try
             {
-                Console.WriteLine("🔄 Reloading LogRetentionDays from App.config...");
+               
 
                 // Refresh config section เพื่อให้ได้ค่าล่าสุด
                 ConfigurationManager.RefreshSection("appSettings");
@@ -122,7 +121,7 @@ namespace ConHIS_Service_XPHL7.Utils
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"Failed to write log to file: {ex}");
+               
             }
         }
 
@@ -153,7 +152,7 @@ namespace ConHIS_Service_XPHL7.Utils
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"Failed to write HL7 raw data file for DrugDispenseipdId {DrugDispenseipdId}: {ex}");
+                
             }
         }
 
@@ -183,7 +182,7 @@ namespace ConHIS_Service_XPHL7.Utils
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"Failed to write HL7 parsed data file for DrugDispenseipdId {DrugDispenseipdId}: {ex}");
+                
             }
         }
         public void LogConnectDatabase(bool isConnected, DateTime? lastConnectedTime = null, DateTime? lastDisconnectedTime = null, string connectLogFolder = "Connection")
@@ -229,7 +228,7 @@ namespace ConHIS_Service_XPHL7.Utils
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"Failed to write connection log: {ex.Message}");
+               
             }
         }
         // 🧹 ลบโฟลเดอร์ที่เก่ากว่าจำนวนวันที่กำหนด
@@ -259,12 +258,12 @@ namespace ConHIS_Service_XPHL7.Utils
                             try
                             {
                                 Directory.Delete(dir, true); // true = ลบทั้งไฟล์ภายใน
-                                Console.WriteLine($"Deleted old log folder: {dir}");
+                                
                                 LogInfo($"Deleted old log folder: {dir}");
                             }
                             catch (Exception ex)
                             {
-                                Console.WriteLine($"Failed to delete folder {dir}: {ex.Message}");
+                                
                             }
                         }
                     }
@@ -272,7 +271,7 @@ namespace ConHIS_Service_XPHL7.Utils
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"Error cleaning old log folders in {baseLogFolder}: {ex.Message}");
+                
             }
         }
 
@@ -282,7 +281,7 @@ namespace ConHIS_Service_XPHL7.Utils
             var appFolder = AppDomain.CurrentDomain.BaseDirectory ?? Environment.CurrentDirectory;
 
             LogInfo($"Starting log cleanup. Retention period: {_logRetentionDays} days");
-            Console.WriteLine($"🧹 Starting log cleanup. Retention period: {_logRetentionDays} days");
+           
 
             // ทำความสะอาดทุกโฟลเดอร์ log
             CleanOldLogFolders(Path.Combine(appFolder, "hl7_raw"));
@@ -293,7 +292,7 @@ namespace ConHIS_Service_XPHL7.Utils
             // ทำความสะอาดโฟลเดอร์ log หลักด้วย
             CleanOldLogFiles(_logFolder);
 
-            Console.WriteLine($"✅ Log cleanup completed. Retention period: {_logRetentionDays} days");
+            
             LogInfo($"Log cleanup completed. Retention period: {_logRetentionDays} days");
         }
 
@@ -323,11 +322,11 @@ namespace ConHIS_Service_XPHL7.Utils
                             try
                             {
                                 File.Delete(file);
-                                Console.WriteLine($"Deleted old log file: {file}");
+                                
                             }
                             catch (Exception ex)
                             {
-                                Console.WriteLine($"Failed to delete file {file}: {ex.Message}");
+                               
                             }
                         }
                     }
@@ -335,7 +334,7 @@ namespace ConHIS_Service_XPHL7.Utils
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"Error cleaning old log files in {logFolder}: {ex.Message}");
+               
             }
         }
 
@@ -381,7 +380,7 @@ namespace ConHIS_Service_XPHL7.Utils
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"Failed to write HL7 read error log for DrugDispenseipdId {DrugDispenseipdId}: {ex}");
+              
             }
         }
 
