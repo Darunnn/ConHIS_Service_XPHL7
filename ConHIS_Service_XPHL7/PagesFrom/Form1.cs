@@ -2,6 +2,7 @@
 using ConHIS_Service_XPHL7.Models;
 using ConHIS_Service_XPHL7.Services;
 using ConHIS_Service_XPHL7.Utils;
+using Mysqlx;
 using Org.BouncyCastle.Utilities.Encoders;
 using System;
 using System.Collections.Generic;
@@ -368,11 +369,27 @@ namespace ConHIS_Service_XPHL7
 
                 var hl7Service = new HL7Service();
                 int loadedCount = 0;
+                int skippedCount = 0;
+                int rawLogSuccessCount = 0;    // ⭐ เพิ่ม: นับจำนวนที่บันทึก RAW สำเร็จ
+                int parsedLogSuccessCount = 0; // ⭐ เพิ่ม: นับจำนวนที่บันทึก Parsed สำเร็จ
 
                 foreach (var data in dispenseData)
                 {
+                    string dispenseId = data.DrugDispenseipdId.ToString();
+
                     try
                     {
+                        // ⭐ เช็คว่ามีข้อมูล Hl7Data หรือไม่
+                        if (data.Hl7Data == null || data.Hl7Data.Length == 0)
+                        {
+                            _logger?.LogWarning($"⚠️ Record {dispenseId} has no HL7 data - Skipped");
+                            skippedCount++;
+                            continue;
+                        }
+
+                        _logger?.LogInfo($"📝 Processing record {dispenseId} with {data.Hl7Data.Length} bytes");
+
+                        // ⭐ Step 1: ถอด encoding จาก byte[] เป็น string
                         string hl7String;
                         try
                         {
@@ -383,13 +400,97 @@ namespace ConHIS_Service_XPHL7
                             if (tisEncoding != null) { hl7String = tisEncoding.GetString(data.Hl7Data); }
                             else { hl7String = Encoding.UTF8.GetString(data.Hl7Data); }
                         }
-                        catch
+                        catch (Exception encEx)
                         {
+                            _logger?.LogWarning($"Encoding fallback to UTF8 for {dispenseId}: {encEx.Message}");
                             hl7String = Encoding.UTF8.GetString(data.Hl7Data);
                         }
 
-                        HL7Message hl7Message = hl7Service.ParseHL7Message(hl7String);
+                        // ⭐ เช็คว่า HL7 string ไม่ว่างเปล่า
+                        if (string.IsNullOrWhiteSpace(hl7String))
+                        {
+                            _logger?.LogWarning($"⚠️ Record {dispenseId} HL7 string is empty after decoding - Skipped");
+                            skippedCount++;
+                            continue;
+                        }
 
+                        string orderType = data.RecieveOrderType ?? "unknown";
+
+                        _logger?.LogInfo($"=== Processing Record {dispenseId} ===");
+                        _logger?.LogInfo($"DispenseId: {dispenseId}, OrderType: {orderType}, HL7 Length: {hl7String.Length} chars");
+
+                        // ⭐ Step 2: บันทึก RAW HL7 ทันที (ก่อน parse และก่อนเช็ค status)
+                        bool rawLogSuccess = false; // ⭐ เพิ่ม: flag เพื่อเช็คว่าบันทึกสำเร็จหรือไม่
+                        try
+                        {
+                            // ⭐ เพิ่ม: เช็คว่า _logger ไม่ใช่ null
+                            if (_logger == null)
+                            {
+                                Console.WriteLine($"⚠️ WARNING: _logger is NULL for record {dispenseId}");
+                            }
+                            else
+                            {
+                                _logger.LogRawHL7Data(
+                                    dispenseId,
+                                    orderType,
+                                    dispenseId,
+                                    hl7String
+                                );
+                                rawLogSuccess = true;
+                                rawLogSuccessCount++;
+                                _logger.LogInfo($"✓ RAW HL7 saved for {dispenseId}");
+                            }
+                        }
+                        catch (Exception logEx)
+                        {
+                            _logger?.LogError($"✗ Failed to save RAW HL7 for {dispenseId}: {logEx.Message}", logEx);
+                            Console.WriteLine($"❌ RAW LOG FAILED for {dispenseId}: {logEx.Message}"); // ⭐ เพิ่ม console output
+                        }
+
+                        // ⭐ Step 3: Parse HL7
+                        HL7Message hl7Message = null;
+                        try
+                        {
+                            hl7Message = hl7Service.ParseHL7Message(hl7String);
+                            _logger?.LogInfo($"✓ HL7 parsed successfully for {dispenseId}");
+                        }
+                        catch (Exception parseEx)
+                        {
+                            _logger?.LogError($"✗ Failed to parse HL7 for {dispenseId}: {parseEx.Message}", parseEx);
+                            _logger?.LogReadError(dispenseId, $"Parse Error: {parseEx.Message}\n{parseEx.StackTrace}");
+                            skippedCount++;
+                            continue;
+                        }
+
+                        // ⭐ Step 4: บันทึก Parsed HL7
+                        bool parsedLogSuccess = false; // ⭐ เพิ่ม: flag
+                        try
+                        {
+                            if (_logger != null)
+                            {
+                                _logger.LogParsedHL7Data(
+                                    dispenseId,
+                                    hl7Message
+                                );
+                                parsedLogSuccess = true;
+                                parsedLogSuccessCount++;
+                                _logger.LogInfo($"✓ Parsed HL7 saved for {dispenseId}");
+                            }
+                        }
+                        catch (Exception logEx)
+                        {
+                            _logger?.LogError($"✗ Failed to save Parsed HL7 for {dispenseId}: {logEx.Message}", logEx);
+                            Console.WriteLine($"❌ PARSED LOG FAILED for {dispenseId}: {logEx.Message}"); // ⭐ เพิ่ม
+                        }
+
+                        // ⭐ เพิ่ม: เตือนถ้า RAW ล้มเหลวแต่ Parsed สำเร็จ (ไม่ควรเกิดขึ้น!)
+                        if (!rawLogSuccess && parsedLogSuccess)
+                        {
+                            Console.WriteLine($"⚠️⚠️⚠️ ANOMALY: Record {dispenseId} - RAW log FAILED but Parsed log SUCCESS!");
+                            _logger?.LogWarning($"⚠️ Anomaly detected: Record {dispenseId} - RAW failed, Parsed succeeded");
+                        }
+
+                        // ⭐ Step 5: ประมวลผลข้อมูลต่อ
                         DateTime timeCheckDate = DateTime.Now;
                         if (data.RecieveStatusDatetime.HasValue && data.RecieveStatusDatetime.Value != DateTime.MinValue)
                         {
@@ -433,6 +534,7 @@ namespace ConHIS_Service_XPHL7
 
                         string orderControl = data.RecieveOrderType ?? hl7Message?.CommonOrder?.OrderControl ?? "N/A";
 
+                        // ⭐ Step 6: ตัดสินใจแสดงบน Grid (แต่ log ไว้แล้วทั้งหมด)
                         string status = "N/A";
                         if (data.RecieveStatus == 'Y')
                         {
@@ -441,25 +543,53 @@ namespace ConHIS_Service_XPHL7
                             if (!_lastSuccessTime.HasValue || timeCheckDate > _lastSuccessTime.Value)
                             {
                                 _lastSuccessTime = timeCheckDate;
-                                UpdateLastSuccess(orderNo); // ⭐ เพิ่มบรรทัดนี้
+                                UpdateLastSuccess(orderNo);
                             }
                         }
                         else if (data.RecieveStatus == 'F')
+                        {
                             status = "Failed";
+                        }
                         else if (data.RecieveStatus == 'N')
+                        {
+                            // ⭐ ข้ามการแสดงผลบน Grid แต่ log ไว้แล้ว
+                            _logger?.LogInfo($"⏭️ Record {dispenseId} has status 'N' - Logged but not displayed");
+                            skippedCount++;
                             continue;
+                        }
 
                         AddRowToGrid(timeCheck, transactionDateTime, orderNo, hn, patientName,
                                    financialClass, orderControl, status, "Database Record", hl7Message);
                         loadedCount++;
+
+                        _logger?.LogInfo($"✓ Record {dispenseId} added to grid successfully");
                     }
                     catch (Exception ex)
                     {
-                        _logger.LogWarning($"Error loading record {data.DrugDispenseipdId}: {ex.Message}");
+                        _logger?.LogError($"❌ Error loading record {dispenseId}: {ex.Message}", ex);
+                        _logger?.LogReadError(
+                            dispenseId,
+                            $"Failed to process record: {ex.Message}\nStackTrace: {ex.StackTrace}"
+                        );
+                        skippedCount++;
                     }
                 }
 
-                _logger.LogInfo($"[LoadDataBySelectedDate] Added {loadedCount} rows to DataTable. DataTable.Rows.Count = {_processedDataTable.Rows.Count}");
+                // ⭐ เพิ่ม: สรุปการบันทึก log
+                _logger.LogInfo($"[LoadDataBySelectedDate] Processed {dispenseData.Count} records: {loadedCount} loaded, {skippedCount} skipped");
+                _logger.LogInfo($"[LoadDataBySelectedDate] RAW logs created: {rawLogSuccessCount}/{dispenseData.Count}");
+                _logger.LogInfo($"[LoadDataBySelectedDate] Parsed logs created: {parsedLogSuccessCount}/{dispenseData.Count}");
+                _logger.LogInfo($"[LoadDataBySelectedDate] DataTable.Rows.Count = {_processedDataTable.Rows.Count}");
+
+                // ⭐ เพิ่ม: แสดงบน Console ด้วย
+                Console.WriteLine($"\n{'=',60}");
+                Console.WriteLine($"SUMMARY:");
+                Console.WriteLine($"Total records: {dispenseData.Count}");
+                Console.WriteLine($"Loaded to grid: {loadedCount}");
+                Console.WriteLine($"Skipped: {skippedCount}");
+                Console.WriteLine($"RAW logs created: {rawLogSuccessCount}");
+                Console.WriteLine($"Parsed logs created: {parsedLogSuccessCount}");
+                Console.WriteLine($"{'=',60}\n");
 
                 _currentStatusFilter = "All";
                 _filteredDataView.RowFilter = string.Empty;
@@ -470,23 +600,27 @@ namespace ConHIS_Service_XPHL7
 
                 if (loadedCount > 0)
                 {
-                    UpdateStatus($"✓ Loaded {loadedCount} records for {selectedDate:yyyy-MM-dd}");
+                    UpdateStatus($"✓ Loaded {loadedCount} records for {selectedDate:yyyy-MM-dd}" +
+                                (skippedCount > 0 ? $" ({skippedCount} skipped)" : "") +
+                                $" | Logs: RAW={rawLogSuccessCount}, Parsed={parsedLogSuccessCount}"); // ⭐ เพิ่มข้อมูล log
                 }
                 else
                 {
-                    UpdateStatus($"✗ No records for {selectedDate:yyyy-MM-dd}");
+                    UpdateStatus($"✗ No records for {selectedDate:yyyy-MM-dd}" +
+                                (skippedCount > 0 ? $" ({skippedCount} skipped)" : ""));
                 }
 
                 _logger.LogInfo($"[LoadDataBySelectedDate] Complete - DataGridView.Rows.Count = {dataGridView.Rows.Count}");
             }
             catch (Exception ex)
             {
-                _logger.LogError("Error loading data by date", ex);
+                _logger?.LogError("Error loading data by date", ex);
                 UpdateStatus($"✗ Error: {ex.Message}");
             }
         }
 
-        // ⭐ แก้ไข Form1_Load เพื่อเปิด Connection Monitor
+
+
         private async void Form1_Load(object sender, EventArgs e)
         {
             _logger.LogInfo("Start Interface");
@@ -1298,77 +1432,80 @@ namespace ConHIS_Service_XPHL7
                     await Task.Run(() =>
                     {
                         _processor.ProcessPendingOrders(
-                            msg =>
-                            {
-                                _logger.LogInfo($"Background processing: {msg}");
-                            },
-                            result =>
-                            {
-                                if (cancellationToken.IsCancellationRequested)
-                                {
-                                    _logger.LogInfo("Processing cancelled by user");
-                                    return;
-                                }
+     msg =>
+     {
+         _logger.LogInfo($"Background processing: {msg}");
+     },
+     result =>
+     {
+         if (cancellationToken.IsCancellationRequested)
+         {
+             _logger.LogInfo("Processing cancelled by user");
+             return;
+         }
 
-                                var hl7Message = result.ParsedMessage;
-                                string orderNo = hl7Message?.CommonOrder?.PlacerOrderNumber ?? "N/A";
-                                remainingCount--;
+         var hl7Message = result.ParsedMessage;
+         string orderNo = hl7Message?.CommonOrder?.PlacerOrderNumber ?? "N/A";
 
-                                this.Invoke(new Action(() =>
-                                {
-                                    this.Text = $"ConHIS Service - Pending: {remainingCount}";
-                                    if (remainingCount > 0)
-                                    {
-                                        UpdateStatus($"Processing... {remainingCount} orders remaining");
-                                    }
-                                }));
+         // ⭐ ลบส่วนนี้ออกไปก่อน (เพราะ result อาจไม่มี DrugDispenseipdId, OrderType, RawHL7String)
 
-                                // ⭐ อัพเดทเวลา Success ถ้าส่งสำเร็จ
-                                if (result.Success)
-                                {
-                                    UpdateLastSuccess(orderNo); // ⭐ เพิ่ม orderNo แทน UpdateLastSuccess();
-                                }
+         remainingCount--;
 
-                                
-                                string hn = hl7Message?.PatientIdentification?.PatientIDExternal ??
-                                           hl7Message?.PatientIdentification?.PatientIDInternal ?? "N/A";
+         this.Invoke(new Action(() =>
+         {
+             this.Text = $"ConHIS Service - Pending: {remainingCount}";
+             if (remainingCount > 0)
+             {
+                 UpdateStatus($"Processing... {remainingCount} orders remaining");
+             }
+         }));
 
-                                string TransactionDateTime = hl7Message?.CommonOrder?.TransactionDateTime != null
-                                    ? ((DateTime)hl7Message.CommonOrder.TransactionDateTime)
-                                        .ToString("yyyy-MM-dd HH:mm:ss")
-                                    : null;
+         // ⭐ อัพเดทเวลา Success ถ้าส่งสำเร็จ
+         if (result.Success)
+         {
+             UpdateLastSuccess(orderNo);
+         }
 
-                                string patientName = "N/A";
-                                if (hl7Message?.PatientIdentification?.OfficialName != null)
-                                {
-                                    var name = hl7Message.PatientIdentification.OfficialName;
-                                    patientName = $"{name.Prefix ?? ""} {name.FirstName ?? ""} {name.LastName ?? ""}".Trim();
-                                }
+         string hn = hl7Message?.PatientIdentification?.PatientIDExternal ??
+                    hl7Message?.PatientIdentification?.PatientIDInternal ?? "N/A";
 
-                                string FinancialClass = "N/A";
-                                if (hl7Message?.PatientVisit?.FinancialClass != null)
-                                {
-                                    var financialclass = hl7Message.PatientVisit.FinancialClass;
-                                    FinancialClass = $"{financialclass.ID ?? ""} {financialclass.Name ?? ""}".Trim();
-                                    if (string.IsNullOrWhiteSpace(FinancialClass)) FinancialClass = "N/A";
-                                }
-                                string OrderControl = hl7Message?.CommonOrder?.OrderControl ?? "N/A";
+         string TransactionDateTime = hl7Message?.CommonOrder?.TransactionDateTime != null
+             ? ((DateTime)hl7Message.CommonOrder.TransactionDateTime)
+                 .ToString("yyyy-MM-dd HH:mm:ss")
+             : null;
 
-                                AddRowToGrid(
-                                    DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss"),
-                                    TransactionDateTime,
-                                    orderNo,
-                                    hn,
-                                    patientName,
-                                    FinancialClass,
-                                    OrderControl,
-                                    result.Success ? "Success" : "Failed",
-                                    result.ApiResponse ?? result.Message ?? "N/A",
-                                    hl7Message
-                                );
-                            },
-                            cancellationToken
-                        );
+         string patientName = "N/A";
+         if (hl7Message?.PatientIdentification?.OfficialName != null)
+         {
+             var name = hl7Message.PatientIdentification.OfficialName;
+             patientName = $"{name.Prefix ?? ""} {name.FirstName ?? ""} {name.LastName ?? ""}".Trim();
+         }
+
+         string FinancialClass = "N/A";
+         if (hl7Message?.PatientVisit?.FinancialClass != null)
+         {
+             var financialclass = hl7Message.PatientVisit.FinancialClass;
+             FinancialClass = $"{financialclass.ID ?? ""} {financialclass.Name ?? ""}".Trim();
+             if (string.IsNullOrWhiteSpace(FinancialClass)) FinancialClass = "N/A";
+         }
+
+         string OrderControl = hl7Message?.CommonOrder?.OrderControl ?? "N/A";
+
+         AddRowToGrid(
+             DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss"),
+             TransactionDateTime,
+             orderNo,
+             hn,
+             patientName,
+             FinancialClass,
+             OrderControl,
+             result.Success ? "Success" : "Failed",
+             result.ApiResponse ?? result.Message ?? "N/A",
+             hl7Message
+         );
+     },
+     cancellationToken
+ );
                     }, cancellationToken);
 
                     _logger.LogInfo("Background check: Completed processing pending orders");
@@ -1482,7 +1619,7 @@ namespace ConHIS_Service_XPHL7
                             if (_backgroundTimer == null)
                             {
                                 _logger?.LogInfo("Auto-resuming service after database reconnection...");
-                                StartBackgroundService(); // ⭐ เรียก StartBackgroundService
+                                StartBackgroundService(); 
                                 _logger?.LogInfo("Service auto-resumed successfully");
                             }
                         }));

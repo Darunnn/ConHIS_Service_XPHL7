@@ -187,9 +187,7 @@ namespace ConHIS_Service_XPHL7.Services
             return result;
         }
 
-        /// <summary>
-        /// ดึงข้อมูลยาที่รอการจัดส่ง (RecieveStatus = 'N') จากฐานข้อมูล
-        /// </summary>
+        
         public List<DrugDispenseipd> GetPendingDispenseData()
         {
             var result = new List<DrugDispenseipd>();
