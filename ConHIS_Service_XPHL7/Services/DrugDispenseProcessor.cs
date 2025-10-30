@@ -143,7 +143,7 @@ namespace ConHIS_Service_XPHL7.Services
                 hl7Message = _hl7Service.ParseHL7Message(hl7String);
                 var orderNo = hl7Message?.CommonOrder?.PlacerOrderNumber;
                 _logger.LogInfo($"HL7 raw data saved to hl7_raw/hl7_data_raw_{data.PrescId}.txt");
-                _logger.LogRawHL7Data(data.DrugDispenseipdId.ToString(), data.RecieveOrderType.ToString(), hl7String, orderNo, "hl7_raw");
+                _logger.LogRawHL7Data(data.DrugDispenseipdId.ToString(), data.RecieveOrderType.ToString(), orderNo , hl7String, "hl7_raw");
                 _logger.LogInfo($"Parsed HL7 message for prescription ID: {data.PrescId}");
                 _logger.LogParsedHL7Data(data.DrugDispenseipdId.ToString(), hl7Message, "hl7_parsed");
             }
@@ -519,7 +519,7 @@ namespace ConHIS_Service_XPHL7.Services
                 })
                 .ToArray();
 
-            return new { data = new object[] { } };
+            return new { data = prescriptions };
         }
     }
 }
