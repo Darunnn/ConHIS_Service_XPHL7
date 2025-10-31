@@ -10,7 +10,7 @@ using MySql.Data.MySqlClient;
 
 namespace ConHIS_Service_XPHL7.PagesFrom
 {
-    public partial class SettingsForm : Form
+    public partial class SettingsForm : System.Windows.Forms.Form
     {
         private const string ConnFolder = "Connection";
         private const string ConnFile = "connectdatabase.ini";

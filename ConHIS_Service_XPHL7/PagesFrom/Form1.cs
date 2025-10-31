@@ -2,8 +2,6 @@
 using ConHIS_Service_XPHL7.Models;
 using ConHIS_Service_XPHL7.Services;
 using ConHIS_Service_XPHL7.Utils;
-using Mysqlx;
-using Org.BouncyCastle.Utilities.Encoders;
 using System;
 using System.Collections.Generic;
 using System.Data;
@@ -13,12 +11,11 @@ using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Forms;
-using static ConHIS_Service_XPHL7.Services.SimpleHL7FileProcessor;
 using Timer = System.Threading.Timer;
 
 namespace ConHIS_Service_XPHL7
 {
-    public partial class Form1 : Form
+    public partial class Form1 : System.Windows.Forms.Form
     {
         #region ตัวแปร
         private AppConfig _appConfig;
@@ -127,7 +124,7 @@ namespace ConHIS_Service_XPHL7
                 _logger?.LogError("Error setting column widths", ex);
             }
         }
-       
+
 
         // ⭐ เพิ่ม Method สำหรับ Reset Notification Flags
         private void ResetNotificationFlags()
@@ -426,7 +423,7 @@ namespace ConHIS_Service_XPHL7
                             // ⭐ เพิ่ม: เช็คว่า _logger ไม่ใช่ null
                             if (_logger == null)
                             {
-                                
+
                             }
                             else
                             {
@@ -444,7 +441,7 @@ namespace ConHIS_Service_XPHL7
                         catch (Exception logEx)
                         {
                             _logger?.LogError($"✗ Failed to save RAW HL7 for {dispenseId}: {logEx.Message}", logEx);
-                            
+
                         }
 
                         // ⭐ Step 3: Parse HL7
@@ -480,13 +477,13 @@ namespace ConHIS_Service_XPHL7
                         catch (Exception logEx)
                         {
                             _logger?.LogError($"✗ Failed to save Parsed HL7 for {dispenseId}: {logEx.Message}", logEx);
-                          
+
                         }
 
                         // ⭐ เพิ่ม: เตือนถ้า RAW ล้มเหลวแต่ Parsed สำเร็จ (ไม่ควรเกิดขึ้น!)
                         if (!rawLogSuccess && parsedLogSuccess)
                         {
-                           
+
                             _logger?.LogWarning($"⚠️ Anomaly detected: Record {dispenseId} - RAW failed, Parsed succeeded");
                         }
 
@@ -581,7 +578,7 @@ namespace ConHIS_Service_XPHL7
                 _logger.LogInfo($"[LoadDataBySelectedDate] Parsed logs created: {parsedLogSuccessCount}/{dispenseData.Count}");
                 _logger.LogInfo($"[LoadDataBySelectedDate] DataTable.Rows.Count = {_processedDataTable.Rows.Count}");
 
-              
+
 
                 _currentStatusFilter = "All";
                 _filteredDataView.RowFilter = string.Empty;
@@ -805,7 +802,7 @@ namespace ConHIS_Service_XPHL7
         #region Export
         //private void ExportButton_Click(object sender, EventArgs e)
         //{
-          
+
 
         //    try
         //    {
@@ -818,7 +815,7 @@ namespace ConHIS_Service_XPHL7
         //            if (saveFileDialog.ShowDialog() == DialogResult.OK)
         //            {
         //                ExportToCSV(saveFileDialog.FileName);
-                       
+
         //                _logger.LogInfo($"Data exported to: {saveFileDialog.FileName}");
         //            }
         //        }
@@ -826,7 +823,7 @@ namespace ConHIS_Service_XPHL7
         //    catch (Exception ex)
         //    {
         //        _logger.LogError("Export error", ex);
-                
+
         //    }
         //}
 
@@ -899,7 +896,7 @@ namespace ConHIS_Service_XPHL7
             catch (Exception ex)
             {
                 _logger.LogError("Error refreshing data", ex);
-                
+
             }
         }
 
@@ -1172,12 +1169,12 @@ namespace ConHIS_Service_XPHL7
                             var detailForm = new HL7DetailForm(hl7Message, filterDate, orderNo, status);
                             detailForm.ShowDialog();
                         }
-                       
+
                     }
                     catch (Exception ex)
                     {
                         _logger.LogError("Error showing HL7 detail", ex);
-                       
+
                     }
                 }
             }
@@ -1203,7 +1200,7 @@ namespace ConHIS_Service_XPHL7
 
             try
             {
-               
+
 
                 // ⭐ หา Status column index
                 int statusColumnIndex = -1;
@@ -1222,7 +1219,7 @@ namespace ConHIS_Service_XPHL7
                     return;
                 }
 
-               
+
 
                 // ⭐ Apply colors based on Status column by index
                 int successCount = 0;
@@ -1236,7 +1233,7 @@ namespace ConHIS_Service_XPHL7
                         {
                             string status = row.Cells[statusColumnIndex].Value.ToString().Trim();
 
-                           
+
 
                             // ⭐ ลบการตั้งค่าเดิม
                             row.DefaultCellStyle.BackColor = System.Drawing.Color.White;
@@ -1246,24 +1243,24 @@ namespace ConHIS_Service_XPHL7
                                 row.DefaultCellStyle.BackColor = System.Drawing.Color.LightGreen;
                                 row.DefaultCellStyle.SelectionBackColor = System.Drawing.Color.Green;
                                 successCount++;
-                                
+
                             }
                             else if (status == "Failed")
                             {
                                 row.DefaultCellStyle.BackColor = System.Drawing.Color.LightCoral;
                                 row.DefaultCellStyle.SelectionBackColor = System.Drawing.Color.Red;
                                 failedCount++;
-                                
+
                             }
                             else
                             {
                                 row.DefaultCellStyle.BackColor = System.Drawing.Color.White;
-                               
+
                             }
                         }
                         else
                         {
-                           
+
                         }
                     }
                     catch (Exception ex)
@@ -1272,7 +1269,7 @@ namespace ConHIS_Service_XPHL7
                     }
                 }
 
-               
+
 
                 // ⭐ Force refresh
                 dataGridView.Invalidate();
@@ -1317,7 +1314,7 @@ namespace ConHIS_Service_XPHL7
         {
             var intervalMs = _intervalSeconds * 500;
 
-            
+
             _backgroundCancellationTokenSource = new CancellationTokenSource();
 
             _backgroundTimer = new Timer(BackgroundTimerCallback, null, 0, intervalMs);
@@ -1611,7 +1608,7 @@ namespace ConHIS_Service_XPHL7
                             if (_backgroundTimer == null)
                             {
                                 _logger?.LogInfo("Auto-resuming service after database reconnection...");
-                                StartBackgroundService(); 
+                                StartBackgroundService();
                                 _logger?.LogInfo("Service auto-resumed successfully");
                             }
                         }));
@@ -1791,7 +1788,7 @@ namespace ConHIS_Service_XPHL7
                 _logger?.LogError("Error updating status summary", ex);
             }
         }
-        
+
         private void UpdatePanelStyles(Panel panel, int count, System.Drawing.Color highlightColor)
         {
             if (count > 0)
