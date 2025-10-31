@@ -1,8 +1,12 @@
 ﻿using System;
 using System.Configuration;
+using System.Drawing;
 using System.IO;
+using System.Net.Http;
 using System.Text;
+using System.Threading.Tasks;
 using System.Windows.Forms;
+using MySql.Data.MySqlClient;
 
 namespace ConHIS_Service_XPHL7.PagesFrom
 {
@@ -25,13 +29,8 @@ namespace ConHIS_Service_XPHL7.PagesFrom
         {
             try
             {
-                // Load Database Settings
                 LoadDatabaseSettings();
-
-                // Load API Settings
                 LoadAPISettings();
-
-                // Load Log Settings
                 LoadLogSettings();
             }
             catch (Exception ex)
@@ -109,7 +108,6 @@ namespace ConHIS_Service_XPHL7.PagesFrom
 
         private void LoadLogSettings()
         {
-            // Load from App.config
             var logDays = ConfigurationManager.AppSettings["LogRetentionDays"];
             if (!string.IsNullOrEmpty(logDays) && int.TryParse(logDays, out int days))
             {
@@ -117,11 +115,198 @@ namespace ConHIS_Service_XPHL7.PagesFrom
             }
         }
 
+        // ⭐ Test Database Connection
+        private async void BtnTestConnection_Click(object sender, EventArgs e)
+        {
+            if (!ValidateDatabaseInputs())
+                return;
+
+            btnTestConnection.Enabled = false;
+            lblConnectionStatus.Text = "⏳ Testing connection...";
+            lblConnectionStatus.ForeColor = Color.Orange;
+
+            try
+            {
+                var connectionString = $"Server={txtServer.Text.Trim()};" +
+                                     $"Database={txtDatabase.Text.Trim()};" +
+                                     $"User Id={txtUserId.Text.Trim()};" +
+                                     $"Password={txtPassword.Text.Trim()};" +
+                                     $"Charset=utf8;";
+
+                await Task.Run(() =>
+                {
+                    using (var connection = new MySqlConnection(connectionString))
+                    {
+                        connection.Open();
+
+                        // Test query
+                        using (var cmd = new MySqlCommand("SELECT VERSION()", connection))
+                        {
+                            var version = cmd.ExecuteScalar()?.ToString() ?? "Unknown";
+
+                            this.Invoke(new Action(() =>
+                            {
+                                lblConnectionStatus.Text = $"✅ Connected successfully!\nMySQL Version: {version}";
+                                lblConnectionStatus.ForeColor = Color.Green;
+
+                                MessageBox.Show(
+                                    $"✅ การเชื่อมต่อสำเร็จ!\n\n" +
+                                    $"Server: {txtServer.Text}\n" +
+                                    $"Database: {txtDatabase.Text}\n" +
+                                    $"MySQL Version: {version}",
+                                    "Connection Successful",
+                                    MessageBoxButtons.OK,
+                                    MessageBoxIcon.Information
+                                );
+                            }));
+                        }
+                    }
+                });
+            }
+            catch (Exception ex)
+            {
+                lblConnectionStatus.Text = $"❌ Connection failed: {ex.Message}";
+                lblConnectionStatus.ForeColor = Color.Red;
+
+                MessageBox.Show(
+                    $"❌ การเชื่อมต่อล้มเหลว!\n\n{ex.Message}\n\n" +
+                    $"กรุณาตรวจสอบ:\n" +
+                    $"• Server address และ port\n" +
+                    $"• Database name\n" +
+                    $"• Username และ Password\n" +
+                    $"• Network connectivity",
+                    "Connection Failed",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Error
+                );
+            }
+            finally
+            {
+                btnTestConnection.Enabled = true;
+            }
+        }
+
+        // ⭐ Test API Endpoint
+        private async void BtnTestApi_Click(object sender, EventArgs e)
+        {
+            if (string.IsNullOrWhiteSpace(txtApiEndpoint.Text))
+            {
+                MessageBox.Show("กรุณาระบุ API Endpoint", "Validation Error",
+                    MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                txtApiEndpoint.Focus();
+                return;
+            }
+
+            if (!Uri.TryCreate(txtApiEndpoint.Text, UriKind.Absolute, out _))
+            {
+                MessageBox.Show("API Endpoint ไม่ถูกต้อง\nกรุณาระบุ URL ที่ถูกต้อง",
+                    "Validation Error", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                txtApiEndpoint.Focus();
+                return;
+            }
+
+            btnTestApi.Enabled = false;
+            lblApiStatus.Text = "⏳ Testing API endpoint...";
+            lblApiStatus.ForeColor = Color.Orange;
+
+            try
+            {
+                using (var client = new HttpClient())
+                {
+                    client.Timeout = TimeSpan.FromSeconds((double)numApiTimeout.Value);
+
+                    // ส่ง HEAD request เพื่อเช็คว่า endpoint มีอยู่จริง
+                    var response = await client.GetAsync(txtApiEndpoint.Text);
+
+                    var statusCode = (int)response.StatusCode;
+                    var statusDescription = response.ReasonPhrase;
+
+                    if (response.IsSuccessStatusCode || statusCode == 405) // 405 = Method Not Allowed แต่ endpoint มีอยู่
+                    {
+                        lblApiStatus.Text = $"✅ API endpoint is reachable (Status: {statusCode})";
+                        lblApiStatus.ForeColor = Color.Green;
+
+                        MessageBox.Show(
+                            $"✅ API Endpoint ตอบกลับได้!\n\n" +
+                            $"URL: {txtApiEndpoint.Text}\n" +
+                            $"Status Code: {statusCode} - {statusDescription}\n" +
+                            $"Response Time: < {numApiTimeout.Value} seconds",
+                            "API Test Successful",
+                            MessageBoxButtons.OK,
+                            MessageBoxIcon.Information
+                        );
+                    }
+                    else
+                    {
+                        lblApiStatus.Text = $"⚠️ Unexpected response (Status: {statusCode})";
+                        lblApiStatus.ForeColor = Color.Orange;
+
+                        MessageBox.Show(
+                            $"⚠️ API Endpoint ตอบกลับแต่ได้ status code ที่ไม่คาดหวัง\n\n" +
+                            $"Status Code: {statusCode} - {statusDescription}\n\n" +
+                            $"หมายเหตุ: Endpoint อาจทำงานได้ตามปกติแต่ต้องการ POST request หรือ authentication",
+                            "API Test Warning",
+                            MessageBoxButtons.OK,
+                            MessageBoxIcon.Warning
+                        );
+                    }
+                }
+            }
+            catch (TaskCanceledException)
+            {
+                lblApiStatus.Text = $"⏱️ Request timeout ({numApiTimeout.Value}s)";
+                lblApiStatus.ForeColor = Color.Red;
+
+                MessageBox.Show(
+                    $"⏱️ API Request Timeout!\n\n" +
+                    $"ระบบรอเกิน {numApiTimeout.Value} วินาทีแต่ไม่ได้รับการตอบกลับ\n\n" +
+                    $"แนะนำ:\n" +
+                    $"• เพิ่มค่า Timeout\n" +
+                    $"• ตรวจสอบ network connectivity\n" +
+                    $"• ตรวจสอบว่า API server ทำงานอยู่",
+                    "Timeout",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Error
+                );
+            }
+            catch (HttpRequestException ex)
+            {
+                lblApiStatus.Text = "❌ Cannot reach API endpoint";
+                lblApiStatus.ForeColor = Color.Red;
+
+                MessageBox.Show(
+                    $"❌ ไม่สามารถเชื่อมต่อกับ API ได้!\n\n{ex.Message}\n\n" +
+                    $"กรุณาตรวจสอบ:\n" +
+                    $"• URL ถูกต้อง\n" +
+                    $"• API server ทำงานอยู่\n" +
+                    $"• Network/Firewall settings",
+                    "Connection Failed",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Error
+                );
+            }
+            catch (Exception ex)
+            {
+                lblApiStatus.Text = $"❌ Error: {ex.Message}";
+                lblApiStatus.ForeColor = Color.Red;
+
+                MessageBox.Show(
+                    $"❌ เกิดข้อผิดพลาดในการทดสอบ API:\n\n{ex.Message}",
+                    "Error",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Error
+                );
+            }
+            finally
+            {
+                btnTestApi.Enabled = true;
+            }
+        }
+
         private void BtnSave_Click(object sender, EventArgs e)
         {
             try
             {
-                // Validate inputs
                 if (!ValidateInputs())
                     return;
 
@@ -140,7 +325,6 @@ namespace ConHIS_Service_XPHL7.PagesFrom
                 if (result != DialogResult.Yes)
                     return;
 
-                // Save all settings
                 SaveDatabaseSettings();
                 SaveAPISettings();
                 SaveLogSettings();
@@ -173,9 +357,8 @@ namespace ConHIS_Service_XPHL7.PagesFrom
             }
         }
 
-        private bool ValidateInputs()
+        private bool ValidateDatabaseInputs()
         {
-            // Validate Database Settings
             if (string.IsNullOrWhiteSpace(txtServer.Text))
             {
                 MessageBox.Show("กรุณาระบุ Server", "Validation Error", MessageBoxButtons.OK, MessageBoxIcon.Warning);
@@ -199,6 +382,15 @@ namespace ConHIS_Service_XPHL7.PagesFrom
                 txtUserId.Focus();
                 return false;
             }
+
+            return true;
+        }
+
+        private bool ValidateInputs()
+        {
+            // Validate Database Settings
+            if (!ValidateDatabaseInputs())
+                return false;
 
             // Validate API Settings
             if (string.IsNullOrWhiteSpace(txtApiEndpoint.Text))
@@ -302,5 +494,7 @@ namespace ConHIS_Service_XPHL7.PagesFrom
                 this.Close();
             }
         }
+
+
     }
 }

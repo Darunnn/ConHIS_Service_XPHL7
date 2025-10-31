@@ -18,7 +18,7 @@ using Timer = System.Threading.Timer;
 
 namespace ConHIS_Service_XPHL7
 {
-    public partial class Form : System.Windows.Forms.Form
+    public partial class Form1 : Form
     {
         #region ตัวแปร
         private AppConfig _appConfig;
@@ -63,7 +63,7 @@ namespace ConHIS_Service_XPHL7
         private bool _isDatabaseConnected = false;
         private bool _isInitializing = false;
         #endregion
-        public Form()
+        public Form1()
         {
             InitializeComponent();
             this.Load += Form1_Load;
@@ -1826,43 +1826,40 @@ namespace ConHIS_Service_XPHL7
                     {
                         if (settingsForm.SettingsChanged)
                         {
-                            // Reload configuration after settings changed
                             try
                             {
-                                // Reload AppConfig to get new database and API settings
+                                _logger?.LogInfo("Reloading configuration after settings changed");
+
+                                // Reload configuration
                                 _appConfig?.ReloadConfiguration();
-
-                                // Reload Logger settings for log retention
                                 _logger?.ReloadLogRetentionDays();
-
-                                // Clean old logs based on new retention settings
                                 _logger?.CleanOldLogs();
 
-                                UpdateStatus("Settings reloaded successfully from configuration files");
+                                UpdateStatus("✓ Settings updated successfully");
 
+                                // แสดง MessageBox แจ้งผลสำเร็จแบบสั้นกระชับ
                                 MessageBox.Show(
-                                    "✅ การตั้งค่าถูกอัพเดทเรียบร้อยแล้ว!\n\n" +
-                                    "📁 ไฟล์ที่ถูกอัพเดท:\n" +
-                                    "   • connectdatabase.ini (Database)\n" +
-                                    "   • appsettings.ini (API)\n" +
-                                    "   • App.config (Log Settings)\n\n" +
-                                    $"🗑️ ระบบได้ทำความสะอาด Log files เก่าแล้ว\n" +
-                                    $"   (เก็บ Log: {_logger?.LogRetentionDays ?? 30} วัน)\n\n" +
-                                    "💡 หมายเหตุ:\n" +
-                                    "   • การเชื่อมต่อ Database จะใช้ค่าใหม่ในครั้งถัดไป\n" +
-                                    "   • การตั้งค่า API จะมีผลในการส่งข้อมูลครั้งถัดไป\n" +
-                                    "   • หากต้องการให้มีผลทันที แนะนำให้ Restart โปรแกรม",
+                                    "การตั้งค่าถูกบันทึกเรียบร้อยแล้ว\n\n" +
+                                    "ไฟล์ที่อัพเดท:\n" +
+                                    "• Database Connection\n" +
+                                    "• API Settings\n" +
+                                    "• Log Retention\n\n" +
+                                    "หมายเหตุ: การตั้งค่าบางอย่างอาจต้อง Restart โปรแกรม",
                                     "Settings Updated",
                                     MessageBoxButtons.OK,
                                     MessageBoxIcon.Information
                                 );
+
+                                _logger?.LogInfo("Configuration reloaded successfully");
                             }
                             catch (Exception reloadEx)
                             {
                                 _logger?.LogError("Error reloading configuration", reloadEx);
+
                                 MessageBox.Show(
-                                    $"⚠️ บันทึกการตั้งค่าสำเร็จ แต่เกิดข้อผิดพลาดในการโหลดใหม่:\n\n{reloadEx.Message}\n\n" +
-                                    "กรุณา Restart โปรแกรมเพื่อให้การตั้งค่าใหม่มีผลเต็มที่",
+                                    $"บันทึกการตั้งค่าสำเร็จ\n\n" +
+                                    $"แต่เกิดข้อผิดพลาดในการโหลดใหม่:\n{reloadEx.Message}\n\n" +
+                                    "กรุณา Restart โปรแกรมเพื่อให้การตั้งค่ามีผล",
                                     "Warning",
                                     MessageBoxButtons.OK,
                                     MessageBoxIcon.Warning
@@ -1876,7 +1873,7 @@ namespace ConHIS_Service_XPHL7
             {
                 _logger?.LogError("Error opening settings", ex);
                 MessageBox.Show(
-                    $"❌ เกิดข้อผิดพลาดในการเปิด Settings:\n\n{ex.Message}",
+                    $"เกิดข้อผิดพลาดในการเปิด Settings:\n\n{ex.Message}",
                     "Error",
                     MessageBoxButtons.OK,
                     MessageBoxIcon.Error
