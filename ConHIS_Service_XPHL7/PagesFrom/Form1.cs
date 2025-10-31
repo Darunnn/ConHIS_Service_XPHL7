@@ -1820,37 +1820,54 @@ namespace ConHIS_Service_XPHL7
         {
             try
             {
-                int currentDays = _logger?.LogRetentionDays ?? 30;
-
-                using (var settingsForm = new PagesFrom.SettingsForm(currentDays))
+                using (var settingsForm = new PagesFrom.SettingsForm())
                 {
                     if (settingsForm.ShowDialog() == DialogResult.OK)
                     {
-                        if (_logger != null)
+                        if (settingsForm.SettingsChanged)
                         {
-                            if (settingsForm.SaveToConfig)
+                            // Reload configuration after settings changed
+                            try
                             {
-                                _logger.ReloadLogRetentionDays();
-                                UpdateStatus($"Settings saved permanently - Log retention: {_logger.LogRetentionDays} days");
+                                // Reload AppConfig to get new database and API settings
+                                _appConfig?.ReloadConfiguration();
+
+                                // Reload Logger settings for log retention
+                                _logger?.ReloadLogRetentionDays();
+
+                                // Clean old logs based on new retention settings
+                                _logger?.CleanOldLogs();
+
+                                UpdateStatus("Settings reloaded successfully from configuration files");
+
+                                MessageBox.Show(
+                                    "✅ การตั้งค่าถูกอัพเดทเรียบร้อยแล้ว!\n\n" +
+                                    "📁 ไฟล์ที่ถูกอัพเดท:\n" +
+                                    "   • connectdatabase.ini (Database)\n" +
+                                    "   • appsettings.ini (API)\n" +
+                                    "   • App.config (Log Settings)\n\n" +
+                                    $"🗑️ ระบบได้ทำความสะอาด Log files เก่าแล้ว\n" +
+                                    $"   (เก็บ Log: {_logger?.LogRetentionDays ?? 30} วัน)\n\n" +
+                                    "💡 หมายเหตุ:\n" +
+                                    "   • การเชื่อมต่อ Database จะใช้ค่าใหม่ในครั้งถัดไป\n" +
+                                    "   • การตั้งค่า API จะมีผลในการส่งข้อมูลครั้งถัดไป\n" +
+                                    "   • หากต้องการให้มีผลทันที แนะนำให้ Restart โปรแกรม",
+                                    "Settings Updated",
+                                    MessageBoxButtons.OK,
+                                    MessageBoxIcon.Information
+                                );
                             }
-                            else
+                            catch (Exception reloadEx)
                             {
-                                _logger.UpdateLogRetentionDaysTemporary(settingsForm.LogRetentionDays);
-                                UpdateStatus($"Settings updated temporarily - Log retention: {_logger.LogRetentionDays} days (session only)");
+                                _logger?.LogError("Error reloading configuration", reloadEx);
+                                MessageBox.Show(
+                                    $"⚠️ บันทึกการตั้งค่าสำเร็จ แต่เกิดข้อผิดพลาดในการโหลดใหม่:\n\n{reloadEx.Message}\n\n" +
+                                    "กรุณา Restart โปรแกรมเพื่อให้การตั้งค่าใหม่มีผลเต็มที่",
+                                    "Warning",
+                                    MessageBoxButtons.OK,
+                                    MessageBoxIcon.Warning
+                                );
                             }
-
-                            _logger.CleanOldLogs();
-
-                            string permanentStatus = settingsForm.SaveToConfig ? "ถาวร (App.config)" : "ชั่วคราว (Session only)";
-
-                            MessageBox.Show(
-                                $"ระบบได้ทำความสะอาดไฟล์ log เก่าเรียบร้อยแล้ว\n\n" +
-                                $"จำนวนวันเก็บ Log: {_logger.LogRetentionDays} วัน\n" +
-                                $"สถานะ: {permanentStatus}",
-                                "Log Cleanup Completed",
-                                MessageBoxButtons.OK,
-                                MessageBoxIcon.Information
-                            );
                         }
                     }
                 }
@@ -1859,7 +1876,7 @@ namespace ConHIS_Service_XPHL7
             {
                 _logger?.LogError("Error opening settings", ex);
                 MessageBox.Show(
-                    $"เกิดข้อผิดพลาดในการเปิด Settings:\n{ex.Message}",
+                    $"❌ เกิดข้อผิดพลาดในการเปิด Settings:\n\n{ex.Message}",
                     "Error",
                     MessageBoxButtons.OK,
                     MessageBoxIcon.Error
