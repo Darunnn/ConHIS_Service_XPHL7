@@ -47,17 +47,15 @@ namespace ConHIS_Service_XPHL7.Utils
                 {
                     if (days > 0)
                     {
-                       
                         return days;
                     }
                 }
 
-               
                 return defaultValue;
             }
             catch (Exception ex)
             {
-                
+                LogError("Error loading LogRetentionDays from App.config", ex);
                 return defaultValue;
             }
         }
@@ -78,7 +76,6 @@ namespace ConHIS_Service_XPHL7.Utils
                 _logRetentionDays = days;
 
                 LogInfo($"LogRetentionDays temporarily updated to: {days} days (for this session only)");
-               
             }
             catch (Exception ex)
             {
@@ -94,8 +91,6 @@ namespace ConHIS_Service_XPHL7.Utils
         {
             try
             {
-               
-
                 // Refresh config section เพื่อให้ได้ค่าล่าสุด
                 ConfigurationManager.RefreshSection("appSettings");
 
@@ -121,7 +116,7 @@ namespace ConHIS_Service_XPHL7.Utils
             }
             catch (Exception ex)
             {
-               
+                LogError("Error writing to log file", ex);
             }
         }
 
@@ -152,7 +147,7 @@ namespace ConHIS_Service_XPHL7.Utils
             }
             catch (Exception ex)
             {
-                
+                LogError($"Error logging raw HL7 data for {DrugDispenseipdId}", ex);
             }
         }
 
@@ -182,9 +177,10 @@ namespace ConHIS_Service_XPHL7.Utils
             }
             catch (Exception ex)
             {
-                
+                LogError($"Error logging parsed HL7 data for {DrugDispenseipdId}", ex);
             }
         }
+
         public void LogConnectDatabase(bool isConnected, DateTime? lastConnectedTime = null, DateTime? lastDisconnectedTime = null, string connectLogFolder = "Connection")
         {
             var appFolder = AppDomain.CurrentDomain.BaseDirectory ?? Environment.CurrentDirectory;
@@ -228,9 +224,10 @@ namespace ConHIS_Service_XPHL7.Utils
             }
             catch (Exception ex)
             {
-               
+                LogError("Error logging database connection status", ex);
             }
         }
+
         // 🧹 ลบโฟลเดอร์ที่เก่ากว่าจำนวนวันที่กำหนด
         private void CleanOldLogFolders(string baseLogFolder)
         {
@@ -258,12 +255,11 @@ namespace ConHIS_Service_XPHL7.Utils
                             try
                             {
                                 Directory.Delete(dir, true); // true = ลบทั้งไฟล์ภายใน
-                                
                                 LogInfo($"Deleted old log folder: {dir}");
                             }
                             catch (Exception ex)
                             {
-                                
+                                LogError($"Error deleting old log folder: {dir}", ex);
                             }
                         }
                     }
@@ -271,7 +267,7 @@ namespace ConHIS_Service_XPHL7.Utils
             }
             catch (Exception ex)
             {
-                
+                LogError($"Error cleaning old log folders in {baseLogFolder}", ex);
             }
         }
 
@@ -281,18 +277,16 @@ namespace ConHIS_Service_XPHL7.Utils
             var appFolder = AppDomain.CurrentDomain.BaseDirectory ?? Environment.CurrentDirectory;
 
             LogInfo($"Starting log cleanup. Retention period: {_logRetentionDays} days");
-           
 
             // ทำความสะอาดทุกโฟลเดอร์ log
             CleanOldLogFolders(Path.Combine(appFolder, "hl7_raw"));
             CleanOldLogFolders(Path.Combine(appFolder, "hl7_parsed"));
             CleanOldLogFolders(Path.Combine(appFolder, "logreaderror"));
-            CleanOldLogFolders(Path.Combine(appFolder, "Connection")); // เพิ่ม
+            CleanOldLogFolders(Path.Combine(appFolder, "Connection"));
 
             // ทำความสะอาดโฟลเดอร์ log หลักด้วย
             CleanOldLogFiles(_logFolder);
 
-            
             LogInfo($"Log cleanup completed. Retention period: {_logRetentionDays} days");
         }
 
@@ -322,11 +316,11 @@ namespace ConHIS_Service_XPHL7.Utils
                             try
                             {
                                 File.Delete(file);
-                                
+                                LogInfo($"Deleted old log file: {file}");
                             }
                             catch (Exception ex)
                             {
-                               
+                                LogError($"Error deleting old log file: {file}", ex);
                             }
                         }
                     }
@@ -334,7 +328,7 @@ namespace ConHIS_Service_XPHL7.Utils
             }
             catch (Exception ex)
             {
-               
+                LogError($"Error cleaning old log files in {logFolder}", ex);
             }
         }
 
@@ -380,7 +374,18 @@ namespace ConHIS_Service_XPHL7.Utils
             }
             catch (Exception ex)
             {
-              
+                // ไม่สามารถเรียก LogError ได้เพราะจะเกิด infinite loop
+                // ให้ลองเขียนไปที่ไฟล์ fallback แทน
+                try
+                {
+                    var fallbackPath = Path.Combine(appFolder, "critical_error.log");
+                    var fallbackEntry = $"[{DateTime.Now:yyyy-MM-dd HH:mm:ss}] CRITICAL: Failed to log error - {ex.Message}{Environment.NewLine}";
+                    File.AppendAllText(fallbackPath, fallbackEntry);
+                }
+                catch
+                {
+                    // ถ้าแม้แต่ fallback ก็ fail ก็ไม่มีทางเขียน log ได้แล้ว
+                }
             }
         }
 
@@ -404,8 +409,5 @@ namespace ConHIS_Service_XPHL7.Utils
         {
             LogToFile(message, "WARNING");
         }
-
-        // 🔌 Log การเชื่อมต่อ Database - เก็บในโฟลเดอร์ตามวันที่
-       
     }
 }
