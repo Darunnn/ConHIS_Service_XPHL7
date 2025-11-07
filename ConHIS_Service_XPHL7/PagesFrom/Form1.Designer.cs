@@ -17,6 +17,7 @@
 
         private void InitializeComponent()
         {
+            System.ComponentModel.ComponentResourceManager resources = new System.ComponentModel.ComponentResourceManager(typeof(Form1));
             this.statusLabel = new System.Windows.Forms.Label();
             this.lastCheckLabel = new System.Windows.Forms.Label();
             this.lastFoundLabel = new System.Windows.Forms.Label();
@@ -154,7 +155,7 @@
             // settingsButton
             // 
             this.settingsButton.Anchor = ((System.Windows.Forms.AnchorStyles)((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Right)));
-            this.settingsButton.Location = new System.Drawing.Point(271, 20);
+            this.settingsButton.Location = new System.Drawing.Point(468, 19);
             this.settingsButton.Name = "settingsButton";
             this.settingsButton.Size = new System.Drawing.Size(120, 32);
             this.settingsButton.TabIndex = 2;
@@ -446,7 +447,7 @@
             this.dataGridView.Size = new System.Drawing.Size(1170, 349);
             this.dataGridView.TabIndex = 4;
             // 
-            // Form
+            // Form1
             // 
             this.AutoScaleDimensions = new System.Drawing.SizeF(6F, 13F);
             this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
@@ -457,10 +458,12 @@
             this.Controls.Add(this.groupBox3);
             this.Controls.Add(this.groupBox2);
             this.Controls.Add(this.groupBox1);
+            this.Icon = ((System.Drawing.Icon)(resources.GetObject("$this.Icon")));
             this.MinimumSize = new System.Drawing.Size(1000, 650);
-            this.Name = "Form";
+            this.Name = "Form1";
             this.StartPosition = System.Windows.Forms.FormStartPosition.CenterScreen;
             this.Text = "ConHIS Service - Drug Dispense Monitor";
+            this.Load += new System.EventHandler(this.Form1_Load_1);
             this.totalPanel.ResumeLayout(false);
             this.successPanel.ResumeLayout(false);
             this.failedPanel.ResumeLayout(false);
