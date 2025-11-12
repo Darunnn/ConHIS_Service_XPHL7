@@ -9,6 +9,13 @@ using System.Threading;
 
 namespace ConHIS_Service_XPHL7.Services
 {
+    // เพิ่ม enum สำหรับระบุประเภท
+    public enum DispenseType
+    {
+        IPD,
+        OPD
+    }
+
     // เพิ่ม class สำหรับส่งข้อมูลกลับไปแสดงบน Grid
     public class ProcessResult
     {
@@ -16,7 +23,8 @@ namespace ConHIS_Service_XPHL7.Services
         public string Message { get; set; }
         public string ApiResponse { get; set; }
         public HL7Message ParsedMessage { get; set; }
-        public DrugDispenseipd DispenseData { get; set; }
+        public object DispenseData { get; set; } // เปลี่ยนเป็น object เพื่อรองรับทั้ง IPD และ OPD
+        public DispenseType Type { get; set; }
     }
 
     public class DrugDispenseProcessor
@@ -28,6 +36,7 @@ namespace ConHIS_Service_XPHL7.Services
 
         private List<int> _pendingUpdatedIds = new List<int>();
         private object _pendingUpdateLock = new object();
+
         public DrugDispenseProcessor(DatabaseService databaseService, HL7Service hl7Service, ApiService apiService)
         {
             _databaseService = databaseService;
@@ -42,16 +51,15 @@ namespace ConHIS_Service_XPHL7.Services
             public string Message { get; set; }
         }
 
-      
+        #region IPD Processing
 
         public void ProcessPendingOrders(
-     Action<string> logAction,
-     Action<ProcessResult> onProcessed = null,
-     CancellationToken cancellationToken = default)  // ⭐ เพิ่ม parameter
+            Action<string> logAction,
+            Action<ProcessResult> onProcessed = null,
+            CancellationToken cancellationToken = default)
         {
-            _logger.LogInfo("Start ProcessPendingOrders");
+            _logger.LogInfo("Start ProcessPendingOrders (IPD)");
 
-            // ⭐ Reset pending updates list
             lock (_pendingUpdateLock)
             {
                 _pendingUpdatedIds.Clear();
@@ -59,62 +67,58 @@ namespace ConHIS_Service_XPHL7.Services
 
             try
             {
-                // ⭐ Check cancel ตั้งแต่ต้น
                 cancellationToken.ThrowIfCancellationRequested();
 
                 var pendingData = _databaseService.GetPendingDispenseData();
-                _logger.LogInfo($"Found {pendingData.Count} pending orders");
-                logAction($"Found {pendingData.Count} pending orders");
+                _logger.LogInfo($"Found {pendingData.Count} pending IPD orders");
+                logAction($"Found {pendingData.Count} pending IPD orders");
 
                 foreach (var data in pendingData)
                 {
-                    // ⭐ Check cancel ที่จุดเริ่มต้นของแต่ละ loop
                     cancellationToken.ThrowIfCancellationRequested();
 
                     try
                     {
-                        _logger.LogInfo($"Processing order {data.PrescId}");
-                        ProcessSingleOrder(data, logAction, onProcessed, cancellationToken);  // ⭐ ส่ง token
+                        _logger.LogInfo($"Processing IPD order {data.PrescId}");
+                        ProcessSingleOrder(data, logAction, onProcessed, cancellationToken);
                     }
                     catch (OperationCanceledException)
                     {
-                        // ⭐ ถ้า Cancel ให้หยุดทันที ไม่ update เป็น F
-                        _logger.LogInfo($"Processing cancelled for order {data.PrescId}");
+                        _logger.LogInfo($"Processing cancelled for IPD order {data.PrescId}");
                     }
                     catch (Exception ex)
                     {
-                        _logger.LogError($"Error processing order {data.PrescId}", ex);
-                        logAction($"Error processing order {data.PrescId}: {ex.Message}");
+                        _logger.LogError($"Error processing IPD order {data.PrescId}", ex);
+                        logAction($"Error processing IPD order {data.PrescId}: {ex.Message}");
 
                         onProcessed?.Invoke(new ProcessResult
                         {
                             Success = false,
                             Message = ex.Message,
                             DispenseData = data,
-                            ParsedMessage = null
+                            ParsedMessage = null,
+                            Type = DispenseType.IPD
                         });
                     }
                 }
             }
             catch (OperationCanceledException)
             {
-                _logger.LogInfo("ProcessPendingOrders: Cancelled by user");
+                _logger.LogInfo("ProcessPendingOrders (IPD): Cancelled by user");
             }
             catch (Exception ex)
             {
-                _logger.LogError("Error in ProcessPendingOrders", ex);
-                logAction($"Error in ProcessPendingOrders: {ex.Message}");
+                _logger.LogError("Error in ProcessPendingOrders (IPD)", ex);
+                logAction($"Error in ProcessPendingOrders (IPD): {ex.Message}");
             }
         }
 
-     
         private void ProcessSingleOrder(
             DrugDispenseipd data,
             Action<string> logAction,
             Action<ProcessResult> onProcessed,
-            CancellationToken cancellationToken)  // ⭐ เพิ่ม parameter
+            CancellationToken cancellationToken)
         {
-            // ⭐ Check cancel ตั้งแต่ต้น
             cancellationToken.ThrowIfCancellationRequested();
 
             // Convert byte array to string
@@ -137,26 +141,24 @@ namespace ConHIS_Service_XPHL7.Services
             HL7Message hl7Message = null;
             try
             {
-                // ⭐ Check cancel ก่อน parsing
                 cancellationToken.ThrowIfCancellationRequested();
 
                 hl7Message = _hl7Service.ParseHL7Message(hl7String);
                 var orderNo = hl7Message?.CommonOrder?.PlacerOrderNumber;
                 _logger.LogInfo($"HL7 raw data saved to hl7_raw/hl7_data_raw_{data.PrescId}.txt");
-                _logger.LogRawHL7Data(data.DrugDispenseipdId.ToString(), data.RecieveOrderType.ToString(), orderNo , hl7String, "hl7_raw");
-                _logger.LogInfo($"Parsed HL7 message for prescription ID: {data.PrescId}");
+                _logger.LogRawHL7Data(data.DrugDispenseipdId.ToString(), data.RecieveOrderType?.ToString(), orderNo, hl7String, "hl7_raw");
+                _logger.LogInfo($"Parsed HL7 message for IPD prescription ID: {data.PrescId}");
                 _logger.LogParsedHL7Data(data.DrugDispenseipdId.ToString(), hl7Message, "hl7_parsed");
             }
             catch (OperationCanceledException)
             {
-                // ⭐ ถ้า Cancel ให้หยุดทันที ไม่ update เป็น F
-                _logger.LogInfo($"Processing cancelled during HL7 parsing for order {data.PrescId}");
+                _logger.LogInfo($"Processing cancelled during HL7 parsing for IPD order {data.PrescId}");
                 return;
             }
             catch (Exception ex)
             {
-                _logger.LogWarning($"Failed to write HL7 raw data file for PrescId {data.PrescId}: {ex.Message}");
-                var errorMsg = $"Error parsing HL7 for prescription ID: {data.PrescId} - {ex.Message}";
+                _logger.LogWarning($"Failed to write HL7 raw data file for IPD PrescId {data.PrescId}: {ex.Message}");
+                var errorMsg = $"Error parsing HL7 for IPD prescription ID: {data.PrescId} - {ex.Message}";
 
                 _databaseService.UpdateReceiveStatus(data.DrugDispenseipdId, 'F');
                 _logger.LogError(errorMsg, ex);
@@ -167,12 +169,12 @@ namespace ConHIS_Service_XPHL7.Services
                     Success = false,
                     Message = errorMsg,
                     DispenseData = data,
-                    ParsedMessage = null
+                    ParsedMessage = null,
+                    Type = DispenseType.IPD
                 });
                 return;
             }
 
-            // ⭐ Check cancel ก่อน validation
             cancellationToken.ThrowIfCancellationRequested();
 
             // Check message format
@@ -181,7 +183,7 @@ namespace ConHIS_Service_XPHL7.Services
                 var errorFields = new List<string>();
                 if (hl7Message == null) errorFields.Add("HL7Message");
                 if (hl7Message != null && hl7Message.MessageHeader == null) errorFields.Add("MSH segment");
-                var errorMsg = $"Invalid HL7 format for prescription ID: {data.PrescId}. Error fields: {string.Join(", ", errorFields)}";
+                var errorMsg = $"Invalid HL7 format for IPD prescription ID: {data.PrescId}. Error fields: {string.Join(", ", errorFields)}";
 
                 _databaseService.UpdateReceiveStatus(data.DrugDispenseipdId, 'F');
                 _logger.LogError(errorMsg);
@@ -192,29 +194,28 @@ namespace ConHIS_Service_XPHL7.Services
                     Success = false,
                     Message = errorMsg,
                     DispenseData = data,
-                    ParsedMessage = hl7Message
+                    ParsedMessage = hl7Message,
+                    Type = DispenseType.IPD
                 });
                 return;
             }
 
-            // ⭐ Check cancel ก่อน determine order type
             cancellationToken.ThrowIfCancellationRequested();
 
             // Determine order type
             var orderControl = !string.IsNullOrEmpty(data.RecieveOrderType) ? data.RecieveOrderType : hl7Message.CommonOrder?.OrderControl;
-            _logger.LogInfo($"OrderControl: {orderControl} for prescription ID: {data.PrescId}");
+            _logger.LogInfo($"OrderControl: {orderControl} for IPD prescription ID: {data.PrescId}");
 
             string apiResponse = null;
             bool success = false;
 
             try
             {
-                // ⭐ Check cancel ก่อน API call
                 cancellationToken.ThrowIfCancellationRequested();
 
                 if (orderControl == "NW")
                 {
-                    apiResponse = ProcessNewOrder(data, hl7Message);
+                    apiResponse = ProcessNewOrder(data, hl7Message, DispenseType.IPD);
                     success = true;
 
                     _databaseService.UpdateReceiveStatus(data.DrugDispenseipdId, 'Y');
@@ -225,7 +226,7 @@ namespace ConHIS_Service_XPHL7.Services
                 }
                 else if (orderControl == "RP")
                 {
-                    apiResponse = ProcessReplaceOrder(data, hl7Message);
+                    apiResponse = ProcessReplaceOrder(data, hl7Message, DispenseType.IPD);
                     success = true;
 
                     _databaseService.UpdateReceiveStatus(data.DrugDispenseipdId, 'Y');
@@ -241,17 +242,17 @@ namespace ConHIS_Service_XPHL7.Services
                     Message = success ? "Processed successfully" : apiResponse,
                     ApiResponse = apiResponse,
                     DispenseData = data,
-                    ParsedMessage = hl7Message
+                    ParsedMessage = hl7Message,
+                    Type = DispenseType.IPD
                 });
             }
             catch (OperationCanceledException)
             {
-                // ⭐ ถ้า Cancel ให้หยุดทันที ไม่ update status
-                _logger.LogInfo($"Processing cancelled for prescription ID: {data.PrescId}");
+                _logger.LogInfo($"Processing cancelled for IPD prescription ID: {data.PrescId}");
             }
             catch (Exception ex)
             {
-                _logger.LogError($"Error processing order: {data.PrescId}", ex);
+                _logger.LogError($"Error processing IPD order: {data.PrescId}", ex);
                 _databaseService.UpdateReceiveStatus(data.DrugDispenseipdId, 'F');
 
                 onProcessed?.Invoke(new ProcessResult
@@ -260,19 +261,247 @@ namespace ConHIS_Service_XPHL7.Services
                     Message = ex.Message,
                     ApiResponse = null,
                     DispenseData = data,
-                    ParsedMessage = hl7Message
+                    ParsedMessage = hl7Message,
+                    Type = DispenseType.IPD
                 });
             }
         }
-        private string ProcessNewOrder(DrugDispenseipd data, HL7Message hl7Message)
+
+        #endregion
+
+        #region OPD Processing
+
+        public void ProcessPendingOpdOrders(
+            Action<string> logAction,
+            Action<ProcessResult> onProcessed = null,
+            CancellationToken cancellationToken = default)
+        {
+            _logger.LogInfo("Start ProcessPendingOrders (OPD)");
+
+            lock (_pendingUpdateLock)
+            {
+                _pendingUpdatedIds.Clear();
+            }
+
+            try
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+
+                var pendingData = _databaseService.GetPendingDispenseOpdData();
+                _logger.LogInfo($"Found {pendingData.Count} pending OPD orders");
+                logAction($"Found {pendingData.Count} pending OPD orders");
+
+                foreach (var data in pendingData)
+                {
+                    cancellationToken.ThrowIfCancellationRequested();
+
+                    try
+                    {
+                        _logger.LogInfo($"Processing OPD order {data.PrescId}");
+                        ProcessSingleOpdOrder(data, logAction, onProcessed, cancellationToken);
+                    }
+                    catch (OperationCanceledException)
+                    {
+                        _logger.LogInfo($"Processing cancelled for OPD order {data.PrescId}");
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogError($"Error processing OPD order {data.PrescId}", ex);
+                        logAction($"Error processing OPD order {data.PrescId}: {ex.Message}");
+
+                        onProcessed?.Invoke(new ProcessResult
+                        {
+                            Success = false,
+                            Message = ex.Message,
+                            DispenseData = data,
+                            ParsedMessage = null,
+                            Type = DispenseType.OPD
+                        });
+                    }
+                }
+            }
+            catch (OperationCanceledException)
+            {
+                _logger.LogInfo("ProcessPendingOrders (OPD): Cancelled by user");
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError("Error in ProcessPendingOrders (OPD)", ex);
+                logAction($"Error in ProcessPendingOrders (OPD): {ex.Message}");
+            }
+        }
+
+        private void ProcessSingleOpdOrder(
+            DrugDispenseopd data,
+            Action<string> logAction,
+            Action<ProcessResult> onProcessed,
+            CancellationToken cancellationToken)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+
+            // Convert byte array to string
+            string hl7String;
+            try
+            {
+                Encoding tisEncoding = null;
+                try { tisEncoding = Encoding.GetEncoding("TIS-620"); } catch { }
+                if (tisEncoding == null) { try { tisEncoding = Encoding.GetEncoding(874); } catch { } }
+                if (tisEncoding != null) { hl7String = tisEncoding.GetString(data.Hl7Data); }
+                else { hl7String = Encoding.UTF8.GetString(data.Hl7Data); }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning($"Failed to decode HL7 data with TIS-620: {ex.Message}. Falling back to UTF8.");
+                hl7String = Encoding.UTF8.GetString(data.Hl7Data);
+            }
+
+            // Parse HL7
+            HL7Message hl7Message = null;
+            try
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+
+                hl7Message = _hl7Service.ParseHL7Message(hl7String);
+                var orderNo = hl7Message?.CommonOrder?.PlacerOrderNumber;
+                _logger.LogInfo($"HL7 raw data saved to hl7_raw/hl7_data_raw_opd_{data.PrescId}.txt");
+                _logger.LogRawHL7Data(data.DrugDispenseopdId.ToString(), data.RecieveOrderType?.ToString(), orderNo, hl7String, "hl7_raw_opd");
+                _logger.LogInfo($"Parsed HL7 message for OPD prescription ID: {data.PrescId}");
+                _logger.LogParsedHL7Data(data.DrugDispenseopdId.ToString(), hl7Message, "hl7_parsed_opd");
+            }
+            catch (OperationCanceledException)
+            {
+                _logger.LogInfo($"Processing cancelled during HL7 parsing for OPD order {data.PrescId}");
+                return;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning($"Failed to write HL7 raw data file for OPD PrescId {data.PrescId}: {ex.Message}");
+                var errorMsg = $"Error parsing HL7 for OPD prescription ID: {data.PrescId} - {ex.Message}";
+
+                _databaseService.UpdateReceiveOpdStatus(data.DrugDispenseopdId, 'F');
+                _logger.LogError(errorMsg, ex);
+                logAction(errorMsg);
+
+                onProcessed?.Invoke(new ProcessResult
+                {
+                    Success = false,
+                    Message = errorMsg,
+                    DispenseData = data,
+                    ParsedMessage = null,
+                    Type = DispenseType.OPD
+                });
+                return;
+            }
+
+            cancellationToken.ThrowIfCancellationRequested();
+
+            // Check message format
+            if (hl7Message == null || hl7Message.MessageHeader == null)
+            {
+                var errorFields = new List<string>();
+                if (hl7Message == null) errorFields.Add("HL7Message");
+                if (hl7Message != null && hl7Message.MessageHeader == null) errorFields.Add("MSH segment");
+                var errorMsg = $"Invalid HL7 format for OPD prescription ID: {data.PrescId}. Error fields: {string.Join(", ", errorFields)}";
+
+                _databaseService.UpdateReceiveOpdStatus(data.DrugDispenseopdId, 'F');
+                _logger.LogError(errorMsg);
+                logAction(errorMsg);
+
+                onProcessed?.Invoke(new ProcessResult
+                {
+                    Success = false,
+                    Message = errorMsg,
+                    DispenseData = data,
+                    ParsedMessage = hl7Message,
+                    Type = DispenseType.OPD
+                });
+                return;
+            }
+
+            cancellationToken.ThrowIfCancellationRequested();
+
+            // Determine order type
+            var orderControl = !string.IsNullOrEmpty(data.RecieveOrderType) ? data.RecieveOrderType : hl7Message.CommonOrder?.OrderControl;
+            _logger.LogInfo($"OrderControl: {orderControl} for OPD prescription ID: {data.PrescId}");
+
+            string apiResponse = null;
+            bool success = false;
+
+            try
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+
+                if (orderControl == "NW")
+                {
+                    apiResponse = ProcessNewOrder(data, hl7Message, DispenseType.OPD);
+                    success = true;
+
+                    _databaseService.UpdateReceiveOpdStatus(data.DrugDispenseopdId, 'Y');
+                    lock (_pendingUpdateLock)
+                    {
+                        _pendingUpdatedIds.Add(data.DrugDispenseopdId);
+                    }
+                }
+                else if (orderControl == "RP")
+                {
+                    apiResponse = ProcessReplaceOrder(data, hl7Message, DispenseType.OPD);
+                    success = true;
+
+                    _databaseService.UpdateReceiveOpdStatus(data.DrugDispenseopdId, 'Y');
+                    lock (_pendingUpdateLock)
+                    {
+                        _pendingUpdatedIds.Add(data.DrugDispenseopdId);
+                    }
+                }
+
+                onProcessed?.Invoke(new ProcessResult
+                {
+                    Success = success,
+                    Message = success ? "Processed successfully" : apiResponse,
+                    ApiResponse = apiResponse,
+                    DispenseData = data,
+                    ParsedMessage = hl7Message,
+                    Type = DispenseType.OPD
+                });
+            }
+            catch (OperationCanceledException)
+            {
+                _logger.LogInfo($"Processing cancelled for OPD prescription ID: {data.PrescId}");
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError($"Error processing OPD order: {data.PrescId}", ex);
+                _databaseService.UpdateReceiveOpdStatus(data.DrugDispenseopdId, 'F');
+
+                onProcessed?.Invoke(new ProcessResult
+                {
+                    Success = false,
+                    Message = ex.Message,
+                    ApiResponse = null,
+                    DispenseData = data,
+                    ParsedMessage = hl7Message,
+                    Type = DispenseType.OPD
+                });
+            }
+        }
+
+        #endregion
+
+        #region Shared Processing Methods
+
+        private string ProcessNewOrder(object data, HL7Message hl7Message, DispenseType type)
         {
             try
             {
-                _logger.LogInfo($"Processing new order for prescription: {data.PrescId}");
+                int prescId = type == DispenseType.IPD
+                    ? ((DrugDispenseipd)data).PrescId
+                    : ((DrugDispenseopd)data).PrescId;
+
+                _logger.LogInfo($"Processing new order for {type} prescription: {prescId}");
 
                 var apiUrl = ConHIS_Service_XPHL7.Configuration.AppConfig.ApiEndpoint;
                 var apiMethod = "POST";
-                var bodyObj = CreatePrescriptionBody(hl7Message, data);
+                var bodyObj = CreatePrescriptionBody(hl7Message, data, type);
                 var bodyJson = JsonConvert.SerializeObject(bodyObj, Formatting.Indented);
 
                 _logger.LogInfo($"API URL: {apiUrl}");
@@ -292,12 +521,12 @@ namespace ConHIS_Service_XPHL7.Services
 
                         if (firstResponse.Status)
                         {
-                            _logger.LogInfo($"Successfully processed order: {data.PrescId}, UniqID: {firstResponse.UniqID}");
+                            _logger.LogInfo($"Successfully processed {type} order: {prescId}, UniqID: {firstResponse.UniqID}");
                             return $"Success: {firstResponse.Message}";
                         }
                         else
                         {
-                            _logger.LogError($"Order processing failed: {data.PrescId}, Message: {firstResponse.Message}");
+                            _logger.LogError($"{type} order processing failed: {prescId}, Message: {firstResponse.Message}");
                             throw new Exception($"Order processing failed: {firstResponse.Message}");
                         }
                     }
@@ -307,20 +536,27 @@ namespace ConHIS_Service_XPHL7.Services
             }
             catch (Exception ex)
             {
-                _logger.LogError($"Error in ProcessNewOrder for {data.PrescId}", ex);
+                int prescId = type == DispenseType.IPD
+                    ? ((DrugDispenseipd)data).PrescId
+                    : ((DrugDispenseopd)data).PrescId;
+                _logger.LogError($"Error in ProcessNewOrder for {type} {prescId}", ex);
                 throw;
             }
         }
 
-        private string ProcessReplaceOrder(DrugDispenseipd data, HL7Message hl7Message)
+        private string ProcessReplaceOrder(object data, HL7Message hl7Message, DispenseType type)
         {
             try
             {
-                _logger.LogInfo($"Processing replace order for prescription: {data.PrescId}");
+                int prescId = type == DispenseType.IPD
+                    ? ((DrugDispenseipd)data).PrescId
+                    : ((DrugDispenseopd)data).PrescId;
+
+                _logger.LogInfo($"Processing replace order for {type} prescription: {prescId}");
 
                 var apiUrl = ConHIS_Service_XPHL7.Configuration.AppConfig.ApiEndpoint;
                 var apiMethod = "POST";
-                var bodyObj = CreatePrescriptionBody(hl7Message, data);
+                var bodyObj = CreatePrescriptionBody(hl7Message, data, type);
                 var bodyJson = JsonConvert.SerializeObject(bodyObj, Formatting.Indented);
 
                 _logger.LogInfo($"API URL: {apiUrl}");
@@ -340,12 +576,12 @@ namespace ConHIS_Service_XPHL7.Services
 
                         if (firstResponse.Status)
                         {
-                            _logger.LogInfo($"Successfully processed order: {data.PrescId}, UniqID: {firstResponse.UniqID}");
+                            _logger.LogInfo($"Successfully processed {type} order: {prescId}, UniqID: {firstResponse.UniqID}");
                             return $"Success: {firstResponse.Message}";
                         }
                         else
                         {
-                            _logger.LogError($"Order processing failed: {data.PrescId}, Message: {firstResponse.Message}");
+                            _logger.LogError($"{type} order processing failed: {prescId}, Message: {firstResponse.Message}");
                             throw new Exception($"Order processing failed: {firstResponse.Message}");
                         }
                     }
@@ -355,15 +591,16 @@ namespace ConHIS_Service_XPHL7.Services
             }
             catch (Exception ex)
             {
-                _logger.LogError($"Error in ProcessReplaceOrder for {data.PrescId}", ex);
+                int prescId = type == DispenseType.IPD
+                    ? ((DrugDispenseipd)data).PrescId
+                    : ((DrugDispenseopd)data).PrescId;
+                _logger.LogError($"Error in ProcessReplaceOrder for {type} {prescId}", ex);
                 throw;
             }
         }
 
-
-        private object CreatePrescriptionBody(HL7Message result, DrugDispenseipd data)
+        private object CreatePrescriptionBody(HL7Message result, object data, DispenseType type)
         {
-           
             string FormatDate(DateTime? dt, string fmt, bool forceBuddhistEra = false)
             {
                 if (!dt.HasValue || dt.Value == DateTime.MinValue)
@@ -521,5 +758,7 @@ namespace ConHIS_Service_XPHL7.Services
 
             return new { data = prescriptions };
         }
+
+        #endregion
     }
 }

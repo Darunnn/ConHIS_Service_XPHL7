@@ -14,6 +14,7 @@ namespace ConHIS_Service_XPHL7.Models
         public string RecieveOrderType { get; set; }
     }
 
+
     public class DrugDispenseopd
     {
         public int DrugDispenseopdId { get; set; }
@@ -25,6 +26,5 @@ namespace ConHIS_Service_XPHL7.Models
         public DateTime? RecieveStatusDatetime { get; set; }
         public string RecieveOrderType { get; set; }
     }
-
 
 }
