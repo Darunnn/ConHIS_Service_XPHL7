@@ -1,9 +1,10 @@
-﻿using System;
+﻿using ConHIS_Service_XPHL7.Models;
+using ConHIS_Service_XPHL7.Utils;
+using MySql.Data.MySqlClient;
+using System;
 using System.Collections.Generic;
 using System.Data;
-using MySql.Data.MySqlClient;
-using ConHIS_Service_XPHL7.Models;
-using ConHIS_Service_XPHL7.Utils;
+using System.Linq;
 
 namespace ConHIS_Service_XPHL7.Services
 {
@@ -525,6 +526,112 @@ namespace ConHIS_Service_XPHL7.Services
             {
                 _logger.LogError($"Error updating receive status (OPD) for ID {drugDispenseopdId}", ex);
             }
+        }
+
+        #endregion
+        #region Shared Methods
+
+        /// <summary>
+        /// ดึงข้อมูล Pending ตาม OrderType (IPD หรือ OPD)
+        /// </summary>
+        public List<DrugDispenseipd> GetPendingDispenseDataByOrderType(string orderType)
+        {
+            _logger.LogInfo($"GetPendingDispenseDataByOrderType: Start - OrderType={orderType}");
+
+            if (orderType == "IPD")
+            {
+                return GetPendingDispenseData();
+            }
+            else if (orderType == "OPD")
+            {
+                // แปลง DrugDispenseopd เป็น DrugDispenseipd เพื่อให้ใช้ type เดียวกัน
+                var opdData = GetPendingDispenseOpdData();
+
+                return opdData.Select(opd => new DrugDispenseipd
+                {
+                    DrugDispenseipdId = opd.DrugDispenseopdId,
+                    PrescId = opd.PrescId,
+                    DrugRequestMsgType = opd.DrugRequestMsgType,
+                    Hl7Data = opd.Hl7Data,
+                    DrugDispenseDatetime = opd.DrugDispenseDatetime,
+                    RecieveStatus = opd.RecieveStatus,
+                    RecieveStatusDatetime = opd.RecieveStatusDatetime,
+                    RecieveOrderType = opd.RecieveOrderType
+                }).ToList();
+            }
+            else
+            {
+                _logger.LogWarning($"Unknown OrderType: {orderType}");
+                return new List<DrugDispenseipd>();
+            }
+        }
+
+        /// <summary>
+        /// ดึงข้อมูลตามวันที่ รวมทั้ง IPD และ OPD
+        /// </summary>
+        public List<DrugDispenseipd> GetAllDispenseDataByDate(DateTime startDate, DateTime endDate)
+        {
+            _logger.LogInfo($"GetAllDispenseDataByDate: From {startDate:yyyy-MM-dd} to {endDate:yyyy-MM-dd}");
+
+            var result = new List<DrugDispenseipd>();
+
+            // ดึง IPD data
+            var ipdData = GetDispenseDataByDate(startDate, endDate);
+            result.AddRange(ipdData);
+
+            // ดึง OPD data และแปลงเป็น IPD type
+            var opdData = GetDispenseOpdDataByDate(startDate, endDate);
+            var convertedOpdData = opdData.Select(opd => new DrugDispenseipd
+            {
+                DrugDispenseipdId = opd.DrugDispenseopdId,
+                PrescId = opd.PrescId,
+                DrugRequestMsgType = opd.DrugRequestMsgType,
+                Hl7Data = opd.Hl7Data,
+                DrugDispenseDatetime = opd.DrugDispenseDatetime,
+                RecieveStatus = opd.RecieveStatus,
+                RecieveStatusDatetime = opd.RecieveStatusDatetime,
+                RecieveOrderType = opd.RecieveOrderType ?? "OPD" // ตั้งค่า default เป็น OPD
+            }).ToList();
+
+            result.AddRange(convertedOpdData);
+
+            _logger.LogInfo($"GetAllDispenseDataByDate: Total {result.Count} records (IPD: {ipdData.Count}, OPD: {convertedOpdData.Count})");
+
+            return result;
+        }
+
+        /// <summary>
+        /// ค้นหาข้อมูลตามวันที่และคำค้นหา รวมทั้ง IPD และ OPD
+        /// </summary>
+        public List<DrugDispenseipd> GetAllDispenseDataByDateAndSearch(DateTime date, string searchText)
+        {
+            _logger.LogInfo($"GetAllDispenseDataByDateAndSearch: Date={date:yyyy-MM-dd}, Search={searchText}");
+
+            var result = new List<DrugDispenseipd>();
+
+            // ค้นหา IPD data
+            var ipdData = GetDispenseDataByDateAndSearch(date, searchText);
+            result.AddRange(ipdData);
+
+            // ค้นหา OPD data และแปลงเป็น IPD type
+            var opdData = GetDispenseOpdDataByDateAndSearch(date, searchText);
+            var convertedOpdData = opdData.Select(opd => new DrugDispenseipd
+            {
+                DrugDispenseipdId = opd.DrugDispenseopdId,
+                PrescId = opd.PrescId,
+                DrugRequestMsgType = opd.DrugRequestMsgType,
+                Hl7Data = opd.Hl7Data,
+                DrugDispenseDatetime = opd.DrugDispenseDatetime,
+                RecieveStatus = opd.RecieveStatus,
+                RecieveStatusDatetime = opd.RecieveStatusDatetime,
+                RecieveOrderType = opd.RecieveOrderType ?? "OPD"
+            }).ToList();
+
+            result.AddRange(convertedOpdData);
+
+            _logger.LogInfo($"GetAllDispenseDataByDateAndSearch: Total {result.Count} records (IPD: {ipdData.Count}, OPD: {convertedOpdData.Count})");
+
+            return result;
         }
 
         #endregion
