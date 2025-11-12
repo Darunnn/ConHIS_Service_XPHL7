@@ -22,7 +22,6 @@ namespace ConHIS_Service_XPHL7
         private DatabaseService _databaseService;
         private LogManager _logger;
         private DrugDispenseProcessor _processor;
-        private SimpleHL7FileProcessor _hl7FileProcessor;
         private DateTime? _lastFoundTime = null;
         private DateTime? _lastSuccessTime = null;
         private string _lastSuccessOrderId = null;
@@ -59,6 +58,16 @@ namespace ConHIS_Service_XPHL7
         // Connection status
         private bool _isDatabaseConnected = false;
         private bool _isInitializing = false;
+
+        // ⭐ เพิ่มตัวแปรสำหรับ IPD/OPD Services
+        private CancellationTokenSource _ipdCancellationTokenSource = null;
+        private CancellationTokenSource _opdCancellationTokenSource = null;
+        private Timer _ipdTimer;
+        private Timer _opdTimer;
+        private bool _isIPDProcessing = false;
+        private bool _isOPDProcessing = false;
+        private bool _wasIPDRunningBeforeDisconnection = false;
+        private bool _wasOPDRunningBeforeDisconnection = false;
         #endregion
         public Form1()
         {
@@ -66,7 +75,7 @@ namespace ConHIS_Service_XPHL7
             this.Load += Form1_Load;
             this.FormClosing += Form1_FormClosing;
             _logger = new LogManager();
-            _hl7FileProcessor = new SimpleHL7FileProcessor();
+            
         }
 
         private void InitializeDataTable()
@@ -151,7 +160,53 @@ namespace ConHIS_Service_XPHL7
             ResetNotificationFlags(); // Reset flags เมื่อหยุด monitor
             _logger?.LogInfo("Connection monitor stopped");
         }
+        private void ShowAutoCloseMessageBox(string message, string title, int timeoutMs,
+    bool shouldResumeIPD, bool shouldResumeOPD)
+        {
+            System.Threading.Timer timer = null;
 
+            timer = new System.Threading.Timer(async (obj) =>
+            {
+                try
+                {
+                    IntPtr hwnd = FindWindow(null, title);
+                    if (hwnd != IntPtr.Zero)
+                    {
+                        SendMessage(hwnd, WM_CLOSE, IntPtr.Zero, IntPtr.Zero);
+                    }
+
+                    if (shouldResumeIPD || shouldResumeOPD)
+                    {
+                        await Task.Delay(500);
+
+                        this.Invoke(new Action(() =>
+                        {
+                            if (shouldResumeIPD && _ipdTimer == null)
+                            {
+                                _logger?.LogInfo("Auto-resuming IPD Service");
+                                StartIPDService();
+                            }
+
+                            if (shouldResumeOPD && _opdTimer == null)
+                            {
+                                _logger?.LogInfo("Auto-resuming OPD Service");
+                                StartOPDService();
+                            }
+                        }));
+                    }
+                }
+                catch (Exception ex)
+                {
+                    _logger?.LogError("Error in auto-close timer", ex);
+                }
+                finally
+                {
+                    timer?.Dispose();
+                }
+            }, null, timeoutMs, System.Threading.Timeout.Infinite);
+
+            MessageBox.Show(message, title, MessageBoxButtons.OK, MessageBoxIcon.Information);
+        }
         // ⭐ Callback สำหรับตรวจสอบการเชื่อมต่อแบบ Realtime
         private async void ConnectionCheckCallback(object state)
         {
@@ -161,104 +216,108 @@ namespace ConHIS_Service_XPHL7
 
             try
             {
-                string checkTime = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss");
-
-                // ทดสอบการเชื่อมต่อ
                 bool isConnected = await Task.Run(() => _databaseService?.TestConnection() ?? false);
 
-                // บันทึก log
                 _logger?.LogConnectDatabase(isConnected, _lastDatabaseConnectionTime, _lastDatabaseDisconnectionTime);
 
-                // อัพเดทเฉพาะเมื่อสถานะเปลี่ยน
                 if (isConnected != _isDatabaseConnected)
                 {
                     if (isConnected)
                     {
-                        // ✅ เชื่อมต่อกลับมาได้
+                        // ✅ Reconnected
                         this.Invoke(new Action(async () =>
                         {
                             try
                             {
                                 UpdateConnectionStatus(true);
-
-                                // รีเฟรชข้อมูลทันที
                                 await LoadDataBySelectedDate();
-                                UpdateStatus("✓ Database reconnected - Data refreshed automatically");
+                                UpdateStatus("✓ Database reconnected - Data refreshed");
 
-                                // แจ้งเตือนครั้งเดียวเมื่อเชื่อมต่อกลับมา
                                 if (!_hasNotifiedReconnection)
                                 {
                                     _hasNotifiedReconnection = true;
                                     _hasNotifiedDisconnection = false;
 
-                                    // ⭐ เช็คว่า Service กำลังทำงานอยู่ก่อนหน้านี้หรือไม่
-                                    bool shouldResumeService = _wasServiceRunningBeforeDisconnection;
+                                    bool shouldResumeIPD = _wasIPDRunningBeforeDisconnection;
+                                    bool shouldResumeOPD = _wasOPDRunningBeforeDisconnection;
 
-                                    string serviceMessage = shouldResumeService
-                                        ? "\n\n⚡ Service will resume automatically in 3 seconds..."
-                                        : "";
+                                    string serviceMessage = "";
+                                    if (shouldResumeIPD && shouldResumeOPD)
+                                        serviceMessage = "\n\n⚡ Both IPD & OPD Services will resume in 3 seconds...";
+                                    else if (shouldResumeIPD)
+                                        serviceMessage = "\n\n⚡ IPD Service will resume in 3 seconds...";
+                                    else if (shouldResumeOPD)
+                                        serviceMessage = "\n\n⚡ OPD Service will resume in 3 seconds...";
 
-                                    // ⭐ แสดง MessageBox ที่ปิดอัตโนมัติหลัง 3 วินาที
                                     this.BeginInvoke(new Action(() =>
                                     {
                                         ShowAutoCloseMessageBox(
-                                            $"✅ Database connection has been restored!\n\n" +
+                                            $"✅ Database connection restored!\n\n" +
                                             $"📅 Reconnected at: {_lastDatabaseConnectionTime.Value:yyyy-MM-dd HH:mm:ss}\n" +
-                                            $"🔄 Data has been refreshed automatically." +
+                                            $"🔄 Data refreshed automatically." +
                                             serviceMessage,
                                             "Connection Restored",
-                                            3000, // 3 วินาที
-                                            shouldResumeService // ⭐ บอกว่าต้อง Resume Service หรือไม่
+                                            3000,
+                                            shouldResumeIPD,
+                                            shouldResumeOPD
                                         );
                                     }));
                                 }
                             }
                             catch (Exception ex)
                             {
-                                _logger?.LogError("Error refreshing data after reconnection", ex);
+                                _logger?.LogError("Error after reconnection", ex);
                             }
                         }));
                     }
                     else
                     {
-                        // ❌ การเชื่อมต่อขาดหาย
+                        // ❌ Disconnected
                         this.Invoke(new Action(() =>
                         {
                             UpdateConnectionStatus(false);
 
-                            // ⭐ บันทึกสถานะว่า Service กำลังทำงานอยู่หรือไม่ (เช็คจาก _backgroundTimer)
-                            _wasServiceRunningBeforeDisconnection = (_backgroundTimer != null);
+                            _wasIPDRunningBeforeDisconnection = (_ipdTimer != null);
+                            _wasOPDRunningBeforeDisconnection = (_opdTimer != null);
 
-                            // ⭐ ถ้า Service กำลังทำงานอยู่ ให้หยุดชั่วคราว
-                            if (_wasServiceRunningBeforeDisconnection)
+                            if (_wasIPDRunningBeforeDisconnection)
                             {
-                                _logger?.LogWarning("Service is running - Auto-stopping due to database disconnection");
-                                StopBackgroundService(); // ⭐ เรียก StopBackgroundService
-                                _logger?.LogInfo("Service stopped temporarily");
+                                _logger?.LogWarning("IPD Service running - Auto-stopping");
+                                StopIPDService();
+                            }
+
+                            if (_wasOPDRunningBeforeDisconnection)
+                            {
+                                _logger?.LogWarning("OPD Service running - Auto-stopping");
+                                StopOPDService();
                             }
 
                             UpdateStatus("✗ Database connection lost - Reconnecting...");
 
-                            // แจ้งเตือนครั้งเดียวเมื่อขาดการเชื่อมต่อ
                             if (!_hasNotifiedDisconnection)
                             {
                                 _hasNotifiedDisconnection = true;
                                 _hasNotifiedReconnection = false;
 
-                                string serviceMessage = _wasServiceRunningBeforeDisconnection
-                                    ? "\n\n⏸️ Service has been stopped temporarily and will auto-resume when reconnected."
-                                    : "";
+                                string serviceMessage = "";
+                                if (_wasIPDRunningBeforeDisconnection && _wasOPDRunningBeforeDisconnection)
+                                    serviceMessage = "\n\n⏸️ Both services stopped and will auto-resume when reconnected.";
+                                else if (_wasIPDRunningBeforeDisconnection)
+                                    serviceMessage = "\n\n⏸️ IPD Service stopped and will auto-resume when reconnected.";
+                                else if (_wasOPDRunningBeforeDisconnection)
+                                    serviceMessage = "\n\n⏸️ OPD Service stopped and will auto-resume when reconnected.";
 
                                 this.BeginInvoke(new Action(() =>
                                 {
                                     ShowAutoCloseMessageBox(
-                                        $"❌ Database connection has been lost!\n\n" +
+                                        $"❌ Database connection lost!\n\n" +
                                         $"📅 Lost at: {_lastDatabaseDisconnectionTime.Value:yyyy-MM-dd HH:mm:ss}\n" +
-                                        $"🔄 System will attempt to reconnect every {_connectionCheckIntervalSeconds} seconds." +
+                                        $"🔄 Reconnecting every {_connectionCheckIntervalSeconds} seconds." +
                                         serviceMessage,
                                         "Connection Lost",
-                                        3000, // 3 วินาที
-                                        false // ไม่ Resume Service เมื่อขาดการเชื่อมต่อ
+                                        3000,
+                                        false,
+                                        false
                                     );
                                 }));
                             }
@@ -269,11 +328,7 @@ namespace ConHIS_Service_XPHL7
             catch (Exception ex)
             {
                 _logger?.LogError("Connection check error", ex);
-
-                this.Invoke(new Action(() =>
-                {
-                    UpdateConnectionStatus(false);
-                }));
+                this.Invoke(new Action(() => UpdateConnectionStatus(false)));
             }
             finally
             {
@@ -286,15 +341,14 @@ namespace ConHIS_Service_XPHL7
             totalPanel.Paint += (s, e) => DrawPanelTopBar(e, System.Drawing.Color.Gray);
             successPanel.Paint += (s, e) => DrawPanelTopBar(e, System.Drawing.Color.Green);
             failedPanel.Paint += (s, e) => DrawPanelTopBar(e, System.Drawing.Color.Red);
-            pendingPanel.Paint += (s, e) => DrawPanelTopBar(e, System.Drawing.Color.Orange);
-            rejectPanel.Paint += (s, e) => DrawPanelTopBar(e, System.Drawing.Color.DarkGray);
+            ipdPanel.Paint += (s, e) => DrawPanelTopBar(e, System.Drawing.Color.FromArgb(52, 152, 219));
+            opdPanel.Paint += (s, e) => DrawPanelTopBar(e, System.Drawing.Color.FromArgb(46, 204, 113));
 
             totalPanel.Click += TotalPanel_Click;
             successPanel.Click += SuccessPanel_Click;
             failedPanel.Click += FailedPanel_Click;
-            pendingPanel.Click += PendingPanel_Click;
-            rejectPanel.Click += RejectPanel_Click;
-
+            ipdPanel.Click += IPDPanel_Click;
+            opdPanel.Click += OPDPanel_Click;
             foreach (Control ctrl in totalPanel.Controls)
             {
                 if (ctrl is Label) { ctrl.Click += TotalPanel_Click; ctrl.Cursor = System.Windows.Forms.Cursors.Hand; }
@@ -307,20 +361,19 @@ namespace ConHIS_Service_XPHL7
             {
                 if (ctrl is Label) { ctrl.Click += FailedPanel_Click; ctrl.Cursor = System.Windows.Forms.Cursors.Hand; }
             }
-            foreach (Control ctrl in pendingPanel.Controls)
+            foreach (Control ctrl in ipdPanel.Controls)
             {
-                if (ctrl is Label) { ctrl.Click += PendingPanel_Click; ctrl.Cursor = System.Windows.Forms.Cursors.Hand; }
+                if (ctrl is Label) { ctrl.Click += IPDPanel_Click; ctrl.Cursor = System.Windows.Forms.Cursors.Hand; }
             }
-            foreach (Control ctrl in rejectPanel.Controls)
+            foreach (Control ctrl in opdPanel.Controls)
             {
-                if (ctrl is Label) { ctrl.Click += RejectPanel_Click; ctrl.Cursor = System.Windows.Forms.Cursors.Hand; }
+                if (ctrl is Label) { ctrl.Click += OPDPanel_Click; ctrl.Cursor = System.Windows.Forms.Cursors.Hand; }
             }
-
             totalPanel.Cursor = System.Windows.Forms.Cursors.Hand;
             successPanel.Cursor = System.Windows.Forms.Cursors.Hand;
             failedPanel.Cursor = System.Windows.Forms.Cursors.Hand;
-            pendingPanel.Cursor = System.Windows.Forms.Cursors.Hand;
-            rejectPanel.Cursor = System.Windows.Forms.Cursors.Hand;
+            ipdPanel.Cursor = System.Windows.Forms.Cursors.Hand;
+            opdPanel.Cursor = System.Windows.Forms.Cursors.Hand;
         }
 
         private async Task LoadDataBySelectedDate()
@@ -667,7 +720,7 @@ namespace ConHIS_Service_XPHL7
 
                 UpdateStatus("Ready - Service Stopped");
                 startStopButton.Enabled = true;
-                testHL7Button.Enabled = true;
+                
                 manualCheckButton.Enabled = true;
                 exportButton.Enabled = true;
                 settingsButton.Enabled = true;
@@ -680,124 +733,7 @@ namespace ConHIS_Service_XPHL7
             }
         }
 
-        #region Test HL7 File
-        //private async void TestHL7Button_Click(object sender, EventArgs e)
-        //{
-        //    try
-        //    {
-        //        using (var openFileDialog = new OpenFileDialog())
-        //        {
-        //            openFileDialog.Title = "Select HL7 File to Test";
-        //            openFileDialog.Filter = "Text files (*.txt)|*.txt|All files (*.*)|*.*";
-
-        //            var searchFolders = new[]
-        //            {
-        //                Path.Combine(Application.StartupPath, "TestData"),
-        //                Application.StartupPath,
-        //                Environment.GetFolderPath(Environment.SpecialFolder.Desktop)
-        //            };
-
-        //            string initialDirectory = Application.StartupPath;
-        //            foreach (var folder in searchFolders)
-        //            {
-        //                if (Directory.Exists(folder))
-        //                {
-        //                    initialDirectory = folder;
-        //                    break;
-        //                }
-        //            }
-        //            openFileDialog.InitialDirectory = initialDirectory;
-
-        //            if (openFileDialog.ShowDialog() == DialogResult.OK)
-        //            {
-        //                var filePath = openFileDialog.FileName;
-        //                var fileName = Path.GetFileName(filePath);
-
-        //                if (string.IsNullOrEmpty(AppConfig.ApiEndpoint))
-        //                {
-        //                    _logger.LogError("API Endpoint is not configured!");
-        //                    UpdateStatus("Error: API Endpoint not configured");
-        //                    return;
-        //                }
-
-        //                var sendToApi = true;
-
-        //                UpdateStatus($"Testing HL7 file: {fileName}...");
-        //                testHL7Button.Enabled = false;
-        //                manualCheckButton.Enabled = false;
-        //                startStopButton.Enabled = false;
-        //                exportButton.Enabled = false;
-
-        //                HL7TestResult result = null;
-        //                await Task.Run(() =>
-        //                {
-        //                    result = _hl7FileProcessor.ProcessAndSendHL7File(filePath, sendToApi);
-        //                });
-
-        //                if (result != null)
-        //                {
-        //                    string TransactionDateTime = result.ParsedMessage?.CommonOrder?.TransactionDateTime != null
-        //                            ? ((DateTime)result.ParsedMessage?.CommonOrder?.TransactionDateTime)
-        //                                .ToString("yyyy-MM-dd HH:mm:ss")
-        //                            : null;
-        //                    string orderNo = result.ParsedMessage?.CommonOrder?.PlacerOrderNumber ?? "N/A";
-        //                    string hn = result.ParsedMessage?.PatientIdentification?.PatientIDExternal ??
-        //                               result.ParsedMessage?.PatientIdentification?.PatientIDInternal ?? "N/A";
-
-        //                    string patientName = "N/A";
-        //                    if (result.ParsedMessage?.PatientIdentification?.OfficialName != null)
-        //                    {
-        //                        var name = result.ParsedMessage.PatientIdentification.OfficialName;
-        //                        patientName = $"{name.Prefix ?? ""} {name.FirstName ?? ""} {name.LastName ?? ""}".Trim();
-        //                        if (string.IsNullOrWhiteSpace(patientName)) patientName = "N/A";
-        //                    }
-
-        //                    string FinancialClass = "N/A";
-        //                    if (result.ParsedMessage?.PatientVisit?.FinancialClass != null)
-        //                    {
-        //                        var financialclass = result.ParsedMessage.PatientVisit.FinancialClass;
-        //                        FinancialClass = $"{financialclass.ID ?? ""} {financialclass.Name ?? ""}".Trim();
-        //                        if (string.IsNullOrWhiteSpace(FinancialClass)) FinancialClass = "N/A";
-        //                    }
-
-        //                    string OrderControl = result.ParsedMessage?.CommonOrder?.OrderControl ?? "N/A";
-
-        //                    AddRowToGrid(
-        //                        DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss"),
-        //                        TransactionDateTime,
-        //                        orderNo,
-        //                        hn,
-        //                        patientName,
-        //                        FinancialClass,
-        //                        OrderControl,
-        //                        result.Success ? "Success" : "Failed",
-        //                        result.ApiResponse ?? result.ErrorMessage ?? "N/A",
-        //                        result.ParsedMessage
-        //                    );
-
-        //                    UpdateStatus(result.Success ? $"HL7 test completed - {fileName}" : $"HL7 test failed - {fileName}");
-        //                }
-        //                else
-        //                {
-        //                    UpdateStatus("HL7 test failed - Check log for details");
-        //                }
-        //            }
-        //        }
-        //    }
-        //    catch (Exception ex)
-        //    {
-        //        _logger.LogError("HL7 file test error", ex);
-        //        UpdateStatus($"HL7 test error: {ex.Message}");
-        //    }
-        //    finally
-        //    {
-        //        testHL7Button.Enabled = true;
-        //        manualCheckButton.Enabled = true;
-        //        startStopButton.Enabled = true;
-        //        exportButton.Enabled = true;
-        //    }
-        //}
-        #endregion
+       
 
         #region Export
         //private void ExportButton_Click(object sender, EventArgs e)
@@ -930,7 +866,19 @@ namespace ConHIS_Service_XPHL7
             ApplyStatusFilter();
             UpdateStatusFilterButtons();
         }
+        private void IPDPanel_Click(object sender, EventArgs e)
+        {
+            _currentStatusFilter = "IPD";
+            ApplyOrderTypeFilter("IPD");
+            UpdateStatusFilterButtons();
+        }
 
+        private void OPDPanel_Click(object sender, EventArgs e)
+        {
+            _currentStatusFilter = "OPD";
+            ApplyOrderTypeFilter("OPD");
+            UpdateStatusFilterButtons();
+        }
         private void PendingPanel_Click(object sender, EventArgs e)
         {
             _currentStatusFilter = "Pending";
@@ -950,8 +898,7 @@ namespace ConHIS_Service_XPHL7
             totalPanel.BorderStyle = System.Windows.Forms.BorderStyle.FixedSingle;
             successPanel.BorderStyle = System.Windows.Forms.BorderStyle.FixedSingle;
             failedPanel.BorderStyle = System.Windows.Forms.BorderStyle.FixedSingle;
-            pendingPanel.BorderStyle = System.Windows.Forms.BorderStyle.FixedSingle;
-            rejectPanel.BorderStyle = System.Windows.Forms.BorderStyle.FixedSingle;
+   
 
             if (_currentStatusFilter == "All")
                 totalPanel.BorderStyle = System.Windows.Forms.BorderStyle.Fixed3D;
@@ -959,10 +906,7 @@ namespace ConHIS_Service_XPHL7
                 successPanel.BorderStyle = System.Windows.Forms.BorderStyle.Fixed3D;
             else if (_currentStatusFilter == "Failed")
                 failedPanel.BorderStyle = System.Windows.Forms.BorderStyle.Fixed3D;
-            else if (_currentStatusFilter == "Pending")
-                pendingPanel.BorderStyle = System.Windows.Forms.BorderStyle.Fixed3D;
-            else if (_currentStatusFilter == "Rejected")
-                rejectPanel.BorderStyle = System.Windows.Forms.BorderStyle.Fixed3D;
+           
         }
 
         private void ApplyStatusFilter()
@@ -992,7 +936,24 @@ namespace ConHIS_Service_XPHL7
                 _logger.LogError("Error applying status filter", ex);
             }
         }
+        private void ApplyOrderTypeFilter(string orderType)
+        {
+            try
+            {
+                _filteredDataView.RowFilter = $"[FinancialClass] LIKE '%{orderType}%' OR [OrderControl] = '{orderType}'";
 
+                ApplyRowColors();
+
+                int resultCount = _filteredDataView.Count;
+                UpdateStatus($"Showing {resultCount} {orderType} record(s)");
+                UpdateStatusSummary();
+                _logger.LogInfo($"Order type filter applied: {orderType} - Found {resultCount} records");
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError($"Error applying {orderType} filter", ex);
+            }
+        }
         // ⭐ ปรับปรุง ApplyFilter เพื่อ apply สีหลังจาก filter
         private void ApplyFilter()
         {
@@ -1123,8 +1084,9 @@ namespace ConHIS_Service_XPHL7
         }
         private void Form1_FormClosing(object sender, FormClosingEventArgs e)
         {
-            StopBackgroundService();
-            StopConnectionMonitor(); // ⭐ หยุด Connection Monitor
+            StopIPDService();
+            StopOPDService();
+            StopConnectionMonitor();
             _logger.LogInfo("Application closing - All services stopped");
         }
 
@@ -1282,122 +1244,224 @@ namespace ConHIS_Service_XPHL7
         }
         #endregion
 
-        #region Start/Stop Service Manual and Auto
-        private void StartStopButton_Click(object sender, EventArgs e)
+        #region Start/Stop Service Manual and Auto - IPD/OPD
+
+        // ⭐ IPD Button Click
+        private void StartStopIPDButton_Click(object sender, EventArgs e)
         {
-            if (_backgroundTimer == null)
+            if (_ipdTimer == null)
             {
-                StartBackgroundService();
-                testHL7Button.Enabled = false;
+                StartIPDService();
                 manualCheckButton.Enabled = false;
                 exportButton.Enabled = false;
             }
             else
             {
-                StopBackgroundService();
-                testHL7Button.Enabled = true;
-                manualCheckButton.Enabled = true;
-                exportButton.Enabled = true;
+                StopIPDService();
+                // ถ้า OPD ก็หยุดแล้ว ให้เปิด manual check
+                if (_opdTimer == null)
+                {
+                    manualCheckButton.Enabled = true;
+                    exportButton.Enabled = true;
+                }
             }
         }
 
-        private async void ManualCheckButton_Click(object sender, EventArgs e)
+        // ⭐ OPD Button Click
+        private void StartStopOPDButton_Click(object sender, EventArgs e)
         {
-            if (!_isProcessing)
+            if (_opdTimer == null)
             {
-                // ⭐ Manual check ใช้ CancellationToken ธรรมชาติ (ไม่สามารถ Cancel ได้)
-                await CheckPendingOrders(isManual: true);
+                StartOPDService();
+                manualCheckButton.Enabled = false;
+                exportButton.Enabled = false;
+            }
+            else
+            {
+                StopOPDService();
+                // ถ้า IPD ก็หยุดแล้ว ให้เปิด manual check
+                if (_ipdTimer == null)
+                {
+                    manualCheckButton.Enabled = true;
+                    exportButton.Enabled = true;
+                }
             }
         }
 
-        private void StartBackgroundService()
+        // ⭐ Start IPD Service
+        private void StartIPDService()
         {
-            var intervalMs = _intervalSeconds * 500;
+            var intervalMs = _intervalSeconds * 1000;
 
+            _ipdCancellationTokenSource = new CancellationTokenSource();
+            _ipdTimer = new Timer(IPDTimerCallback, null, 0, intervalMs);
 
-            _backgroundCancellationTokenSource = new CancellationTokenSource();
-
-            _backgroundTimer = new Timer(BackgroundTimerCallback, null, 0, intervalMs);
-
-            startStopButton.Text = "Stop Service";
-            UpdateStatus($"Service Running - Checking every {_intervalSeconds} seconds");
-            _logger.LogInfo($"Background service started with {_intervalSeconds}s interval");
+            UpdateButtonState(startStopIPDButton, true, "■ Stop IPD");
+            UpdateServiceStatus();
+            _logger.LogInfo($"IPD Service started with {_intervalSeconds}s interval");
         }
-        private async void StopBackgroundService()
-        {
-            _logger.LogInfo("StopBackgroundService: Starting stop process");
 
-            // ⭐ Step 1: หยุด Timer ทันที
-            if (_backgroundTimer != null)
+        // ⭐ Start OPD Service
+        private void StartOPDService()
+        {
+            var intervalMs = _intervalSeconds * 1000;
+
+            _opdCancellationTokenSource = new CancellationTokenSource();
+            _opdTimer = new Timer(OPDTimerCallback, null, 0, intervalMs);
+
+            UpdateButtonState(startStopOPDButton, true, "■ Stop OPD");
+            UpdateServiceStatus();
+            _logger.LogInfo($"OPD Service started with {_intervalSeconds}s interval");
+        }
+
+        // ⭐ Stop IPD Service
+        private async void StopIPDService()
+        {
+            _logger.LogInfo("Stopping IPD Service");
+
+            if (_ipdTimer != null)
             {
-                _backgroundTimer.Dispose();
-                _backgroundTimer = null;
-                _logger.LogInfo("StopBackgroundService: Timer disposed");
+                _ipdTimer.Dispose();
+                _ipdTimer = null;
             }
 
-            // ⭐ Step 2: ยกเลิก Background Task ที่กำลังทำงาน
-            if (_backgroundCancellationTokenSource != null)
+            if (_ipdCancellationTokenSource != null)
             {
-                _backgroundCancellationTokenSource.Cancel();
-                _logger.LogInfo("StopBackgroundService: Cancellation requested");
+                _ipdCancellationTokenSource.Cancel();
 
-                // รอให้ task รับการ Cancel - สูงสุด 5 วินาที
                 int timeoutMs = 5000;
                 int elapsedMs = 0;
                 int checkIntervalMs = 100;
 
-                while (_isProcessing && elapsedMs < timeoutMs)
+                while (_isIPDProcessing && elapsedMs < timeoutMs)
                 {
                     await Task.Delay(checkIntervalMs);
                     elapsedMs += checkIntervalMs;
                 }
 
-                if (_isProcessing)
-                {
-                    _logger.LogWarning("StopBackgroundService: Task did not stop within timeout, forcing stop");
-                }
-
-                // ⭐ Step 3: Dispose CancellationTokenSource
-                _backgroundCancellationTokenSource.Dispose();
-                _backgroundCancellationTokenSource = null;
+                _ipdCancellationTokenSource.Dispose();
+                _ipdCancellationTokenSource = null;
             }
 
-            // ⭐ Step 4: บังคับให้ _isProcessing = false
-            _isProcessing = false;
-            _logger.LogInfo("StopBackgroundService: _isProcessing set to false");
+            _isIPDProcessing = false;
 
-            // ⭐ Step 5: โหลดข้อมูลใหม่จาก Database เพื่อแสดงผลที่อัพเดทแล้ว
             await LoadDataBySelectedDate();
 
-            startStopButton.Text = "Start Service";
-            UpdateStatus("Service Stopped");
-            _logger.LogInfo("StopBackgroundService: Completed");
+            UpdateButtonState(startStopIPDButton, false, "▶ Start IPD");
+            UpdateServiceStatus();
+            _logger.LogInfo("IPD Service stopped");
         }
 
-        private async Task CheckPendingOrders(bool isManual, CancellationToken cancellationToken = default)
+        // ⭐ Stop OPD Service
+        private async void StopOPDService()
         {
-            if (_isProcessing) return;
+            _logger.LogInfo("Stopping OPD Service");
 
-            _isProcessing = true;
+            if (_opdTimer != null)
+            {
+                _opdTimer.Dispose();
+                _opdTimer = null;
+            }
+
+            if (_opdCancellationTokenSource != null)
+            {
+                _opdCancellationTokenSource.Cancel();
+
+                int timeoutMs = 5000;
+                int elapsedMs = 0;
+                int checkIntervalMs = 100;
+
+                while (_isOPDProcessing && elapsedMs < timeoutMs)
+                {
+                    await Task.Delay(checkIntervalMs);
+                    elapsedMs += checkIntervalMs;
+                }
+
+                _opdCancellationTokenSource.Dispose();
+                _opdCancellationTokenSource = null;
+            }
+
+            _isOPDProcessing = false;
+
+            await LoadDataBySelectedDate();
+
+            UpdateButtonState(startStopOPDButton, false, "▶ Start OPD");
+            UpdateServiceStatus();
+            _logger.LogInfo("OPD Service stopped");
+        }
+
+        // ⭐ IPD Timer Callback
+        private async void IPDTimerCallback(object state)
+        {
+            if (_isIPDProcessing || _ipdTimer == null) return;
+
+            if (_ipdCancellationTokenSource == null || _ipdCancellationTokenSource.IsCancellationRequested)
+                return;
+
+            await CheckPendingOrders("IPD", false, _ipdCancellationTokenSource.Token);
+        }
+
+        // ⭐ OPD Timer Callback
+        private async void OPDTimerCallback(object state)
+        {
+            if (_isOPDProcessing || _opdTimer == null) return;
+
+            if (_opdCancellationTokenSource == null || _opdCancellationTokenSource.IsCancellationRequested)
+                return;
+
+            await CheckPendingOrders("OPD", false, _opdCancellationTokenSource.Token);
+        }
+
+        // ⭐ Manual Check Button - แก้ไขให้เช็คทั้ง IPD และ OPD
+        private async void ManualCheckButton_Click(object sender, EventArgs e)
+        {
+            if (!_isIPDProcessing && !_isOPDProcessing)
+            {
+                // เช็คทั้งสองแบบพร้อมกัน
+                var ipdTask = CheckPendingOrders("IPD", true);
+                var opdTask = CheckPendingOrders("OPD", true);
+
+                await Task.WhenAll(ipdTask, opdTask);
+            }
+        }
+
+        // ⭐ แก้ไข CheckPendingOrders ให้รับ orderType
+        private async Task CheckPendingOrders(string orderType, bool isManual, CancellationToken cancellationToken = default)
+        {
+            bool isIPD = orderType == "IPD";
+
+            if (isIPD && _isIPDProcessing) return;
+            if (!isIPD && _isOPDProcessing) return;
+
+            if (isIPD)
+                _isIPDProcessing = true;
+            else
+                _isOPDProcessing = true;
 
             try
             {
                 if (isManual)
                 {
-                    testHL7Button.Enabled = false;
-                    startStopButton.Enabled = false;
-                    exportButton.Enabled = false;
+                    this.Invoke(new Action(() =>
+                    {
+                        startStopIPDButton.Enabled = false;
+                        startStopOPDButton.Enabled = false;
+                        exportButton.Enabled = false;
+                    }));
                 }
 
                 UpdateLastCheck();
-                _logger.LogInfo("Background check: Starting pending orders check");
+                _logger.LogInfo($"[{orderType}] Starting pending orders check");
 
                 cancellationToken.ThrowIfCancellationRequested();
 
-                var pending = await Task.Run(() => _databaseService.GetPendingDispenseData(), cancellationToken);
-                _logger.LogInfo($"Background check: Found {pending.Count} pending orders");
+                // ⭐ ดึงข้อมูลตาม OrderType
+                var pending = await Task.Run(() =>
+                    _databaseService.GetPendingDispenseDataByOrderType(orderType),
+                    cancellationToken);
 
-                // ⭐ อัพเดทเวลาเจอไฟล์
+                _logger.LogInfo($"[{orderType}] Found {pending.Count} pending orders");
+
                 if (pending.Count > 0)
                 {
                     UpdateLastFound(pending.Count);
@@ -1409,10 +1473,10 @@ namespace ConHIS_Service_XPHL7
 
                 this.Invoke(new Action(() =>
                 {
-                    this.Text = $"ConHIS Service - Pending: {remainingCount}";
+                    this.Text = $"ConHIS Service - {orderType} Pending: {remainingCount}";
                     if (remainingCount > 0)
                     {
-                        UpdateStatus($"Processing {remainingCount} pending orders...");
+                        UpdateStatus($"[{orderType}] Processing {remainingCount} pending orders...");
                     }
                 }));
 
@@ -1421,96 +1485,81 @@ namespace ConHIS_Service_XPHL7
                     await Task.Run(() =>
                     {
                         _processor.ProcessPendingOrders(
-     msg =>
-     {
-         _logger.LogInfo($"Background processing: {msg}");
-     },
-     result =>
-     {
-         if (cancellationToken.IsCancellationRequested)
-         {
-             _logger.LogInfo("Processing cancelled by user");
-             return;
-         }
+                            msg => { _logger.LogInfo($"[{orderType}] {msg}"); },
+                            result =>
+                            {
+                                if (cancellationToken.IsCancellationRequested)
+                                {
+                                    _logger.LogInfo($"[{orderType}] Processing cancelled");
+                                    return;
+                                }
 
-         var hl7Message = result.ParsedMessage;
-         string orderNo = hl7Message?.CommonOrder?.PlacerOrderNumber ?? "N/A";
+                                var hl7Message = result.ParsedMessage;
+                                string orderNo = hl7Message?.CommonOrder?.PlacerOrderNumber ?? "N/A";
 
-         // ⭐ ลบส่วนนี้ออกไปก่อน (เพราะ result อาจไม่มี DrugDispenseipdId, OrderType, RawHL7String)
+                                remainingCount--;
 
-         remainingCount--;
+                                this.Invoke(new Action(() =>
+                                {
+                                    this.Text = $"ConHIS Service - {orderType} Pending: {remainingCount}";
+                                    if (remainingCount > 0)
+                                    {
+                                        UpdateStatus($"[{orderType}] Processing... {remainingCount} remaining");
+                                    }
+                                }));
 
-         this.Invoke(new Action(() =>
-         {
-             this.Text = $"ConHIS Service - Pending: {remainingCount}";
-             if (remainingCount > 0)
-             {
-                 UpdateStatus($"Processing... {remainingCount} orders remaining");
-             }
-         }));
+                                if (result.Success)
+                                {
+                                    UpdateLastSuccess(orderNo);
+                                }
 
-         // ⭐ อัพเดทเวลา Success ถ้าส่งสำเร็จ
-         if (result.Success)
-         {
-             UpdateLastSuccess(orderNo);
-         }
+                                string hn = hl7Message?.PatientIdentification?.PatientIDExternal ??
+                                           hl7Message?.PatientIdentification?.PatientIDInternal ?? "N/A";
 
-         string hn = hl7Message?.PatientIdentification?.PatientIDExternal ??
-                    hl7Message?.PatientIdentification?.PatientIDInternal ?? "N/A";
+                                string transactionDateTime = hl7Message?.CommonOrder?.TransactionDateTime != null
+                                    ? ((DateTime)hl7Message.CommonOrder.TransactionDateTime).ToString("yyyy-MM-dd HH:mm:ss")
+                                    : null;
 
-         string TransactionDateTime = hl7Message?.CommonOrder?.TransactionDateTime != null
-             ? ((DateTime)hl7Message.CommonOrder.TransactionDateTime)
-                 .ToString("yyyy-MM-dd HH:mm:ss")
-             : null;
+                                string patientName = "N/A";
+                                if (hl7Message?.PatientIdentification?.OfficialName != null)
+                                {
+                                    var name = hl7Message.PatientIdentification.OfficialName;
+                                    patientName = $"{name.Prefix ?? ""} {name.FirstName ?? ""} {name.LastName ?? ""}".Trim();
+                                }
 
-         string patientName = "N/A";
-         if (hl7Message?.PatientIdentification?.OfficialName != null)
-         {
-             var name = hl7Message.PatientIdentification.OfficialName;
-             patientName = $"{name.Prefix ?? ""} {name.FirstName ?? ""} {name.LastName ?? ""}".Trim();
-         }
+                                string financialClass = "N/A";
+                                if (hl7Message?.PatientVisit?.FinancialClass != null)
+                                {
+                                    var fc = hl7Message.PatientVisit.FinancialClass;
+                                    financialClass = $"{fc.ID ?? ""} {fc.Name ?? ""}".Trim();
+                                    if (string.IsNullOrWhiteSpace(financialClass)) financialClass = "N/A";
+                                }
 
-         string FinancialClass = "N/A";
-         if (hl7Message?.PatientVisit?.FinancialClass != null)
-         {
-             var financialclass = hl7Message.PatientVisit.FinancialClass;
-             FinancialClass = $"{financialclass.ID ?? ""} {financialclass.Name ?? ""}".Trim();
-             if (string.IsNullOrWhiteSpace(FinancialClass)) FinancialClass = "N/A";
-         }
+                                string orderControl = hl7Message?.CommonOrder?.OrderControl ?? "N/A";
 
-         string OrderControl = hl7Message?.CommonOrder?.OrderControl ?? "N/A";
-
-         AddRowToGrid(
-             DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss"),
-             TransactionDateTime,
-             orderNo,
-             hn,
-             patientName,
-             FinancialClass,
-             OrderControl,
-             result.Success ? "Success" : "Failed",
-             result.ApiResponse ?? result.Message ?? "N/A",
-             hl7Message
-         );
-     },
-     cancellationToken
- );
+                                AddRowToGrid(
+                                    DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss"),
+                                    transactionDateTime,
+                                    orderNo,
+                                    hn,
+                                    patientName,
+                                    financialClass,
+                                    orderControl,
+                                    result.Success ? "Success" : "Failed",
+                                    result.ApiResponse ?? result.Message ?? "N/A",
+                                    hl7Message
+                                );
+                            },
+                            cancellationToken
+                        );
                     }, cancellationToken);
 
-                    _logger.LogInfo("Background check: Completed processing pending orders");
+                    _logger.LogInfo($"[{orderType}] Completed processing");
 
                     this.Invoke(new Action(() =>
                     {
                         this.Text = "ConHIS Service - Drug Dispense Monitor";
-
-                        if (_backgroundTimer != null)
-                        {
-                            UpdateStatus($"Service Running - Last processed {pending.Count} orders");
-                        }
-                        else
-                        {
-                            UpdateStatus($"Manual check completed - Processed {pending.Count} orders");
-                        }
+                        UpdateServiceStatus(orderType, pending.Count);
                     }));
                 }
                 else
@@ -1518,120 +1567,99 @@ namespace ConHIS_Service_XPHL7
                     this.Invoke(new Action(() =>
                     {
                         this.Text = "ConHIS Service - Drug Dispense Monitor";
-
-                        if (_backgroundTimer != null)
-                        {
-                            UpdateStatus("Service Running - No pending orders");
-                        }
-                        else
-                        {
-                            UpdateStatus("Manual check completed - No pending orders");
-                        }
+                        UpdateServiceStatus(orderType, 0);
                     }));
                 }
             }
             catch (OperationCanceledException)
             {
-                _logger.LogInfo("Background check: Operation cancelled by user");
+                _logger.LogInfo($"[{orderType}] Operation cancelled");
                 this.Invoke(new Action(() =>
                 {
                     this.Text = "ConHIS Service - Drug Dispense Monitor";
-                    UpdateStatus("Service stopped - Current operation cancelled");
+                    UpdateStatus($"[{orderType}] Service stopped - Operation cancelled");
                 }));
             }
             catch (Exception ex)
             {
-                _logger.LogError("Background check error", ex);
-
+                _logger.LogError($"[{orderType}] Check error", ex);
                 this.Invoke(new Action(() =>
                 {
                     this.Text = "ConHIS Service - Drug Dispense Monitor";
-                    UpdateStatus($"Error: {ex.Message}");
+                    UpdateStatus($"[{orderType}] Error: {ex.Message}");
                 }));
             }
             finally
             {
-                _isProcessing = false;
+                if (isIPD)
+                    _isIPDProcessing = false;
+                else
+                    _isOPDProcessing = false;
 
                 if (isManual)
                 {
                     this.Invoke(new Action(() =>
                     {
-                        testHL7Button.Enabled = true;
-                        startStopButton.Enabled = true;
+                        startStopIPDButton.Enabled = true;
+                        startStopOPDButton.Enabled = true;
                         exportButton.Enabled = true;
                     }));
                 }
             }
         }
 
-        private async void BackgroundTimerCallback(object state)
+        // ⭐ Helper Methods
+        private void UpdateButtonState(Button button, bool isRunning, string text)
         {
-            // ⭐ ถ้ากำลังประมวลผลอยู่ให้ข้าม
-            if (_isProcessing || _backgroundTimer == null)
+            if (button.InvokeRequired)
             {
+                button.Invoke(new Action(() => UpdateButtonState(button, isRunning, text)));
                 return;
             }
 
-            // ⭐ ถ้า CancellationTokenSource ถูก Dispose แล้ว ให้หยุด
-            if (_backgroundCancellationTokenSource == null || _backgroundCancellationTokenSource.IsCancellationRequested)
+            button.Text = text;
+            if (isRunning)
             {
-                return;
+                button.BackColor = System.Drawing.Color.FromArgb(231, 76, 60); // Red for Stop
+            }
+            else
+            {
+                // กลับไปสีเดิม
+                if (button == startStopIPDButton)
+                    button.BackColor = System.Drawing.Color.FromArgb(52, 152, 219); // Blue for IPD
+                else
+                    button.BackColor = System.Drawing.Color.FromArgb(46, 204, 113); // Green for OPD
+            }
+        }
+
+        private void UpdateServiceStatus(string orderType = null, int processedCount = 0)
+        {
+            bool ipdRunning = _ipdTimer != null;
+            bool opdRunning = _opdTimer != null;
+
+            string status = "";
+
+            if (ipdRunning && opdRunning)
+                status = "Both IPD & OPD Services Running";
+            else if (ipdRunning)
+                status = "IPD Service Running";
+            else if (opdRunning)
+                status = "OPD Service Running";
+            else
+                status = "All Services Stopped";
+
+            if (orderType != null && processedCount > 0)
+            {
+                status += $" - [{orderType}] Processed {processedCount} orders";
+            }
+            else if (orderType != null && processedCount == 0)
+            {
+                status += $" - [{orderType}] No pending orders";
             }
 
-            await CheckPendingOrders(isManual: false, _backgroundCancellationTokenSource.Token);
+            UpdateStatus(status);
         }
 
-        private void ShowAutoCloseMessageBox(string message, string title, int timeoutMs, bool shouldResumeService)
-        {
-            System.Threading.Timer timer = null;
-
-            timer = new System.Threading.Timer(async (obj) =>
-            {
-                try
-                {
-                    // ปิด MessageBox อัตโนมัติ
-                    IntPtr hwnd = FindWindow(null, title);
-                    if (hwnd != IntPtr.Zero)
-                    {
-                        SendMessage(hwnd, WM_CLOSE, IntPtr.Zero, IntPtr.Zero);
-                    }
-
-                    // ⭐ ถ้า Service ทำงานอยู่ก่อนหน้านี้ ให้เริ่มใหม่อัตโนมัติ
-                    if (shouldResumeService)
-                    {
-                        await Task.Delay(500); // รอให้ MessageBox ปิดสนิท
-
-                        this.Invoke(new Action(() =>
-                        {
-                            // ตรวจสอบว่า Service ยังไม่ได้เริ่มใหม่
-                            if (_backgroundTimer == null)
-                            {
-                                _logger?.LogInfo("Auto-resuming service after database reconnection...");
-                                StartBackgroundService();
-                                _logger?.LogInfo("Service auto-resumed successfully");
-                            }
-                        }));
-                    }
-                }
-                catch (Exception ex)
-                {
-                    _logger?.LogError("Error in auto-close MessageBox timer", ex);
-                }
-                finally
-                {
-                    timer?.Dispose();
-                }
-            }, null, timeoutMs, System.Threading.Timeout.Infinite);
-
-            // แสดง MessageBox (จะถูกปิดโดย Timer หรือถ้าผู้ใช้คลิก OK)
-            MessageBox.Show(
-                message,
-                title,
-                MessageBoxButtons.OK,
-                MessageBoxIcon.Information
-            );
-        }
         #endregion
 
         #region Update Methods
@@ -1754,34 +1782,37 @@ namespace ConHIS_Service_XPHL7
                 int totalRecords = _processedDataTable.Rows.Count;
                 int successCount = 0;
                 int failedCount = 0;
-                int pendingCount = 0;
-                int rejectCount = 0;
+                int ipdCount = 0;
+                int opdCount = 0;
 
                 foreach (DataRow row in _processedDataTable.Rows)
                 {
                     string status = row["Status"]?.ToString() ?? "";
+                    string orderControl = row["OrderControl"]?.ToString() ?? "";
 
                     if (status == "Success")
                         successCount++;
                     else if (status == "Failed")
                         failedCount++;
-                    else if (status == "Pending")
-                        pendingCount++;
-                    else if (status == "Rejected")
-                        rejectCount++;
+
+                    // นับ IPD/OPD ตาม OrderControl หรือ FinancialClass
+                    if (orderControl.Contains("IPD") || orderControl == "IPD")
+                        ipdCount++;
+                    else if (orderControl.Contains("OPD") || orderControl == "OPD")
+                        opdCount++;
                 }
 
                 totalCountLabel.Text = totalRecords.ToString();
                 successCountLabel.Text = successCount.ToString();
                 failedCountLabel.Text = failedCount.ToString();
-                pendingCountLabel.Text = pendingCount.ToString();
-                rejectCountLabel.Text = rejectCount.ToString();
+                ipdCountLabel.Text = ipdCount.ToString();
+                opdCountLabel.Text = opdCount.ToString();
 
                 UpdatePanelStyles(totalPanel, totalRecords, System.Drawing.Color.FromArgb(240, 240, 240));
                 UpdatePanelStyles(successPanel, successCount, System.Drawing.Color.FromArgb(220, 255, 220));
                 UpdatePanelStyles(failedPanel, failedCount, System.Drawing.Color.FromArgb(255, 220, 220));
-                UpdatePanelStyles(pendingPanel, pendingCount, System.Drawing.Color.FromArgb(255, 245, 220));
-                UpdatePanelStyles(rejectPanel, rejectCount, System.Drawing.Color.FromArgb(240, 240, 240));
+                UpdatePanelStyles(ipdPanel, ipdCount, System.Drawing.Color.FromArgb(220, 235, 255));
+                UpdatePanelStyles(opdPanel, opdCount, System.Drawing.Color.FromArgb(220, 255, 235));
             }
             catch (Exception ex)
             {
@@ -1879,9 +1910,6 @@ namespace ConHIS_Service_XPHL7
         }
         #endregion
 
-        private void Form1_Load_1(object sender, EventArgs e)
-        {
-
-        }
+    
     }
 }

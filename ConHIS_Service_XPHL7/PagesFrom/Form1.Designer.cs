@@ -23,9 +23,9 @@
             this.lastFoundLabel = new System.Windows.Forms.Label();
             this.lastSuccessLabel = new System.Windows.Forms.Label();
             this.connectionStatusLabel = new System.Windows.Forms.Label();
-            this.startStopButton = new System.Windows.Forms.Button();
+            this.startStopIPDButton = new System.Windows.Forms.Button();
+            this.startStopOPDButton = new System.Windows.Forms.Button();
             this.manualCheckButton = new System.Windows.Forms.Button();
-            this.testHL7Button = new System.Windows.Forms.Button();
             this.exportButton = new System.Windows.Forms.Button();
             this.settingsButton = new System.Windows.Forms.Button();
             this.dateLabel = new System.Windows.Forms.Label();
@@ -43,12 +43,12 @@
             this.failedPanel = new System.Windows.Forms.Panel();
             this.failedLabel = new System.Windows.Forms.Label();
             this.failedCountLabel = new System.Windows.Forms.Label();
-            this.pendingPanel = new System.Windows.Forms.Panel();
-            this.pendingLabel = new System.Windows.Forms.Label();
-            this.pendingCountLabel = new System.Windows.Forms.Label();
-            this.rejectPanel = new System.Windows.Forms.Panel();
-            this.rejectLabel = new System.Windows.Forms.Label();
-            this.rejectCountLabel = new System.Windows.Forms.Label();
+            this.ipdPanel = new System.Windows.Forms.Panel();
+            this.ipdLabel = new System.Windows.Forms.Label();
+            this.ipdCountLabel = new System.Windows.Forms.Label();
+            this.opdPanel = new System.Windows.Forms.Panel();
+            this.opdLabel = new System.Windows.Forms.Label();
+            this.opdCountLabel = new System.Windows.Forms.Label();
             this.groupBox1 = new System.Windows.Forms.GroupBox();
             this.groupBox2 = new System.Windows.Forms.GroupBox();
             this.groupBox3 = new System.Windows.Forms.GroupBox();
@@ -57,6 +57,8 @@
             this.totalPanel.SuspendLayout();
             this.successPanel.SuspendLayout();
             this.failedPanel.SuspendLayout();
+            this.ipdPanel.SuspendLayout();
+            this.opdPanel.SuspendLayout();
             this.groupBox1.SuspendLayout();
             this.groupBox2.SuspendLayout();
             this.groupBox3.SuspendLayout();
@@ -112,37 +114,43 @@
             this.connectionStatusLabel.TabIndex = 4;
             this.connectionStatusLabel.Text = "Database: Connecting...";
             // 
-            // startStopButton
+            // startStopIPDButton
             // 
-            this.startStopButton.BackColor = System.Drawing.Color.FromArgb(((int)(((byte)(0)))), ((int)(((byte)(122)))), ((int)(((byte)(204)))));
-            this.startStopButton.FlatStyle = System.Windows.Forms.FlatStyle.Flat;
-            this.startStopButton.Font = new System.Drawing.Font("Tahoma", 9F, System.Drawing.FontStyle.Bold);
-            this.startStopButton.ForeColor = System.Drawing.Color.White;
-            this.startStopButton.Location = new System.Drawing.Point(15, 20);
-            this.startStopButton.Name = "startStopButton";
-            this.startStopButton.Size = new System.Drawing.Size(120, 32);
-            this.startStopButton.TabIndex = 0;
-            this.startStopButton.Text = "▶ Start Service";
-            this.startStopButton.UseVisualStyleBackColor = false;
-            this.startStopButton.Click += new System.EventHandler(this.StartStopButton_Click);
+            this.startStopIPDButton.BackColor = System.Drawing.Color.FromArgb(((int)(((byte)(52)))), ((int)(((byte)(152)))), ((int)(((byte)(219)))));
+            this.startStopIPDButton.FlatStyle = System.Windows.Forms.FlatStyle.Flat;
+            this.startStopIPDButton.Font = new System.Drawing.Font("Tahoma", 9F, System.Drawing.FontStyle.Bold);
+            this.startStopIPDButton.ForeColor = System.Drawing.Color.White;
+            this.startStopIPDButton.Location = new System.Drawing.Point(15, 20);
+            this.startStopIPDButton.Name = "startStopIPDButton";
+            this.startStopIPDButton.Size = new System.Drawing.Size(140, 32);
+            this.startStopIPDButton.TabIndex = 0;
+            this.startStopIPDButton.Text = "▶ Start IPD";
+            this.startStopIPDButton.UseVisualStyleBackColor = false;
+            this.startStopIPDButton.Click += new System.EventHandler(this.StartStopIPDButton_Click);
+            // 
+            // startStopOPDButton
+            // 
+            this.startStopOPDButton.BackColor = System.Drawing.Color.FromArgb(((int)(((byte)(46)))), ((int)(((byte)(204)))), ((int)(((byte)(113)))));
+            this.startStopOPDButton.FlatStyle = System.Windows.Forms.FlatStyle.Flat;
+            this.startStopOPDButton.Font = new System.Drawing.Font("Tahoma", 9F, System.Drawing.FontStyle.Bold);
+            this.startStopOPDButton.ForeColor = System.Drawing.Color.White;
+            this.startStopOPDButton.Location = new System.Drawing.Point(165, 20);
+            this.startStopOPDButton.Name = "startStopOPDButton";
+            this.startStopOPDButton.Size = new System.Drawing.Size(140, 32);
+            this.startStopOPDButton.TabIndex = 1;
+            this.startStopOPDButton.Text = "▶ Start OPD";
+            this.startStopOPDButton.UseVisualStyleBackColor = false;
+           this.startStopOPDButton.Click += new System.EventHandler(this.StartStopOPDButton_Click);
             // 
             // manualCheckButton
             // 
-            this.manualCheckButton.Location = new System.Drawing.Point(145, 20);
+            this.manualCheckButton.Location = new System.Drawing.Point(315, 20);
             this.manualCheckButton.Name = "manualCheckButton";
             this.manualCheckButton.Size = new System.Drawing.Size(120, 32);
-            this.manualCheckButton.TabIndex = 1;
+            this.manualCheckButton.TabIndex = 2;
             this.manualCheckButton.Text = "🔄 Manual Check";
             this.manualCheckButton.UseVisualStyleBackColor = true;
             this.manualCheckButton.Click += new System.EventHandler(this.ManualCheckButton_Click);
-            // 
-            // testHL7Button
-            // 
-            this.testHL7Button.Location = new System.Drawing.Point(0, 0);
-            this.testHL7Button.Name = "testHL7Button";
-            this.testHL7Button.Size = new System.Drawing.Size(0, 0);
-            this.testHL7Button.TabIndex = 99;
-            this.testHL7Button.Visible = false;
             // 
             // exportButton
             // 
@@ -154,10 +162,10 @@
             // 
             // settingsButton
             // 
-            this.settingsButton.Location = new System.Drawing.Point(277, 19);
+            this.settingsButton.Location = new System.Drawing.Point(445, 20);
             this.settingsButton.Name = "settingsButton";
             this.settingsButton.Size = new System.Drawing.Size(120, 32);
-            this.settingsButton.TabIndex = 2;
+            this.settingsButton.TabIndex = 3;
             this.settingsButton.Text = "⚙️ Settings";
             this.settingsButton.UseVisualStyleBackColor = true;
             this.settingsButton.Click += new System.EventHandler(this.SettingsButton_Click);
@@ -229,7 +237,7 @@
             this.totalPanel.Cursor = System.Windows.Forms.Cursors.Hand;
             this.totalPanel.Location = new System.Drawing.Point(20, 22);
             this.totalPanel.Name = "totalPanel";
-            this.totalPanel.Size = new System.Drawing.Size(220, 60);
+            this.totalPanel.Size = new System.Drawing.Size(180, 60);
             this.totalPanel.TabIndex = 0;
             this.totalPanel.Click += new System.EventHandler(this.TotalPanel_Click);
             // 
@@ -239,7 +247,7 @@
             this.totalLabel.ForeColor = System.Drawing.Color.Gray;
             this.totalLabel.Location = new System.Drawing.Point(10, 10);
             this.totalLabel.Name = "totalLabel";
-            this.totalLabel.Size = new System.Drawing.Size(200, 16);
+            this.totalLabel.Size = new System.Drawing.Size(160, 16);
             this.totalLabel.TabIndex = 0;
             this.totalLabel.Text = "จำนวนรายการทั้งหมด";
             // 
@@ -249,7 +257,7 @@
             this.totalCountLabel.ForeColor = System.Drawing.Color.Black;
             this.totalCountLabel.Location = new System.Drawing.Point(10, 26);
             this.totalCountLabel.Name = "totalCountLabel";
-            this.totalCountLabel.Size = new System.Drawing.Size(200, 30);
+            this.totalCountLabel.Size = new System.Drawing.Size(160, 30);
             this.totalCountLabel.TabIndex = 1;
             this.totalCountLabel.Text = "0";
             this.totalCountLabel.TextAlign = System.Drawing.ContentAlignment.MiddleLeft;
@@ -261,9 +269,9 @@
             this.successPanel.Controls.Add(this.successLabel);
             this.successPanel.Controls.Add(this.successCountLabel);
             this.successPanel.Cursor = System.Windows.Forms.Cursors.Hand;
-            this.successPanel.Location = new System.Drawing.Point(260, 22);
+            this.successPanel.Location = new System.Drawing.Point(215, 22);
             this.successPanel.Name = "successPanel";
-            this.successPanel.Size = new System.Drawing.Size(220, 60);
+            this.successPanel.Size = new System.Drawing.Size(180, 60);
             this.successPanel.TabIndex = 1;
             this.successPanel.Click += new System.EventHandler(this.SuccessPanel_Click);
             // 
@@ -273,7 +281,7 @@
             this.successLabel.ForeColor = System.Drawing.Color.Gray;
             this.successLabel.Location = new System.Drawing.Point(10, 10);
             this.successLabel.Name = "successLabel";
-            this.successLabel.Size = new System.Drawing.Size(200, 16);
+            this.successLabel.Size = new System.Drawing.Size(160, 16);
             this.successLabel.TabIndex = 0;
             this.successLabel.Text = "รายการส่งสำเร็จ";
             // 
@@ -283,7 +291,7 @@
             this.successCountLabel.ForeColor = System.Drawing.Color.Green;
             this.successCountLabel.Location = new System.Drawing.Point(10, 26);
             this.successCountLabel.Name = "successCountLabel";
-            this.successCountLabel.Size = new System.Drawing.Size(200, 30);
+            this.successCountLabel.Size = new System.Drawing.Size(160, 30);
             this.successCountLabel.TabIndex = 1;
             this.successCountLabel.Text = "0";
             this.successCountLabel.TextAlign = System.Drawing.ContentAlignment.MiddleLeft;
@@ -295,9 +303,9 @@
             this.failedPanel.Controls.Add(this.failedLabel);
             this.failedPanel.Controls.Add(this.failedCountLabel);
             this.failedPanel.Cursor = System.Windows.Forms.Cursors.Hand;
-            this.failedPanel.Location = new System.Drawing.Point(500, 22);
+            this.failedPanel.Location = new System.Drawing.Point(410, 22);
             this.failedPanel.Name = "failedPanel";
-            this.failedPanel.Size = new System.Drawing.Size(220, 60);
+            this.failedPanel.Size = new System.Drawing.Size(180, 60);
             this.failedPanel.TabIndex = 2;
             this.failedPanel.Click += new System.EventHandler(this.FailedPanel_Click);
             // 
@@ -307,7 +315,7 @@
             this.failedLabel.ForeColor = System.Drawing.Color.Gray;
             this.failedLabel.Location = new System.Drawing.Point(10, 10);
             this.failedLabel.Name = "failedLabel";
-            this.failedLabel.Size = new System.Drawing.Size(200, 16);
+            this.failedLabel.Size = new System.Drawing.Size(160, 16);
             this.failedLabel.TabIndex = 0;
             this.failedLabel.Text = "รายการล้มเหลว";
             // 
@@ -317,58 +325,82 @@
             this.failedCountLabel.ForeColor = System.Drawing.Color.Red;
             this.failedCountLabel.Location = new System.Drawing.Point(10, 26);
             this.failedCountLabel.Name = "failedCountLabel";
-            this.failedCountLabel.Size = new System.Drawing.Size(200, 30);
+            this.failedCountLabel.Size = new System.Drawing.Size(160, 30);
             this.failedCountLabel.TabIndex = 1;
             this.failedCountLabel.Text = "0";
             this.failedCountLabel.TextAlign = System.Drawing.ContentAlignment.MiddleLeft;
             // 
-            // pendingPanel
+            // ipdPanel
             // 
-            this.pendingPanel.Location = new System.Drawing.Point(0, 0);
-            this.pendingPanel.Name = "pendingPanel";
-            this.pendingPanel.Size = new System.Drawing.Size(0, 0);
-            this.pendingPanel.TabIndex = 99;
-            this.pendingPanel.Visible = false;
+            this.ipdPanel.BackColor = System.Drawing.Color.White;
+            this.ipdPanel.BorderStyle = System.Windows.Forms.BorderStyle.FixedSingle;
+            this.ipdPanel.Controls.Add(this.ipdLabel);
+            this.ipdPanel.Controls.Add(this.ipdCountLabel);
+            this.ipdPanel.Cursor = System.Windows.Forms.Cursors.Hand;
+            this.ipdPanel.Location = new System.Drawing.Point(605, 22);
+            this.ipdPanel.Name = "ipdPanel";
+            this.ipdPanel.Size = new System.Drawing.Size(160, 60);
+            this.ipdPanel.TabIndex = 3;
+            this.ipdPanel.Click += new System.EventHandler(this.IPDPanel_Click);
             // 
-            // pendingLabel
+            // ipdLabel
             // 
-            this.pendingLabel.Location = new System.Drawing.Point(0, 0);
-            this.pendingLabel.Name = "pendingLabel";
-            this.pendingLabel.Size = new System.Drawing.Size(0, 0);
-            this.pendingLabel.TabIndex = 0;
+            this.ipdLabel.Font = new System.Drawing.Font("Tahoma", 8F);
+            this.ipdLabel.ForeColor = System.Drawing.Color.Gray;
+            this.ipdLabel.Location = new System.Drawing.Point(10, 10);
+            this.ipdLabel.Name = "ipdLabel";
+            this.ipdLabel.Size = new System.Drawing.Size(140, 16);
+            this.ipdLabel.TabIndex = 0;
+            this.ipdLabel.Text = "รายการ IPD";
             // 
-            // pendingCountLabel
+            // ipdCountLabel
             // 
-            this.pendingCountLabel.Location = new System.Drawing.Point(0, 0);
-            this.pendingCountLabel.Name = "pendingCountLabel";
-            this.pendingCountLabel.Size = new System.Drawing.Size(0, 0);
-            this.pendingCountLabel.TabIndex = 0;
+            this.ipdCountLabel.Font = new System.Drawing.Font("Tahoma", 20F, System.Drawing.FontStyle.Bold);
+            this.ipdCountLabel.ForeColor = System.Drawing.Color.FromArgb(((int)(((byte)(52)))), ((int)(((byte)(152)))), ((int)(((byte)(219)))));
+            this.ipdCountLabel.Location = new System.Drawing.Point(10, 26);
+            this.ipdCountLabel.Name = "ipdCountLabel";
+            this.ipdCountLabel.Size = new System.Drawing.Size(140, 30);
+            this.ipdCountLabel.TabIndex = 1;
+            this.ipdCountLabel.Text = "0";
+            this.ipdCountLabel.TextAlign = System.Drawing.ContentAlignment.MiddleLeft;
             // 
-            // rejectPanel
+            // opdPanel
             // 
-            this.rejectPanel.Location = new System.Drawing.Point(0, 0);
-            this.rejectPanel.Name = "rejectPanel";
-            this.rejectPanel.Size = new System.Drawing.Size(0, 0);
-            this.rejectPanel.TabIndex = 99;
-            this.rejectPanel.Visible = false;
+            this.opdPanel.BackColor = System.Drawing.Color.White;
+            this.opdPanel.BorderStyle = System.Windows.Forms.BorderStyle.FixedSingle;
+            this.opdPanel.Controls.Add(this.opdLabel);
+            this.opdPanel.Controls.Add(this.opdCountLabel);
+            this.opdPanel.Cursor = System.Windows.Forms.Cursors.Hand;
+            this.opdPanel.Location = new System.Drawing.Point(780, 22);
+            this.opdPanel.Name = "opdPanel";
+            this.opdPanel.Size = new System.Drawing.Size(160, 60);
+            this.opdPanel.TabIndex = 4;
+            this.opdPanel.Click += new System.EventHandler(this.OPDPanel_Click);
             // 
-            // rejectLabel
+            // opdLabel
             // 
-            this.rejectLabel.Location = new System.Drawing.Point(0, 0);
-            this.rejectLabel.Name = "rejectLabel";
-            this.rejectLabel.Size = new System.Drawing.Size(0, 0);
-            this.rejectLabel.TabIndex = 0;
+            this.opdLabel.Font = new System.Drawing.Font("Tahoma", 8F);
+            this.opdLabel.ForeColor = System.Drawing.Color.Gray;
+            this.opdLabel.Location = new System.Drawing.Point(10, 10);
+            this.opdLabel.Name = "opdLabel";
+            this.opdLabel.Size = new System.Drawing.Size(140, 16);
+            this.opdLabel.TabIndex = 0;
+            this.opdLabel.Text = "รายการ OPD";
             // 
-            // rejectCountLabel
+            // opdCountLabel
             // 
-            this.rejectCountLabel.Location = new System.Drawing.Point(0, 0);
-            this.rejectCountLabel.Name = "rejectCountLabel";
-            this.rejectCountLabel.Size = new System.Drawing.Size(0, 0);
-            this.rejectCountLabel.TabIndex = 0;
+            this.opdCountLabel.Font = new System.Drawing.Font("Tahoma", 20F, System.Drawing.FontStyle.Bold);
+            this.opdCountLabel.ForeColor = System.Drawing.Color.FromArgb(((int)(((byte)(46)))), ((int)(((byte)(204)))), ((int)(((byte)(113)))));
+            this.opdCountLabel.Location = new System.Drawing.Point(10, 26);
+            this.opdCountLabel.Name = "opdCountLabel";
+            this.opdCountLabel.Size = new System.Drawing.Size(140, 30);
+            this.opdCountLabel.TabIndex = 1;
+            this.opdCountLabel.Text = "0";
+            this.opdCountLabel.TextAlign = System.Drawing.ContentAlignment.MiddleLeft;
             // 
             // groupBox1
             // 
-            this.groupBox1.Anchor = ((System.Windows.Forms.AnchorStyles)(((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Left) 
+            this.groupBox1.Anchor = ((System.Windows.Forms.AnchorStyles)(((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Left)
             | System.Windows.Forms.AnchorStyles.Right)));
             this.groupBox1.Controls.Add(this.statusLabel);
             this.groupBox1.Controls.Add(this.lastCheckLabel);
@@ -384,9 +416,10 @@
             // 
             // groupBox2
             // 
-            this.groupBox2.Anchor = ((System.Windows.Forms.AnchorStyles)(((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Left) 
+            this.groupBox2.Anchor = ((System.Windows.Forms.AnchorStyles)(((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Left)
             | System.Windows.Forms.AnchorStyles.Right)));
-            this.groupBox2.Controls.Add(this.startStopButton);
+            this.groupBox2.Controls.Add(this.startStopIPDButton);
+            this.groupBox2.Controls.Add(this.startStopOPDButton);
             this.groupBox2.Controls.Add(this.manualCheckButton);
             this.groupBox2.Controls.Add(this.settingsButton);
             this.groupBox2.Location = new System.Drawing.Point(15, 118);
@@ -398,7 +431,7 @@
             // 
             // groupBox3
             // 
-            this.groupBox3.Anchor = ((System.Windows.Forms.AnchorStyles)(((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Left) 
+            this.groupBox3.Anchor = ((System.Windows.Forms.AnchorStyles)(((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Left)
             | System.Windows.Forms.AnchorStyles.Right)));
             this.groupBox3.Controls.Add(this.searchLabel);
             this.groupBox3.Controls.Add(this.searchTextBox);
@@ -415,11 +448,13 @@
             // 
             // groupBox4
             // 
-            this.groupBox4.Anchor = ((System.Windows.Forms.AnchorStyles)(((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Left) 
+            this.groupBox4.Anchor = ((System.Windows.Forms.AnchorStyles)(((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Left)
             | System.Windows.Forms.AnchorStyles.Right)));
             this.groupBox4.Controls.Add(this.totalPanel);
             this.groupBox4.Controls.Add(this.successPanel);
             this.groupBox4.Controls.Add(this.failedPanel);
+            this.groupBox4.Controls.Add(this.ipdPanel);
+            this.groupBox4.Controls.Add(this.opdPanel);
             this.groupBox4.Location = new System.Drawing.Point(15, 252);
             this.groupBox4.Name = "groupBox4";
             this.groupBox4.Size = new System.Drawing.Size(957, 95);
@@ -431,8 +466,8 @@
             // 
             this.dataGridView.AllowUserToAddRows = false;
             this.dataGridView.AllowUserToDeleteRows = false;
-            this.dataGridView.Anchor = ((System.Windows.Forms.AnchorStyles)((((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Bottom) 
-            | System.Windows.Forms.AnchorStyles.Left) 
+            this.dataGridView.Anchor = ((System.Windows.Forms.AnchorStyles)((((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Bottom)
+            | System.Windows.Forms.AnchorStyles.Left)
             | System.Windows.Forms.AnchorStyles.Right)));
             this.dataGridView.BackgroundColor = System.Drawing.Color.White;
             this.dataGridView.ColumnHeadersHeightSizeMode = System.Windows.Forms.DataGridViewColumnHeadersHeightSizeMode.AutoSize;
@@ -462,10 +497,12 @@
             this.Name = "Form1";
             this.StartPosition = System.Windows.Forms.FormStartPosition.CenterScreen;
             this.Text = "ConHIS Service - Drug Dispense Monitor";
-            this.Load += new System.EventHandler(this.Form1_Load_1);
+            
             this.totalPanel.ResumeLayout(false);
             this.successPanel.ResumeLayout(false);
             this.failedPanel.ResumeLayout(false);
+            this.ipdPanel.ResumeLayout(false);
+            this.opdPanel.ResumeLayout(false);
             this.groupBox1.ResumeLayout(false);
             this.groupBox1.PerformLayout();
             this.groupBox2.ResumeLayout(false);
@@ -487,9 +524,9 @@
         private System.Windows.Forms.Label connectionStatusLabel;
 
         // Controls Zone
-        private System.Windows.Forms.Button startStopButton;
+        private System.Windows.Forms.Button startStopIPDButton;
+        private System.Windows.Forms.Button startStopOPDButton;
         private System.Windows.Forms.Button manualCheckButton;
-        private System.Windows.Forms.Button testHL7Button;
         private System.Windows.Forms.Button exportButton;
         private System.Windows.Forms.Button settingsButton;
 
@@ -511,12 +548,13 @@
         private System.Windows.Forms.Panel failedPanel;
         private System.Windows.Forms.Label failedLabel;
         private System.Windows.Forms.Label failedCountLabel;
-        private System.Windows.Forms.Panel pendingPanel;
-        private System.Windows.Forms.Label pendingLabel;
-        private System.Windows.Forms.Label pendingCountLabel;
-        private System.Windows.Forms.Panel rejectPanel;
-        private System.Windows.Forms.Label rejectLabel;
-        private System.Windows.Forms.Label rejectCountLabel;
+        private System.Windows.Forms.Panel ipdPanel;
+        private System.Windows.Forms.Label ipdLabel;
+        private System.Windows.Forms.Label ipdCountLabel;
+        private System.Windows.Forms.Panel opdPanel;
+        private System.Windows.Forms.Label opdLabel;
+        private System.Windows.Forms.Label opdCountLabel;
+
 
         // GroupBoxes
         private System.Windows.Forms.GroupBox groupBox1;
