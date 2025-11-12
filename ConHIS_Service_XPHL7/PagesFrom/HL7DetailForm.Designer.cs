@@ -54,7 +54,7 @@ namespace ConHIS_Service_XPHL7
             this.tabControl.Location = new System.Drawing.Point(0, 50);
             this.tabControl.Name = "tabControl";
             this.tabControl.SelectedIndex = 0;
-            this.tabControl.Size = new System.Drawing.Size(900, 600);
+            this.tabControl.Size = new System.Drawing.Size(611, 369);
             this.tabControl.TabIndex = 0;
             // 
             // tabMSH
@@ -62,7 +62,7 @@ namespace ConHIS_Service_XPHL7
             this.tabMSH.Location = new System.Drawing.Point(4, 22);
             this.tabMSH.Name = "tabMSH";
             this.tabMSH.Padding = new System.Windows.Forms.Padding(3);
-            this.tabMSH.Size = new System.Drawing.Size(892, 574);
+            this.tabMSH.Size = new System.Drawing.Size(603, 343);
             this.tabMSH.TabIndex = 0;
             this.tabMSH.Text = "MSH - Message Header";
             this.tabMSH.UseVisualStyleBackColor = true;
@@ -193,7 +193,7 @@ namespace ConHIS_Service_XPHL7
             this.panelTop.Dock = System.Windows.Forms.DockStyle.Top;
             this.panelTop.Location = new System.Drawing.Point(0, 0);
             this.panelTop.Name = "panelTop";
-            this.panelTop.Size = new System.Drawing.Size(900, 50);
+            this.panelTop.Size = new System.Drawing.Size(611, 50);
             this.panelTop.TabIndex = 1;
             // 
             // lblOrderNo
@@ -210,7 +210,7 @@ namespace ConHIS_Service_XPHL7
             // 
             this.AutoScaleDimensions = new System.Drawing.SizeF(6F, 13F);
             this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
-            this.ClientSize = new System.Drawing.Size(900, 650);
+            this.ClientSize = new System.Drawing.Size(611, 419);
             this.Controls.Add(this.tabControl);
             this.Controls.Add(this.panelTop);
             this.Name = "HL7DetailForm";

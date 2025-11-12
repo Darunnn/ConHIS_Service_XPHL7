@@ -17,12 +17,9 @@
 
         private void InitializeComponent()
         {
-            System.ComponentModel.ComponentResourceManager resources = new System.ComponentModel.ComponentResourceManager(typeof(SettingsForm));
             this.tabControl = new System.Windows.Forms.TabControl();
             this.tabDatabase = new System.Windows.Forms.TabPage();
             this.grpDatabase = new System.Windows.Forms.GroupBox();
-            this.pnlDbInfo = new System.Windows.Forms.Panel();
-            this.lblDbInfo = new System.Windows.Forms.Label();
             this.lblConnectionStatus = new System.Windows.Forms.Label();
             this.btnTestConnection = new System.Windows.Forms.Button();
             this.txtPassword = new System.Windows.Forms.TextBox();
@@ -35,8 +32,6 @@
             this.lblServer = new System.Windows.Forms.Label();
             this.tabAPI = new System.Windows.Forms.TabPage();
             this.grpAPI = new System.Windows.Forms.GroupBox();
-            this.pnlApiInfo = new System.Windows.Forms.Panel();
-            this.lblApiInfo = new System.Windows.Forms.Label();
             this.lblApiRetryDelayUnit = new System.Windows.Forms.Label();
             this.numApiRetryDelay = new System.Windows.Forms.NumericUpDown();
             this.lblApiRetryDelay = new System.Windows.Forms.Label();
@@ -52,8 +47,6 @@
             this.lblApiEndpoint = new System.Windows.Forms.Label();
             this.tabLog = new System.Windows.Forms.TabPage();
             this.grpLog = new System.Windows.Forms.GroupBox();
-            this.pnlLogInfo = new System.Windows.Forms.Panel();
-            this.lblLogInfo = new System.Windows.Forms.Label();
             this.lblDays = new System.Windows.Forms.Label();
             this.numLogRetention = new System.Windows.Forms.NumericUpDown();
             this.lblLogRetention = new System.Windows.Forms.Label();
@@ -62,16 +55,13 @@
             this.tabControl.SuspendLayout();
             this.tabDatabase.SuspendLayout();
             this.grpDatabase.SuspendLayout();
-            this.pnlDbInfo.SuspendLayout();
             this.tabAPI.SuspendLayout();
             this.grpAPI.SuspendLayout();
-            this.pnlApiInfo.SuspendLayout();
             ((System.ComponentModel.ISupportInitialize)(this.numApiRetryDelay)).BeginInit();
             ((System.ComponentModel.ISupportInitialize)(this.numApiRetry)).BeginInit();
             ((System.ComponentModel.ISupportInitialize)(this.numApiTimeout)).BeginInit();
             this.tabLog.SuspendLayout();
             this.grpLog.SuspendLayout();
-            this.pnlLogInfo.SuspendLayout();
             ((System.ComponentModel.ISupportInitialize)(this.numLogRetention)).BeginInit();
             this.SuspendLayout();
             // 
@@ -84,7 +74,7 @@
             this.tabControl.Location = new System.Drawing.Point(12, 12);
             this.tabControl.Name = "tabControl";
             this.tabControl.SelectedIndex = 0;
-            this.tabControl.Size = new System.Drawing.Size(760, 450);
+            this.tabControl.Size = new System.Drawing.Size(528, 356);
             this.tabControl.TabIndex = 0;
             // 
             // tabDatabase
@@ -94,13 +84,12 @@
             this.tabDatabase.Location = new System.Drawing.Point(4, 25);
             this.tabDatabase.Name = "tabDatabase";
             this.tabDatabase.Padding = new System.Windows.Forms.Padding(3);
-            this.tabDatabase.Size = new System.Drawing.Size(752, 421);
+            this.tabDatabase.Size = new System.Drawing.Size(520, 327);
             this.tabDatabase.TabIndex = 0;
             this.tabDatabase.Text = "🗄️ Database";
             // 
             // grpDatabase
             // 
-            this.grpDatabase.Controls.Add(this.pnlDbInfo);
             this.grpDatabase.Controls.Add(this.lblConnectionStatus);
             this.grpDatabase.Controls.Add(this.btnTestConnection);
             this.grpDatabase.Controls.Add(this.txtPassword);
@@ -113,42 +102,20 @@
             this.grpDatabase.Controls.Add(this.lblServer);
             this.grpDatabase.Font = new System.Drawing.Font("Tahoma", 9F, System.Drawing.FontStyle.Bold);
             this.grpDatabase.ForeColor = System.Drawing.Color.FromArgb(((int)(((byte)(70)))), ((int)(((byte)(70)))), ((int)(((byte)(70)))));
-            this.grpDatabase.Location = new System.Drawing.Point(15, 15);
+            this.grpDatabase.Location = new System.Drawing.Point(15, 10);
             this.grpDatabase.Name = "grpDatabase";
-            this.grpDatabase.Size = new System.Drawing.Size(720, 390);
+            this.grpDatabase.Size = new System.Drawing.Size(489, 306);
             this.grpDatabase.TabIndex = 0;
             this.grpDatabase.TabStop = false;
             this.grpDatabase.Text = "Database Connection (connectdatabase.ini)";
-            // 
-            // pnlDbInfo
-            // 
-            this.pnlDbInfo.BackColor = System.Drawing.Color.FromArgb(((int)(((byte)(232)))), ((int)(((byte)(244)))), ((int)(((byte)(253)))));
-            this.pnlDbInfo.BorderStyle = System.Windows.Forms.BorderStyle.FixedSingle;
-            this.pnlDbInfo.Controls.Add(this.lblDbInfo);
-            this.pnlDbInfo.Location = new System.Drawing.Point(30, 250);
-            this.pnlDbInfo.Name = "pnlDbInfo";
-            this.pnlDbInfo.Size = new System.Drawing.Size(660, 120);
-            this.pnlDbInfo.TabIndex = 10;
-            // 
-            // lblDbInfo
-            // 
-            this.lblDbInfo.Font = new System.Drawing.Font("Tahoma", 8.25F);
-            this.lblDbInfo.ForeColor = System.Drawing.Color.FromArgb(((int)(((byte)(0)))), ((int)(((byte)(102)))), ((int)(((byte)(204)))));
-            this.lblDbInfo.Location = new System.Drawing.Point(10, 10);
-            this.lblDbInfo.Name = "lblDbInfo";
-            this.lblDbInfo.Size = new System.Drawing.Size(640, 100);
-            this.lblDbInfo.TabIndex = 0;
-            this.lblDbInfo.Text = "ℹ️ หมายเหตุ:\r\n• ข้อมูลจะถูกบันทึกในไฟล์ Connection\\connectdatabase.ini\r\n• Passwor" +
-    "d จะถูกเก็บในรูปแบบ Plain Text\r\n• กรุณาทดสอบการเชื่อมต่อก่อนบันทึก\r\n• การเปลี่ยน" +
-    "แปลงจะมีผลหลังบันทึกและ Restart";
             // 
             // lblConnectionStatus
             // 
             this.lblConnectionStatus.Font = new System.Drawing.Font("Tahoma", 9F, System.Drawing.FontStyle.Bold);
             this.lblConnectionStatus.ForeColor = System.Drawing.Color.Gray;
-            this.lblConnectionStatus.Location = new System.Drawing.Point(320, 200);
+            this.lblConnectionStatus.Location = new System.Drawing.Point(278, 201);
             this.lblConnectionStatus.Name = "lblConnectionStatus";
-            this.lblConnectionStatus.Size = new System.Drawing.Size(370, 35);
+            this.lblConnectionStatus.Size = new System.Drawing.Size(205, 35);
             this.lblConnectionStatus.TabIndex = 9;
             this.lblConnectionStatus.Text = "ℹ️ Click Test Connection to verify";
             this.lblConnectionStatus.TextAlign = System.Drawing.ContentAlignment.MiddleLeft;
@@ -161,7 +128,7 @@
             this.btnTestConnection.FlatStyle = System.Windows.Forms.FlatStyle.Flat;
             this.btnTestConnection.Font = new System.Drawing.Font("Tahoma", 9F, System.Drawing.FontStyle.Bold);
             this.btnTestConnection.ForeColor = System.Drawing.Color.White;
-            this.btnTestConnection.Location = new System.Drawing.Point(150, 200);
+            this.btnTestConnection.Location = new System.Drawing.Point(118, 202);
             this.btnTestConnection.Name = "btnTestConnection";
             this.btnTestConnection.Size = new System.Drawing.Size(150, 35);
             this.btnTestConnection.TabIndex = 8;
@@ -174,7 +141,7 @@
             this.txtPassword.Font = new System.Drawing.Font("Tahoma", 10F);
             this.txtPassword.Location = new System.Drawing.Point(150, 157);
             this.txtPassword.Name = "txtPassword";
-            this.txtPassword.Size = new System.Drawing.Size(540, 24);
+            this.txtPassword.Size = new System.Drawing.Size(335, 24);
             this.txtPassword.TabIndex = 7;
             this.txtPassword.UseSystemPasswordChar = true;
             // 
@@ -193,7 +160,7 @@
             this.txtUserId.Font = new System.Drawing.Font("Tahoma", 10F);
             this.txtUserId.Location = new System.Drawing.Point(150, 117);
             this.txtUserId.Name = "txtUserId";
-            this.txtUserId.Size = new System.Drawing.Size(540, 24);
+            this.txtUserId.Size = new System.Drawing.Size(335, 24);
             this.txtUserId.TabIndex = 5;
             // 
             // lblUserId
@@ -211,7 +178,7 @@
             this.txtDatabase.Font = new System.Drawing.Font("Tahoma", 10F);
             this.txtDatabase.Location = new System.Drawing.Point(150, 77);
             this.txtDatabase.Name = "txtDatabase";
-            this.txtDatabase.Size = new System.Drawing.Size(540, 24);
+            this.txtDatabase.Size = new System.Drawing.Size(335, 24);
             this.txtDatabase.TabIndex = 3;
             // 
             // lblDatabase
@@ -229,7 +196,7 @@
             this.txtServer.Font = new System.Drawing.Font("Tahoma", 10F);
             this.txtServer.Location = new System.Drawing.Point(150, 37);
             this.txtServer.Name = "txtServer";
-            this.txtServer.Size = new System.Drawing.Size(540, 24);
+            this.txtServer.Size = new System.Drawing.Size(335, 24);
             this.txtServer.TabIndex = 1;
             // 
             // lblServer
@@ -249,13 +216,12 @@
             this.tabAPI.Location = new System.Drawing.Point(4, 25);
             this.tabAPI.Name = "tabAPI";
             this.tabAPI.Padding = new System.Windows.Forms.Padding(3);
-            this.tabAPI.Size = new System.Drawing.Size(752, 421);
+            this.tabAPI.Size = new System.Drawing.Size(520, 327);
             this.tabAPI.TabIndex = 1;
             this.tabAPI.Text = "🌐 API";
             // 
             // grpAPI
             // 
-            this.grpAPI.Controls.Add(this.pnlApiInfo);
             this.grpAPI.Controls.Add(this.lblApiRetryDelayUnit);
             this.grpAPI.Controls.Add(this.numApiRetryDelay);
             this.grpAPI.Controls.Add(this.lblApiRetryDelay);
@@ -271,33 +237,12 @@
             this.grpAPI.Controls.Add(this.lblApiEndpoint);
             this.grpAPI.Font = new System.Drawing.Font("Tahoma", 9F, System.Drawing.FontStyle.Bold);
             this.grpAPI.ForeColor = System.Drawing.Color.FromArgb(((int)(((byte)(70)))), ((int)(((byte)(70)))), ((int)(((byte)(70)))));
-            this.grpAPI.Location = new System.Drawing.Point(15, 15);
+            this.grpAPI.Location = new System.Drawing.Point(12, 9);
             this.grpAPI.Name = "grpAPI";
-            this.grpAPI.Size = new System.Drawing.Size(720, 390);
+            this.grpAPI.Size = new System.Drawing.Size(499, 306);
             this.grpAPI.TabIndex = 0;
             this.grpAPI.TabStop = false;
             this.grpAPI.Text = "API Settings (appsettings.ini)";
-            // 
-            // pnlApiInfo
-            // 
-            this.pnlApiInfo.BackColor = System.Drawing.Color.FromArgb(((int)(((byte)(255)))), ((int)(((byte)(250)))), ((int)(((byte)(205)))));
-            this.pnlApiInfo.BorderStyle = System.Windows.Forms.BorderStyle.FixedSingle;
-            this.pnlApiInfo.Controls.Add(this.lblApiInfo);
-            this.pnlApiInfo.Location = new System.Drawing.Point(30, 270);
-            this.pnlApiInfo.Name = "pnlApiInfo";
-            this.pnlApiInfo.Size = new System.Drawing.Size(660, 100);
-            this.pnlApiInfo.TabIndex = 13;
-            // 
-            // lblApiInfo
-            // 
-            this.lblApiInfo.Font = new System.Drawing.Font("Tahoma", 8.25F);
-            this.lblApiInfo.ForeColor = System.Drawing.Color.DarkOrange;
-            this.lblApiInfo.Location = new System.Drawing.Point(10, 10);
-            this.lblApiInfo.Name = "lblApiInfo";
-            this.lblApiInfo.Size = new System.Drawing.Size(640, 80);
-            this.lblApiInfo.TabIndex = 0;
-            this.lblApiInfo.Text = "ℹ️ คำแนะนำ:\r\n• Timeout: 30-60 วินาที (เหมาะสมสำหรับเครือข่ายทั่วไป)\r\n• Retry: 3 ค" +
-    "รั้ง (จะลองส่งใหม่หากล้มเหลว)\r\n• Delay: 5 วินาที (ระยะเวลารอก่อนลองใหม่)";
             // 
             // lblApiRetryDelayUnit
             // 
@@ -461,7 +406,7 @@
             this.txtApiEndpoint.Font = new System.Drawing.Font("Consolas", 9.75F);
             this.txtApiEndpoint.Location = new System.Drawing.Point(30, 60);
             this.txtApiEndpoint.Name = "txtApiEndpoint";
-            this.txtApiEndpoint.Size = new System.Drawing.Size(660, 23);
+            this.txtApiEndpoint.Size = new System.Drawing.Size(456, 23);
             this.txtApiEndpoint.TabIndex = 1;
             // 
             // lblApiEndpoint
@@ -481,13 +426,12 @@
             this.tabLog.Location = new System.Drawing.Point(4, 25);
             this.tabLog.Name = "tabLog";
             this.tabLog.Padding = new System.Windows.Forms.Padding(3);
-            this.tabLog.Size = new System.Drawing.Size(752, 421);
+            this.tabLog.Size = new System.Drawing.Size(520, 327);
             this.tabLog.TabIndex = 2;
             this.tabLog.Text = "📝 Log";
             // 
             // grpLog
             // 
-            this.grpLog.Controls.Add(this.pnlLogInfo);
             this.grpLog.Controls.Add(this.lblDays);
             this.grpLog.Controls.Add(this.numLogRetention);
             this.grpLog.Controls.Add(this.lblLogRetention);
@@ -495,30 +439,10 @@
             this.grpLog.ForeColor = System.Drawing.Color.FromArgb(((int)(((byte)(70)))), ((int)(((byte)(70)))), ((int)(((byte)(70)))));
             this.grpLog.Location = new System.Drawing.Point(15, 15);
             this.grpLog.Name = "grpLog";
-            this.grpLog.Size = new System.Drawing.Size(720, 390);
+            this.grpLog.Size = new System.Drawing.Size(493, 299);
             this.grpLog.TabIndex = 0;
             this.grpLog.TabStop = false;
             this.grpLog.Text = "Log Settings (App.config)";
-            // 
-            // pnlLogInfo
-            // 
-            this.pnlLogInfo.BackColor = System.Drawing.Color.FromArgb(((int)(((byte)(255)))), ((int)(((byte)(250)))), ((int)(((byte)(205)))));
-            this.pnlLogInfo.BorderStyle = System.Windows.Forms.BorderStyle.FixedSingle;
-            this.pnlLogInfo.Controls.Add(this.lblLogInfo);
-            this.pnlLogInfo.Location = new System.Drawing.Point(30, 140);
-            this.pnlLogInfo.Name = "pnlLogInfo";
-            this.pnlLogInfo.Size = new System.Drawing.Size(660, 230);
-            this.pnlLogInfo.TabIndex = 3;
-            // 
-            // lblLogInfo
-            // 
-            this.lblLogInfo.Font = new System.Drawing.Font("Tahoma", 8.25F);
-            this.lblLogInfo.ForeColor = System.Drawing.Color.DarkOrange;
-            this.lblLogInfo.Location = new System.Drawing.Point(10, 10);
-            this.lblLogInfo.Name = "lblLogInfo";
-            this.lblLogInfo.Size = new System.Drawing.Size(640, 210);
-            this.lblLogInfo.TabIndex = 0;
-            this.lblLogInfo.Text = resources.GetString("lblLogInfo.Text");
             // 
             // lblDays
             // 
@@ -560,7 +484,7 @@
             this.lblLogRetention.Font = new System.Drawing.Font("Tahoma", 9F);
             this.lblLogRetention.Location = new System.Drawing.Point(30, 40);
             this.lblLogRetention.Name = "lblLogRetention";
-            this.lblLogRetention.Size = new System.Drawing.Size(550, 40);
+            this.lblLogRetention.Size = new System.Drawing.Size(184, 40);
             this.lblLogRetention.TabIndex = 0;
             this.lblLogRetention.Text = "จำนวนวันที่ต้องการเก็บไฟล์ Log:\r\n(ไฟล์ที่เก่ากว่านี้จะถูกลบอัตโนมัติ)";
             // 
@@ -572,7 +496,7 @@
             this.btnSave.FlatStyle = System.Windows.Forms.FlatStyle.Flat;
             this.btnSave.Font = new System.Drawing.Font("Tahoma", 10F, System.Drawing.FontStyle.Bold);
             this.btnSave.ForeColor = System.Drawing.Color.White;
-            this.btnSave.Location = new System.Drawing.Point(540, 475);
+            this.btnSave.Location = new System.Drawing.Point(306, 374);
             this.btnSave.Name = "btnSave";
             this.btnSave.Size = new System.Drawing.Size(110, 40);
             this.btnSave.TabIndex = 1;
@@ -587,7 +511,7 @@
             this.btnCancel.FlatAppearance.BorderSize = 0;
             this.btnCancel.FlatStyle = System.Windows.Forms.FlatStyle.Flat;
             this.btnCancel.Font = new System.Drawing.Font("Tahoma", 10F);
-            this.btnCancel.Location = new System.Drawing.Point(660, 475);
+            this.btnCancel.Location = new System.Drawing.Point(422, 374);
             this.btnCancel.Name = "btnCancel";
             this.btnCancel.Size = new System.Drawing.Size(110, 40);
             this.btnCancel.TabIndex = 2;
@@ -600,7 +524,7 @@
             this.AutoScaleDimensions = new System.Drawing.SizeF(6F, 13F);
             this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
             this.BackColor = System.Drawing.Color.WhiteSmoke;
-            this.ClientSize = new System.Drawing.Size(811, 531);
+            this.ClientSize = new System.Drawing.Size(611, 419);
             this.Controls.Add(this.btnCancel);
             this.Controls.Add(this.btnSave);
             this.Controls.Add(this.tabControl);
@@ -614,18 +538,15 @@
             this.tabDatabase.ResumeLayout(false);
             this.grpDatabase.ResumeLayout(false);
             this.grpDatabase.PerformLayout();
-            this.pnlDbInfo.ResumeLayout(false);
             this.tabAPI.ResumeLayout(false);
             this.grpAPI.ResumeLayout(false);
             this.grpAPI.PerformLayout();
-            this.pnlApiInfo.ResumeLayout(false);
             ((System.ComponentModel.ISupportInitialize)(this.numApiRetryDelay)).EndInit();
             ((System.ComponentModel.ISupportInitialize)(this.numApiRetry)).EndInit();
             ((System.ComponentModel.ISupportInitialize)(this.numApiTimeout)).EndInit();
             this.tabLog.ResumeLayout(false);
             this.grpLog.ResumeLayout(false);
             this.grpLog.PerformLayout();
-            this.pnlLogInfo.ResumeLayout(false);
             ((System.ComponentModel.ISupportInitialize)(this.numLogRetention)).EndInit();
             this.ResumeLayout(false);
 
@@ -638,8 +559,6 @@
         private System.Windows.Forms.TabPage tabAPI;
         private System.Windows.Forms.TabPage tabLog;
         private System.Windows.Forms.GroupBox grpDatabase;
-        private System.Windows.Forms.Panel pnlDbInfo;
-        private System.Windows.Forms.Label lblDbInfo;
         private System.Windows.Forms.Label lblConnectionStatus;
         private System.Windows.Forms.Button btnTestConnection;
         private System.Windows.Forms.TextBox txtPassword;
@@ -651,8 +570,6 @@
         private System.Windows.Forms.TextBox txtServer;
         private System.Windows.Forms.Label lblServer;
         private System.Windows.Forms.GroupBox grpAPI;
-        private System.Windows.Forms.Panel pnlApiInfo;
-        private System.Windows.Forms.Label lblApiInfo;
         private System.Windows.Forms.Label lblApiRetryDelayUnit;
         private System.Windows.Forms.NumericUpDown numApiRetryDelay;
         private System.Windows.Forms.Label lblApiRetryDelay;
@@ -667,8 +584,6 @@
         private System.Windows.Forms.TextBox txtApiEndpoint;
         private System.Windows.Forms.Label lblApiEndpoint;
         private System.Windows.Forms.GroupBox grpLog;
-        private System.Windows.Forms.Panel pnlLogInfo;
-        private System.Windows.Forms.Label lblLogInfo;
         private System.Windows.Forms.Label lblDays;
         private System.Windows.Forms.NumericUpDown numLogRetention;
         private System.Windows.Forms.Label lblLogRetention;

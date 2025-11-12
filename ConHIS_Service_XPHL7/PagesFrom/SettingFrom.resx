@@ -117,15 +117,4 @@
   <resheader name="writer">
     <value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
   </resheader>
-  <data name="lblLogInfo.Text" xml:space="preserve">
-    <value>ℹ️ หมายเหตุ:
-• ระบบจะลบไฟล์ log ที่เก่ากว่าจำนวนวันที่กำหนด
-• การเปลี่ยนแปลงจะมีผลทันทีหลังจากกด Save
-• แนะนำให้เก็บ log อย่างน้อย 7-30 วัน
-
-📁 ไฟล์ที่จะถูกแก้ไข:
-   • Connection\connectdatabase.ini (Database)
-   • Config\appsettings.ini (API)
-   • App.config (Log Settings)</value>
-  </data>
 </root>

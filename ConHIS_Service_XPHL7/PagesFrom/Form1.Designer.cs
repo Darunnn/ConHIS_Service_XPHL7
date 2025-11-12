@@ -154,8 +154,7 @@
             // 
             // settingsButton
             // 
-            this.settingsButton.Anchor = ((System.Windows.Forms.AnchorStyles)((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Right)));
-            this.settingsButton.Location = new System.Drawing.Point(468, 19);
+            this.settingsButton.Location = new System.Drawing.Point(277, 19);
             this.settingsButton.Name = "settingsButton";
             this.settingsButton.Size = new System.Drawing.Size(120, 32);
             this.settingsButton.TabIndex = 2;
@@ -378,7 +377,7 @@
             this.groupBox1.Controls.Add(this.connectionStatusLabel);
             this.groupBox1.Location = new System.Drawing.Point(15, 12);
             this.groupBox1.Name = "groupBox1";
-            this.groupBox1.Size = new System.Drawing.Size(1170, 100);
+            this.groupBox1.Size = new System.Drawing.Size(957, 100);
             this.groupBox1.TabIndex = 0;
             this.groupBox1.TabStop = false;
             this.groupBox1.Text = "📊 Status Information";
@@ -392,7 +391,7 @@
             this.groupBox2.Controls.Add(this.settingsButton);
             this.groupBox2.Location = new System.Drawing.Point(15, 118);
             this.groupBox2.Name = "groupBox2";
-            this.groupBox2.Size = new System.Drawing.Size(1170, 62);
+            this.groupBox2.Size = new System.Drawing.Size(957, 62);
             this.groupBox2.TabIndex = 1;
             this.groupBox2.TabStop = false;
             this.groupBox2.Text = "🎮 Service Controls";
@@ -409,7 +408,7 @@
             this.groupBox3.Controls.Add(this.refreshButton);
             this.groupBox3.Location = new System.Drawing.Point(15, 186);
             this.groupBox3.Name = "groupBox3";
-            this.groupBox3.Size = new System.Drawing.Size(1170, 60);
+            this.groupBox3.Size = new System.Drawing.Size(957, 60);
             this.groupBox3.TabIndex = 2;
             this.groupBox3.TabStop = false;
             this.groupBox3.Text = "🔍 Search & Filter";
@@ -423,7 +422,7 @@
             this.groupBox4.Controls.Add(this.failedPanel);
             this.groupBox4.Location = new System.Drawing.Point(15, 252);
             this.groupBox4.Name = "groupBox4";
-            this.groupBox4.Size = new System.Drawing.Size(1170, 95);
+            this.groupBox4.Size = new System.Drawing.Size(957, 95);
             this.groupBox4.TabIndex = 3;
             this.groupBox4.TabStop = false;
             this.groupBox4.Text = "📈 Status Summary";
@@ -437,14 +436,14 @@
             | System.Windows.Forms.AnchorStyles.Right)));
             this.dataGridView.BackgroundColor = System.Drawing.Color.White;
             this.dataGridView.ColumnHeadersHeightSizeMode = System.Windows.Forms.DataGridViewColumnHeadersHeightSizeMode.AutoSize;
-            this.dataGridView.Location = new System.Drawing.Point(15, 365);
+            this.dataGridView.Location = new System.Drawing.Point(12, 359);
             this.dataGridView.Name = "dataGridView";
             this.dataGridView.ReadOnly = true;
             this.dataGridView.RowHeadersVisible = false;
             this.dataGridView.RowHeadersWidth = 51;
             this.dataGridView.RowTemplate.Height = 24;
             this.dataGridView.SelectionMode = System.Windows.Forms.DataGridViewSelectionMode.FullRowSelect;
-            this.dataGridView.Size = new System.Drawing.Size(1170, 349);
+            this.dataGridView.Size = new System.Drawing.Size(960, 240);
             this.dataGridView.TabIndex = 4;
             // 
             // Form1
@@ -452,7 +451,7 @@
             this.AutoScaleDimensions = new System.Drawing.SizeF(6F, 13F);
             this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
             this.BackColor = System.Drawing.Color.FromArgb(((int)(((byte)(240)))), ((int)(((byte)(240)))), ((int)(((byte)(240)))));
-            this.ClientSize = new System.Drawing.Size(1200, 750);
+            this.ClientSize = new System.Drawing.Size(984, 611);
             this.Controls.Add(this.dataGridView);
             this.Controls.Add(this.groupBox4);
             this.Controls.Add(this.groupBox3);
