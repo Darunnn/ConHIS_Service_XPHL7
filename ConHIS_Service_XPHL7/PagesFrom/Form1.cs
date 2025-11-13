@@ -227,7 +227,7 @@ namespace ConHIS_Service_XPHL7
 
             MessageBox.Show(message, title, MessageBoxButtons.OK, MessageBoxIcon.Information);
         }
-        // ⭐ Callback สำหรับตรวจสอบการเชื่อมต่อแบบ Realtime
+        // ⭐  ConnectionCheckCallback เพื่อเช็ค table และอัปเดตปุ่ม
         private async void ConnectionCheckCallback(object state)
         {
             if (_isCheckingConnection) return;
@@ -250,6 +250,18 @@ namespace ConHIS_Service_XPHL7
                             try
                             {
                                 UpdateConnectionStatus(true);
+
+                                // ⭐ เช็ค tables หลัง reconnect
+                                _logger?.LogInfo("Rechecking database tables after reconnection...");
+                                _ipdTableExists = await CheckTableExists("drug_dispense_ipd");
+                                _opdTableExists = await CheckTableExists("drug_dispense_opd");
+                                _hasCheckedTables = true;
+
+                                _logger?.LogInfo($"Table Status - IPD: {(_ipdTableExists ? "EXISTS" : "NOT FOUND")}, OPD: {(_opdTableExists ? "EXISTS" : "NOT FOUND")}");
+
+                                // ⭐ อัปเดตสถานะปุ่มตามการมี table
+                                UpdateServiceButtonStates();
+
                                 await LoadDataBySelectedDate();
                                 UpdateStatus("✓ Database reconnected - Data refreshed");
 
@@ -258,8 +270,8 @@ namespace ConHIS_Service_XPHL7
                                     _hasNotifiedReconnection = true;
                                     _hasNotifiedDisconnection = false;
 
-                                    bool shouldResumeIPD = _wasIPDRunningBeforeDisconnection;
-                                    bool shouldResumeOPD = _wasOPDRunningBeforeDisconnection;
+                                    bool shouldResumeIPD = _wasIPDRunningBeforeDisconnection && _ipdTableExists;
+                                    bool shouldResumeOPD = _wasOPDRunningBeforeDisconnection && _opdTableExists;
 
                                     string serviceMessage = "";
                                     if (shouldResumeIPD && shouldResumeOPD)
@@ -269,12 +281,20 @@ namespace ConHIS_Service_XPHL7
                                     else if (shouldResumeOPD)
                                         serviceMessage = "\n\n⚡ OPD Service will resume in 3 seconds...";
 
+                                    // ⭐ เพิ่มข้อความแจ้งเตือนถ้า table หายไป
+                                    string tableWarning = "";
+                                    if (_wasIPDRunningBeforeDisconnection && !_ipdTableExists)
+                                        tableWarning += "\n⚠️ IPD table not found - IPD Service disabled";
+                                    if (_wasOPDRunningBeforeDisconnection && !_opdTableExists)
+                                        tableWarning += "\n⚠️ OPD table not found - OPD Service disabled";
+
                                     this.BeginInvoke(new Action(() =>
                                     {
                                         ShowAutoCloseMessageBox(
                                             $"✅ Database connection restored!\n\n" +
                                             $"📅 Reconnected at: {_lastDatabaseConnectionTime.Value:yyyy-MM-dd HH:mm:ss}\n" +
                                             $"🔄 Data refreshed automatically." +
+                                            tableWarning +
                                             serviceMessage,
                                             "Connection Restored",
                                             3000,
@@ -296,6 +316,14 @@ namespace ConHIS_Service_XPHL7
                         this.Invoke(new Action(() =>
                         {
                             UpdateConnectionStatus(false);
+
+                            // ⭐ รีเซ็ตสถานะ table
+                            _ipdTableExists = false;
+                            _opdTableExists = false;
+                            _hasCheckedTables = false;
+
+                            // ⭐ อัปเดตปุ่มให้ disabled
+                            UpdateServiceButtonStates();
 
                             _wasIPDRunningBeforeDisconnection = (_ipdTimer != null);
                             _wasOPDRunningBeforeDisconnection = (_opdTimer != null);
@@ -348,7 +376,18 @@ namespace ConHIS_Service_XPHL7
             catch (Exception ex)
             {
                 _logger?.LogError("Connection check error", ex);
-                this.Invoke(new Action(() => UpdateConnectionStatus(false)));
+                this.Invoke(new Action(() =>
+                {
+                    UpdateConnectionStatus(false);
+
+                    // ⭐ รีเซ็ตสถานะ table เมื่อเกิด error
+                    _ipdTableExists = false;
+                    _opdTableExists = false;
+                    _hasCheckedTables = false;
+
+                    // ⭐ อัปเดตปุ่มให้ disabled
+                    UpdateServiceButtonStates();
+                }));
             }
             finally
             {
@@ -748,15 +787,16 @@ namespace ConHIS_Service_XPHL7
                         // แสดง MessageBox แจ้งเตือน
                         this.BeginInvoke(new Action(() =>
                         {
-                            MessageBox.Show(
+                            ShowAutoCloseMessageBox(
                                 $"⚠️ Database Warning\n\n" +
                                 $"Missing tables detected:\n{missingTables}\n\n" +
                                 $"IPD Service: {(_ipdTableExists ? "Available" : "Disabled")}\n" +
                                 $"OPD Service: {(_opdTableExists ? "Available" : "Disabled")}\n\n" +
                                 $"Please create the missing tables to enable all features.",
                                 "Database Warning",
-                                MessageBoxButtons.OK,
-                                MessageBoxIcon.Warning
+                                 3000,
+                                 false,
+                                 false
                             );
                         }));
                     }
@@ -946,26 +986,15 @@ namespace ConHIS_Service_XPHL7
             ApplyOrderTypeFilter("OPD");
             UpdateStatusFilterButtons();
         }
-        private void PendingPanel_Click(object sender, EventArgs e)
-        {
-            _currentStatusFilter = "Pending";
-            ApplyStatusFilter();
-            UpdateStatusFilterButtons();
-        }
-
-        private void RejectPanel_Click(object sender, EventArgs e)
-        {
-            _currentStatusFilter = "Rejected";
-            ApplyStatusFilter();
-            UpdateStatusFilterButtons();
-        }
+      
 
         private void UpdateStatusFilterButtons()
         {
             totalPanel.BorderStyle = System.Windows.Forms.BorderStyle.FixedSingle;
             successPanel.BorderStyle = System.Windows.Forms.BorderStyle.FixedSingle;
             failedPanel.BorderStyle = System.Windows.Forms.BorderStyle.FixedSingle;
-   
+            ipdPanel.BorderStyle = System.Windows.Forms.BorderStyle.FixedSingle;
+            opdPanel.BorderStyle = System.Windows.Forms.BorderStyle.FixedSingle;
 
             if (_currentStatusFilter == "All")
                 totalPanel.BorderStyle = System.Windows.Forms.BorderStyle.Fixed3D;
@@ -973,7 +1002,10 @@ namespace ConHIS_Service_XPHL7
                 successPanel.BorderStyle = System.Windows.Forms.BorderStyle.Fixed3D;
             else if (_currentStatusFilter == "Failed")
                 failedPanel.BorderStyle = System.Windows.Forms.BorderStyle.Fixed3D;
-           
+            else if (_currentStatusFilter == "IPD")
+                ipdPanel.BorderStyle = System.Windows.Forms.BorderStyle.Fixed3D;
+            else if (_currentStatusFilter == "OPD")
+                opdPanel.BorderStyle = System.Windows.Forms.BorderStyle.Fixed3D;
         }
 
         private void ApplyStatusFilter()
