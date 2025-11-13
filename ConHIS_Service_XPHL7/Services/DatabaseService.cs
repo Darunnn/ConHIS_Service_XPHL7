@@ -433,20 +433,38 @@ namespace ConHIS_Service_XPHL7.Services
         public List<DrugDispenseopd> GetPendingDispenseOpdData()
         {
             var result = new List<DrugDispenseopd>();
-            _logger.LogInfo("GetPendingDispenseData (OPD): Start");
+            _logger.LogInfo("[GetPendingDispenseData OPD] Start");
+
             try
             {
+                // ⭐ เพิ่ม: ตรวจสอบ table ก่อน
+                if (!CheckTableExists("drug_dispense_opd"))
+                {
+                    _logger.LogWarning("[GetPendingDispenseData OPD] Table 'drug_dispense_opd' does not exist");
+                    return result;
+                }
+
                 using (var conn = new MySqlConnection(_connectionString))
                 {
+                    // ⭐ เพิ่ม: Log connection string (ซ่อน password)
+                    var safeConnectionString = _connectionString.Replace(
+                        System.Text.RegularExpressions.Regex.Match(_connectionString, @"password=([^;]+)",
+                        System.Text.RegularExpressions.RegexOptions.IgnoreCase).Groups[1].Value,
+                        "****"
+                    );
+                    _logger.LogInfo($"[GetPendingDispenseData OPD] Connecting to database: {safeConnectionString}");
+
                     conn.Open();
-                    _logger.LogInfo("Database connection opened for GetPendingDispenseData (OPD)");
+                    _logger.LogInfo("[GetPendingDispenseData OPD] Database connection opened successfully");
 
                     var sql = @"SELECT drug_dispense_opd_id, presc_id, drug_request_msg_type, 
-                               hl7_data, drug_dispense_datetime, recieve_status, recieve_status_datetime, recieve_order_type
-                               FROM drug_dispense_opd 
-                               WHERE recieve_status = 'N'
-                               ORDER BY drug_dispense_datetime
-                               LIMIT 500";
+                       hl7_data, drug_dispense_datetime, recieve_status, recieve_status_datetime, recieve_order_type
+                       FROM drug_dispense_opd 
+                       WHERE recieve_status = 'N'
+                       ORDER BY drug_dispense_datetime
+                       LIMIT 500";
+
+                    _logger.LogInfo($"[GetPendingDispenseData OPD] Executing query: {sql}");
 
                     using (var cmd = new MySqlCommand(sql, conn))
                     {
@@ -454,13 +472,17 @@ namespace ConHIS_Service_XPHL7.Services
 
                         using (var reader = cmd.ExecuteReader())
                         {
+                            _logger.LogInfo("[GetPendingDispenseData OPD] Query executed, reading results...");
+
                             int recieveStatusDatetimeOrdinal = reader.GetOrdinal("recieve_status_datetime");
                             int recieveOrderTypeOrdinal = reader.GetOrdinal("recieve_order_type");
 
+                            int rowCount = 0; // ⭐ เพิ่ม counter
                             while (reader.Read())
                             {
                                 try
                                 {
+                                    rowCount++;
                                     var orderType = reader.IsDBNull(recieveOrderTypeOrdinal) ? null : reader.GetString(recieveOrderTypeOrdinal);
                                     var prescId = reader.GetInt32("presc_id");
 
@@ -477,22 +499,33 @@ namespace ConHIS_Service_XPHL7.Services
                                         RecieveOrderType = orderType
                                     });
 
-                                    _logger.LogInfo($"GetPendingDispenseData (OPD): Row PrescId={prescId}, RecieveOrderType={orderType}");
+                                    // ⭐ Log ทุก 10 rows
+                                    if (rowCount % 10 == 0)
+                                    {
+                                        _logger.LogInfo($"[GetPendingDispenseData OPD] Reading progress: {rowCount} rows...");
+                                    }
                                 }
-                                catch (Exception ex)
+                                catch (Exception rowEx)
                                 {
-                                    _logger.LogWarning($"Error reading pending row (OPD): {ex.Message}");
+                                    _logger.LogError($"[GetPendingDispenseData OPD] Error reading row #{rowCount}: {rowEx.Message}", rowEx);
                                 }
                             }
 
-                            _logger.LogInfo($"GetPendingDispenseData (OPD): Found {result.Count} rows");
+                            _logger.LogInfo($"[GetPendingDispenseData OPD] Query completed - Found {result.Count} rows (Total read: {rowCount})");
                         }
                     }
                 }
             }
+            catch (MySqlException mysqlEx)
+            {
+                // ⭐ เพิ่ม: จัดการ MySQL Error แยก
+                _logger.LogError($"[GetPendingDispenseData OPD] MySQL Error (Code: {mysqlEx.Number}): {mysqlEx.Message}", mysqlEx);
+                _logger.LogError($"[GetPendingDispenseData OPD] StackTrace: {mysqlEx.StackTrace}", mysqlEx);
+            }
             catch (Exception ex)
             {
-                _logger.LogError("Error getting pending dispense data (OPD)", ex);
+                _logger.LogError("[GetPendingDispenseData OPD] Critical error", ex);
+                _logger.LogError($"[GetPendingDispenseData OPD] StackTrace: {ex.StackTrace}", ex);
             }
 
             return result;
@@ -536,32 +569,81 @@ namespace ConHIS_Service_XPHL7.Services
         /// </summary>
         public List<DrugDispenseipd> GetPendingDispenseDataByOrderType(string orderType)
         {
-            _logger.LogInfo($"GetPendingDispenseDataByOrderType: Start - OrderType={orderType}");
+            _logger.LogInfo($"[GetPendingDispenseDataByOrderType] Start - OrderType={orderType}");
 
-            if (orderType == "IPD")
+            try
             {
-                return GetPendingDispenseData();
-            }
-            else if (orderType == "OPD")
-            {
-                // แปลง DrugDispenseopd เป็น DrugDispenseipd เพื่อให้ใช้ type เดียวกัน
-                var opdData = GetPendingDispenseOpdData();
-
-                return opdData.Select(opd => new DrugDispenseipd
+                // ⭐ เพิ่ม: ตรวจสอบ parameter
+                if (string.IsNullOrWhiteSpace(orderType))
                 {
-                    DrugDispenseipdId = opd.DrugDispenseopdId,
-                    PrescId = opd.PrescId,
-                    DrugRequestMsgType = opd.DrugRequestMsgType,
-                    Hl7Data = opd.Hl7Data,
-                    DrugDispenseDatetime = opd.DrugDispenseDatetime,
-                    RecieveStatus = opd.RecieveStatus,
-                    RecieveStatusDatetime = opd.RecieveStatusDatetime,
-                    RecieveOrderType = opd.RecieveOrderType
-                }).ToList();
+                    _logger.LogError("[GetPendingDispenseDataByOrderType] OrderType is null or empty");
+                    return new List<DrugDispenseipd>();
+                }
+
+                // ⭐ เพิ่ม: ตรวจสอบ table ก่อน query
+                string tableName = orderType == "IPD" ? "drug_dispense_ipd" : "drug_dispense_opd";
+
+                if (!CheckTableExists(tableName))
+                {
+                    _logger.LogWarning($"[GetPendingDispenseDataByOrderType] Table '{tableName}' does not exist");
+                    return new List<DrugDispenseipd>();
+                }
+
+                _logger.LogInfo($"[GetPendingDispenseDataByOrderType] Table '{tableName}' exists - Proceeding with query");
+
+                // ⭐ เพิ่ม: Try-Catch แยกสำหรับแต่ละ OrderType
+                if (orderType == "IPD")
+                {
+                    try
+                    {
+                        var result = GetPendingDispenseData();
+                        _logger.LogInfo($"[GetPendingDispenseDataByOrderType] IPD returned {result.Count} records");
+                        return result;
+                    }
+                    catch (Exception ipdEx)
+                    {
+                        _logger.LogError($"[GetPendingDispenseDataByOrderType] Error in IPD query", ipdEx);
+                        return new List<DrugDispenseipd>();
+                    }
+                }
+                else if (orderType == "OPD")
+                {
+                    try
+                    {
+                        var opdData = GetPendingDispenseOpdData();
+                        _logger.LogInfo($"[GetPendingDispenseDataByOrderType] OPD query returned {opdData.Count} records");
+
+                        // แปลง DrugDispenseopd เป็น DrugDispenseipd
+                        var result = opdData.Select(opd => new DrugDispenseipd
+                        {
+                            DrugDispenseipdId = opd.DrugDispenseopdId,
+                            PrescId = opd.PrescId,
+                            DrugRequestMsgType = opd.DrugRequestMsgType,
+                            Hl7Data = opd.Hl7Data,
+                            DrugDispenseDatetime = opd.DrugDispenseDatetime,
+                            RecieveStatus = opd.RecieveStatus,
+                            RecieveStatusDatetime = opd.RecieveStatusDatetime,
+                            RecieveOrderType = opd.RecieveOrderType
+                        }).ToList();
+
+                        _logger.LogInfo($"[GetPendingDispenseDataByOrderType] OPD converted {result.Count} records");
+                        return result;
+                    }
+                    catch (Exception opdEx)
+                    {
+                        _logger.LogError($"[GetPendingDispenseDataByOrderType] Error in OPD query", opdEx);
+                        return new List<DrugDispenseipd>();
+                    }
+                }
+                else
+                {
+                    _logger.LogWarning($"[GetPendingDispenseDataByOrderType] Unknown OrderType: {orderType}");
+                    return new List<DrugDispenseipd>();
+                }
             }
-            else
+            catch (Exception ex)
             {
-                _logger.LogWarning($"Unknown OrderType: {orderType}");
+                _logger.LogError($"[GetPendingDispenseDataByOrderType] Critical error", ex);
                 return new List<DrugDispenseipd>();
             }
         }

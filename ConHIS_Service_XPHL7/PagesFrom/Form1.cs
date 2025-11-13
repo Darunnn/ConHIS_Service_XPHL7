@@ -68,6 +68,7 @@ namespace ConHIS_Service_XPHL7
         private bool _isOPDProcessing = false;
         private bool _wasIPDRunningBeforeDisconnection = false;
         private bool _wasOPDRunningBeforeDisconnection = false;
+        
         #endregion
 
         #region Additional Variables for Table Status
@@ -397,17 +398,24 @@ namespace ConHIS_Service_XPHL7
 
         private void InitializePanelPaintEvents()
         {
-            totalPanel.Paint += (s, e) => DrawPanelTopBar(e, System.Drawing.Color.Gray);
-            successPanel.Paint += (s, e) => DrawPanelTopBar(e, System.Drawing.Color.Green);
-            failedPanel.Paint += (s, e) => DrawPanelTopBar(e, System.Drawing.Color.Red);
-            ipdPanel.Paint += (s, e) => DrawPanelTopBar(e, System.Drawing.Color.FromArgb(52, 152, 219));
-            opdPanel.Paint += (s, e) => DrawPanelTopBar(e, System.Drawing.Color.FromArgb(46, 204, 113));
+            // ⭐ Set initial filter to "All" ถ้ายังไม่ได้กำหนด
+            if (string.IsNullOrEmpty(_currentStatusFilter))
+            {
+                _currentStatusFilter = "All";
+            }
+
+            totalPanel.Paint += (s, e) => DrawPanelTopBar(totalPanel, e, System.Drawing.Color.Gray, "All");
+            successPanel.Paint += (s, e) => DrawPanelTopBar(successPanel, e, System.Drawing.Color.Green, "Success");
+            failedPanel.Paint += (s, e) => DrawPanelTopBar(failedPanel, e, System.Drawing.Color.Red, "Failed");
+            ipdPanel.Paint += (s, e) => DrawPanelTopBar(ipdPanel, e, System.Drawing.Color.FromArgb(52, 152, 219), "IPD");
+            opdPanel.Paint += (s, e) => DrawPanelTopBar(opdPanel, e, System.Drawing.Color.FromArgb(46, 204, 113), "OPD");
 
             totalPanel.Click += TotalPanel_Click;
             successPanel.Click += SuccessPanel_Click;
             failedPanel.Click += FailedPanel_Click;
             ipdPanel.Click += IPDPanel_Click;
             opdPanel.Click += OPDPanel_Click;
+
             foreach (Control ctrl in totalPanel.Controls)
             {
                 if (ctrl is Label) { ctrl.Click += TotalPanel_Click; ctrl.Cursor = System.Windows.Forms.Cursors.Hand; }
@@ -428,6 +436,7 @@ namespace ConHIS_Service_XPHL7
             {
                 if (ctrl is Label) { ctrl.Click += OPDPanel_Click; ctrl.Cursor = System.Windows.Forms.Cursors.Hand; }
             }
+
             totalPanel.Cursor = System.Windows.Forms.Cursors.Hand;
             successPanel.Cursor = System.Windows.Forms.Cursors.Hand;
             failedPanel.Cursor = System.Windows.Forms.Cursors.Hand;
@@ -736,7 +745,7 @@ namespace ConHIS_Service_XPHL7
         {
             _logger.LogInfo("Start Interface");
             UpdateStatus("Initializing...");
-
+            _currentStatusFilter = "All";
             InitializeDataTable();
             UpdateConnectionStatus(false);
 
@@ -819,9 +828,9 @@ namespace ConHIS_Service_XPHL7
                 var hl7Service = new HL7Service();
                 _processor = new DrugDispenseProcessor(_databaseService, hl7Service, apiService);
 
-                UpdateStatusFilterButtons();
+                
                 InitializePanelPaintEvents();
-
+                UpdateStatusFilterButtons();
                 StartConnectionMonitor();
 
                 UpdateStatus("Ready - Services Stopped");
@@ -986,16 +995,18 @@ namespace ConHIS_Service_XPHL7
             ApplyOrderTypeFilter("OPD");
             UpdateStatusFilterButtons();
         }
-      
+
 
         private void UpdateStatusFilterButtons()
         {
+            // Reset all panels to default state
             totalPanel.BorderStyle = System.Windows.Forms.BorderStyle.FixedSingle;
             successPanel.BorderStyle = System.Windows.Forms.BorderStyle.FixedSingle;
             failedPanel.BorderStyle = System.Windows.Forms.BorderStyle.FixedSingle;
             ipdPanel.BorderStyle = System.Windows.Forms.BorderStyle.FixedSingle;
             opdPanel.BorderStyle = System.Windows.Forms.BorderStyle.FixedSingle;
 
+            // Set selected panel to 3D border
             if (_currentStatusFilter == "All")
                 totalPanel.BorderStyle = System.Windows.Forms.BorderStyle.Fixed3D;
             else if (_currentStatusFilter == "Success")
@@ -1006,6 +1017,20 @@ namespace ConHIS_Service_XPHL7
                 ipdPanel.BorderStyle = System.Windows.Forms.BorderStyle.Fixed3D;
             else if (_currentStatusFilter == "OPD")
                 opdPanel.BorderStyle = System.Windows.Forms.BorderStyle.Fixed3D;
+
+            // ⭐ Force repaint all panels to update top bar colors
+            totalPanel.Invalidate();
+            successPanel.Invalidate();
+            failedPanel.Invalidate();
+            ipdPanel.Invalidate();
+            opdPanel.Invalidate();
+
+            // Force immediate refresh
+            totalPanel.Update();
+            successPanel.Update();
+            failedPanel.Update();
+            ipdPanel.Update();
+            opdPanel.Update();
         }
 
         private void ApplyStatusFilter()
@@ -1569,6 +1594,21 @@ namespace ConHIS_Service_XPHL7
 
             try
             {
+                // ⭐ เพิ่ม: ตรวจสอบ table ก่อนทำงาน
+                if (isIPD && !_ipdTableExists)
+                {
+                    _logger?.LogWarning($"[{orderType}] Table does not exist - Aborting");
+                    UpdateStatus($"✗ {orderType} table not found");
+                    return;
+                }
+
+                if (!isIPD && !_opdTableExists)
+                {
+                    _logger?.LogWarning($"[{orderType}] Table does not exist - Aborting");
+                    UpdateStatus($"✗ {orderType} table not found");
+                    return;
+                }
+
                 if (isManual)
                 {
                     this.Invoke(new Action(() =>
@@ -1584,16 +1624,43 @@ namespace ConHIS_Service_XPHL7
 
                 cancellationToken.ThrowIfCancellationRequested();
 
-                // ⭐ ดึงข้อมูลตาม OrderType
-                var pending = await Task.Run(() =>
-                    _databaseService.GetPendingDispenseDataByOrderType(orderType),
-                    cancellationToken);
+                // ⭐ เพิ่ม: แสดง log ก่อนเรียก database
+                _logger?.LogInfo($"[{orderType}] Querying database for pending orders...");
 
-                _logger.LogInfo($"[{orderType}] Found {pending.Count} pending orders");
+                List<DrugDispenseipd> pending = null;
+
+                // ⭐ เพิ่ม: Try-Catch เฉพาะการ query database
+                try
+                {
+                    pending = await Task.Run(() =>
+                        _databaseService.GetPendingDispenseDataByOrderType(orderType),
+                        cancellationToken);
+                }
+                catch (Exception dbEx)
+                {
+                    _logger?.LogError($"[{orderType}] Database query failed", dbEx);
+                    UpdateStatus($"✗ {orderType} - Database Error: {dbEx.Message}");
+                    return;
+                }
+
+                // ⭐ เพิ่ม: ตรวจสอบ null
+                if (pending == null)
+                {
+                    _logger?.LogWarning($"[{orderType}] Database returned null");
+                    pending = new List<DrugDispenseipd>();
+                }
+
+                _logger.LogInfo($"[{orderType}] Retrieved {pending.Count} records");
 
                 if (pending.Count > 0)
                 {
                     UpdateLastFound(pending.Count);
+                }
+                else
+                {
+                    // ⭐ เพิ่ม: Log ชัดเจนว่าไม่มีข้อมูล
+                    _logger?.LogInfo($"[{orderType}] No pending orders found");
+                    UpdateStatus($"✓ {orderType} - No pending orders");
                 }
 
                 cancellationToken.ThrowIfCancellationRequested();
@@ -1613,40 +1680,45 @@ namespace ConHIS_Service_XPHL7
                 {
                     await Task.Run(() =>
                     {
-                        // ⭐ เรียก ProcessPendingOrders ที่ถูกต้องตาม orderType
-                        if (orderType == "IPD")
+                        try
                         {
-                            _processor.ProcessPendingOrders(
-                                msg => { _logger.LogInfo($"[{orderType}] {msg}"); },
-                                result =>
-                                {
-                                    if (cancellationToken.IsCancellationRequested)
+                            if (orderType == "IPD")
+                            {
+                                _processor.ProcessPendingOrders(
+                                    msg => { _logger.LogInfo($"[{orderType}] {msg}"); },
+                                    result =>
                                     {
-                                        _logger.LogInfo($"[{orderType}] Processing cancelled");
-                                        return;
-                                    }
-
-                                    ProcessOrderResult(result, ref remainingCount, orderType, cancellationToken);
-                                },
-                                cancellationToken
-                            );
+                                        if (cancellationToken.IsCancellationRequested)
+                                        {
+                                            _logger.LogInfo($"[{orderType}] Processing cancelled");
+                                            return;
+                                        }
+                                        ProcessOrderResult(result, ref remainingCount, orderType, cancellationToken);
+                                    },
+                                    cancellationToken
+                                );
+                            }
+                            else // OPD
+                            {
+                                _processor.ProcessPendingOpdOrders(
+                                    msg => { _logger.LogInfo($"[{orderType}] {msg}"); },
+                                    result =>
+                                    {
+                                        if (cancellationToken.IsCancellationRequested)
+                                        {
+                                            _logger.LogInfo($"[{orderType}] Processing cancelled");
+                                            return;
+                                        }
+                                        ProcessOrderResult(result, ref remainingCount, orderType, cancellationToken);
+                                    },
+                                    cancellationToken
+                                );
+                            }
                         }
-                        else // OPD
+                        catch (Exception processEx)
                         {
-                            _processor.ProcessPendingOpdOrders(
-                                msg => { _logger.LogInfo($"[{orderType}] {msg}"); },
-                                result =>
-                                {
-                                    if (cancellationToken.IsCancellationRequested)
-                                    {
-                                        _logger.LogInfo($"[{orderType}] Processing cancelled");
-                                        return;
-                                    }
-
-                                    ProcessOrderResult(result, ref remainingCount, orderType, cancellationToken);
-                                },
-                                cancellationToken
-                            );
+                            _logger?.LogError($"[{orderType}] Processing failed", processEx);
+                            throw; // Re-throw เพื่อให้ outer catch จัดการ
                         }
                     }, cancellationToken);
 
@@ -1678,11 +1750,24 @@ namespace ConHIS_Service_XPHL7
             }
             catch (Exception ex)
             {
-                _logger.LogError($"[{orderType}] Check error", ex);
+                // ⭐ ปรับปรุง: Log error แบบละเอียด
+                _logger?.LogError($"[{orderType}] Critical error in CheckPendingOrders", ex);
+                _logger?.LogError($"[{orderType}] StackTrace: {ex.StackTrace}", ex);
+
                 this.Invoke(new Action(() =>
                 {
                     this.Text = "ConHIS Service - Drug Dispense Monitor";
-                    UpdateStatus($"[{orderType}] Error: {ex.Message}");
+                    UpdateStatus($"✗ {orderType} Error: {ex.Message}");
+
+                    // ⭐ เพิ่ม: แสดง MessageBox เมื่อเกิด error ร้ายแรง
+                    MessageBox.Show(
+                        $"เกิดข้อผิดพลาดร้ายแรงใน {orderType} Service:\n\n" +
+                        $"{ex.Message}\n\n" +
+                        $"กรุณาตรวจสอบ Log files สำหรับรายละเอียด",
+                        $"{orderType} Service Error",
+                        MessageBoxButtons.OK,
+                        MessageBoxIcon.Error
+                    );
                 }));
             }
             finally
@@ -1696,8 +1781,8 @@ namespace ConHIS_Service_XPHL7
                 {
                     this.Invoke(new Action(() =>
                     {
-                        startStopIPDButton.Enabled = true;
-                        startStopOPDButton.Enabled = true;
+                        startStopIPDButton.Enabled = _ipdTableExists;
+                        startStopOPDButton.Enabled = _opdTableExists;
                         exportButton.Enabled = true;
                     }));
                 }
@@ -2088,11 +2173,23 @@ namespace ConHIS_Service_XPHL7
             }
         }
 
-        private void DrawPanelTopBar(PaintEventArgs e, System.Drawing.Color barColor)
+        private void DrawPanelTopBar(Panel panel, PaintEventArgs e, System.Drawing.Color barColor, string filterType)
         {
-            using (var brush = new System.Drawing.SolidBrush(barColor))
+            // วาดแถบสีเฉพาะ panel ที่ถูกเลือก
+            if (_currentStatusFilter == filterType)
             {
-                e.Graphics.FillRectangle(brush, 0, 0, e.ClipRectangle.Width, 3);
+                using (var brush = new System.Drawing.SolidBrush(barColor))
+                {
+                    e.Graphics.FillRectangle(brush, 0, 0, e.ClipRectangle.Width, 3);
+                }
+            }
+            else
+            {
+                // วาดแถบสีเทาอ่อนสำหรับ panel ที่ไม่ได้เลือก
+                using (var brush = new System.Drawing.SolidBrush(System.Drawing.Color.FromArgb(220, 220, 220)))
+                {
+                    e.Graphics.FillRectangle(brush, 0, 0, e.ClipRectangle.Width, 3);
+                }
             }
         }
 
