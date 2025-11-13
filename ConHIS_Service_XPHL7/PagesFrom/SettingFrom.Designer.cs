@@ -41,8 +41,6 @@
             this.lblApiTimeoutUnit = new System.Windows.Forms.Label();
             this.numApiTimeout = new System.Windows.Forms.NumericUpDown();
             this.lblApiTimeout = new System.Windows.Forms.Label();
-            this.lblApiStatus = new System.Windows.Forms.Label();
-            this.btnTestApi = new System.Windows.Forms.Button();
             this.txtApiEndpoint = new System.Windows.Forms.TextBox();
             this.lblApiEndpoint = new System.Windows.Forms.Label();
             this.tabLog = new System.Windows.Forms.TabPage();
@@ -231,8 +229,6 @@
             this.grpAPI.Controls.Add(this.lblApiTimeoutUnit);
             this.grpAPI.Controls.Add(this.numApiTimeout);
             this.grpAPI.Controls.Add(this.lblApiTimeout);
-            this.grpAPI.Controls.Add(this.lblApiStatus);
-            this.grpAPI.Controls.Add(this.btnTestApi);
             this.grpAPI.Controls.Add(this.txtApiEndpoint);
             this.grpAPI.Controls.Add(this.lblApiEndpoint);
             this.grpAPI.Font = new System.Drawing.Font("Tahoma", 9F, System.Drawing.FontStyle.Bold);
@@ -249,7 +245,7 @@
             this.lblApiRetryDelayUnit.AutoSize = true;
             this.lblApiRetryDelayUnit.Font = new System.Drawing.Font("Tahoma", 8.25F);
             this.lblApiRetryDelayUnit.ForeColor = System.Drawing.Color.Gray;
-            this.lblApiRetryDelayUnit.Location = new System.Drawing.Point(310, 227);
+            this.lblApiRetryDelayUnit.Location = new System.Drawing.Point(310, 194);
             this.lblApiRetryDelayUnit.Name = "lblApiRetryDelayUnit";
             this.lblApiRetryDelayUnit.Size = new System.Drawing.Size(32, 13);
             this.lblApiRetryDelayUnit.TabIndex = 12;
@@ -258,7 +254,7 @@
             // numApiRetryDelay
             // 
             this.numApiRetryDelay.Font = new System.Drawing.Font("Tahoma", 10F);
-            this.numApiRetryDelay.Location = new System.Drawing.Point(220, 222);
+            this.numApiRetryDelay.Location = new System.Drawing.Point(220, 189);
             this.numApiRetryDelay.Maximum = new decimal(new int[] {
             60,
             0,
@@ -283,7 +279,7 @@
             // 
             this.lblApiRetryDelay.AutoSize = true;
             this.lblApiRetryDelay.Font = new System.Drawing.Font("Tahoma", 9F);
-            this.lblApiRetryDelay.Location = new System.Drawing.Point(30, 225);
+            this.lblApiRetryDelay.Location = new System.Drawing.Point(30, 192);
             this.lblApiRetryDelay.Name = "lblApiRetryDelay";
             this.lblApiRetryDelay.Size = new System.Drawing.Size(73, 14);
             this.lblApiRetryDelay.TabIndex = 10;
@@ -294,7 +290,7 @@
             this.lblApiRetryUnit.AutoSize = true;
             this.lblApiRetryUnit.Font = new System.Drawing.Font("Tahoma", 8.25F);
             this.lblApiRetryUnit.ForeColor = System.Drawing.Color.Gray;
-            this.lblApiRetryUnit.Location = new System.Drawing.Point(310, 187);
+            this.lblApiRetryUnit.Location = new System.Drawing.Point(310, 154);
             this.lblApiRetryUnit.Name = "lblApiRetryUnit";
             this.lblApiRetryUnit.Size = new System.Drawing.Size(24, 13);
             this.lblApiRetryUnit.TabIndex = 9;
@@ -303,7 +299,7 @@
             // numApiRetry
             // 
             this.numApiRetry.Font = new System.Drawing.Font("Tahoma", 10F);
-            this.numApiRetry.Location = new System.Drawing.Point(220, 182);
+            this.numApiRetry.Location = new System.Drawing.Point(220, 149);
             this.numApiRetry.Maximum = new decimal(new int[] {
             10,
             0,
@@ -323,7 +319,7 @@
             // 
             this.lblApiRetry.AutoSize = true;
             this.lblApiRetry.Font = new System.Drawing.Font("Tahoma", 9F);
-            this.lblApiRetry.Location = new System.Drawing.Point(30, 185);
+            this.lblApiRetry.Location = new System.Drawing.Point(30, 152);
             this.lblApiRetry.Name = "lblApiRetry";
             this.lblApiRetry.Size = new System.Drawing.Size(96, 14);
             this.lblApiRetry.TabIndex = 7;
@@ -334,7 +330,7 @@
             this.lblApiTimeoutUnit.AutoSize = true;
             this.lblApiTimeoutUnit.Font = new System.Drawing.Font("Tahoma", 8.25F);
             this.lblApiTimeoutUnit.ForeColor = System.Drawing.Color.Gray;
-            this.lblApiTimeoutUnit.Location = new System.Drawing.Point(310, 147);
+            this.lblApiTimeoutUnit.Location = new System.Drawing.Point(310, 114);
             this.lblApiTimeoutUnit.Name = "lblApiTimeoutUnit";
             this.lblApiTimeoutUnit.Size = new System.Drawing.Size(32, 13);
             this.lblApiTimeoutUnit.TabIndex = 6;
@@ -343,7 +339,7 @@
             // numApiTimeout
             // 
             this.numApiTimeout.Font = new System.Drawing.Font("Tahoma", 10F);
-            this.numApiTimeout.Location = new System.Drawing.Point(220, 142);
+            this.numApiTimeout.Location = new System.Drawing.Point(220, 109);
             this.numApiTimeout.Maximum = new decimal(new int[] {
             300,
             0,
@@ -368,43 +364,16 @@
             // 
             this.lblApiTimeout.AutoSize = true;
             this.lblApiTimeout.Font = new System.Drawing.Font("Tahoma", 9F);
-            this.lblApiTimeout.Location = new System.Drawing.Point(30, 145);
+            this.lblApiTimeout.Location = new System.Drawing.Point(30, 112);
             this.lblApiTimeout.Name = "lblApiTimeout";
             this.lblApiTimeout.Size = new System.Drawing.Size(80, 14);
             this.lblApiTimeout.TabIndex = 4;
             this.lblApiTimeout.Text = "API Timeout:";
             // 
-            // lblApiStatus
-            // 
-            this.lblApiStatus.Font = new System.Drawing.Font("Tahoma", 8.25F);
-            this.lblApiStatus.ForeColor = System.Drawing.Color.Gray;
-            this.lblApiStatus.Location = new System.Drawing.Point(160, 95);
-            this.lblApiStatus.Name = "lblApiStatus";
-            this.lblApiStatus.Size = new System.Drawing.Size(530, 30);
-            this.lblApiStatus.TabIndex = 3;
-            this.lblApiStatus.Text = "ℹ️ Click Test API to verify";
-            this.lblApiStatus.TextAlign = System.Drawing.ContentAlignment.MiddleLeft;
-            // 
-            // btnTestApi
-            // 
-            this.btnTestApi.BackColor = System.Drawing.Color.FromArgb(((int)(((byte)(46)))), ((int)(((byte)(204)))), ((int)(((byte)(113)))));
-            this.btnTestApi.Cursor = System.Windows.Forms.Cursors.Hand;
-            this.btnTestApi.FlatAppearance.BorderSize = 0;
-            this.btnTestApi.FlatStyle = System.Windows.Forms.FlatStyle.Flat;
-            this.btnTestApi.Font = new System.Drawing.Font("Tahoma", 9F, System.Drawing.FontStyle.Bold);
-            this.btnTestApi.ForeColor = System.Drawing.Color.White;
-            this.btnTestApi.Location = new System.Drawing.Point(30, 95);
-            this.btnTestApi.Name = "btnTestApi";
-            this.btnTestApi.Size = new System.Drawing.Size(120, 30);
-            this.btnTestApi.TabIndex = 2;
-            this.btnTestApi.Text = "🔍 Test API";
-            this.btnTestApi.UseVisualStyleBackColor = false;
-            this.btnTestApi.Click += new System.EventHandler(this.BtnTestApi_Click);
-            // 
             // txtApiEndpoint
             // 
             this.txtApiEndpoint.Font = new System.Drawing.Font("Consolas", 9.75F);
-            this.txtApiEndpoint.Location = new System.Drawing.Point(30, 60);
+            this.txtApiEndpoint.Location = new System.Drawing.Point(30, 67);
             this.txtApiEndpoint.Name = "txtApiEndpoint";
             this.txtApiEndpoint.Size = new System.Drawing.Size(456, 23);
             this.txtApiEndpoint.TabIndex = 1;
@@ -579,8 +548,6 @@
         private System.Windows.Forms.Label lblApiTimeoutUnit;
         private System.Windows.Forms.NumericUpDown numApiTimeout;
         private System.Windows.Forms.Label lblApiTimeout;
-        private System.Windows.Forms.Label lblApiStatus;
-        private System.Windows.Forms.Button btnTestApi;
         private System.Windows.Forms.TextBox txtApiEndpoint;
         private System.Windows.Forms.Label lblApiEndpoint;
         private System.Windows.Forms.GroupBox grpLog;
@@ -589,6 +556,6 @@
         private System.Windows.Forms.Label lblLogRetention;
         private System.Windows.Forms.Button btnSave;
         private System.Windows.Forms.Button btnCancel;
-     
+
     }
 }

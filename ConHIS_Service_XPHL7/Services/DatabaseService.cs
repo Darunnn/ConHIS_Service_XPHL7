@@ -569,33 +569,101 @@ namespace ConHIS_Service_XPHL7.Services
         /// <summary>
         /// ดึงข้อมูลตามวันที่ รวมทั้ง IPD และ OPD
         /// </summary>
-        public List<DrugDispenseipd> GetAllDispenseDataByDate(DateTime startDate, DateTime endDate)
+        public List<DrugDispenseipd> GetAllDispenseDataByDate(DateTime startDate, DateTime endDate, bool includeIPD = true, bool includeOPD = true)
         {
-            _logger.LogInfo($"GetAllDispenseDataByDate: From {startDate:yyyy-MM-dd} to {endDate:yyyy-MM-dd}");
-
             var result = new List<DrugDispenseipd>();
 
-            // ดึง IPD data
-            var ipdData = GetDispenseDataByDate(startDate, endDate);
-            result.AddRange(ipdData);
-
-            // ดึง OPD data และแปลงเป็น IPD type
-            var opdData = GetDispenseOpdDataByDate(startDate, endDate);
-            var convertedOpdData = opdData.Select(opd => new DrugDispenseipd
+            try
             {
-                DrugDispenseipdId = opd.DrugDispenseopdId,
-                PrescId = opd.PrescId,
-                DrugRequestMsgType = opd.DrugRequestMsgType,
-                Hl7Data = opd.Hl7Data,
-                DrugDispenseDatetime = opd.DrugDispenseDatetime,
-                RecieveStatus = opd.RecieveStatus,
-                RecieveStatusDatetime = opd.RecieveStatusDatetime,
-                RecieveOrderType = opd.RecieveOrderType ?? "OPD" // ตั้งค่า default เป็น OPD
-            }).ToList();
+                using (var connection = new MySqlConnection(_connectionString))
+                {
+                    connection.Open();
 
-            result.AddRange(convertedOpdData);
+                    // ⭐ Query จาก IPD table
+                    if (includeIPD && CheckTableExists("drug_dispense_ipd"))
+                    {
+                        try
+                        {
+                            string ipdQuery = @"
+                        SELECT 
+                            drug_dispense_ipd_id as DrugDispenseipdId,
+                            drug_dispense_datetime as DrugDispenseDatetime,
+                            hl7_data as Hl7Data,
+                            recieve_status as RecieveStatus,
+                            recieve_status_datetime as RecieveStatusDatetime,
+                            'IPD' as RecieveOrderType
+                        FROM drug_dispense_ipd
+                        WHERE DATE(drug_dispense_datetime) BETWEEN @StartDate AND @EndDate
+                        AND recieve_status IN ('Y', 'F')
+                        ORDER BY drug_dispense_datetime DESC";
 
-            _logger.LogInfo($"GetAllDispenseDataByDate: Total {result.Count} records (IPD: {ipdData.Count}, OPD: {convertedOpdData.Count})");
+                            using (var command = new MySqlCommand(ipdQuery, connection))
+                            {
+                                command.Parameters.AddWithValue("@StartDate", startDate.Date);
+                                command.Parameters.AddWithValue("@EndDate", endDate.Date);
+
+                                using (var reader = command.ExecuteReader())
+                                {
+                                    while (reader.Read())
+                                    {
+                                        result.Add(ReadDrugDispenseFromReader(reader));
+                                    }
+                                }
+                            }
+                            Console.WriteLine($"[IPD] Retrieved {result.Count} records");
+                        }
+                        catch (Exception ipdEx)
+                        {
+                            Console.WriteLine($"Error querying IPD table: {ipdEx.Message}");
+                        }
+                    }
+
+                    // ⭐ Query จาก OPD table
+                    if (includeOPD && CheckTableExists("drug_dispense_opd"))
+                    {
+                        try
+                        {
+                            string opdQuery = @"
+                        SELECT 
+                            drug_dispense_opd_id as DrugDispenseipdId,
+                            drug_dispense_datetime as DrugDispenseDatetime,
+                            hl7_data as Hl7Data,
+                            recieve_status as RecieveStatus,
+                            recieve_status_datetime as RecieveStatusDatetime,
+                            'OPD' as RecieveOrderType
+                        FROM drug_dispense_opd
+                        WHERE DATE(drug_dispense_datetime) BETWEEN @StartDate AND @EndDate
+                        AND recieve_status IN ('Y', 'F')
+                        ORDER BY drug_dispense_datetime DESC";
+
+                            using (var command = new MySqlCommand(opdQuery, connection))
+                            {
+                                command.Parameters.AddWithValue("@StartDate", startDate.Date);
+                                command.Parameters.AddWithValue("@EndDate", endDate.Date);
+
+                                using (var reader = command.ExecuteReader())
+                                {
+                                    int opdCount = 0;
+                                    while (reader.Read())
+                                    {
+                                        result.Add(ReadDrugDispenseFromReader(reader));
+                                        opdCount++;
+                                    }
+                                    Console.WriteLine($"[OPD] Retrieved {opdCount} records");
+                                }
+                            }
+                        }
+                        catch (Exception opdEx)
+                        {
+                            Console.WriteLine($"Error querying OPD table: {opdEx.Message}");
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error in GetAllDispenseDataByDate: {ex.Message}");
+            }
 
             return result;
         }
@@ -603,37 +671,155 @@ namespace ConHIS_Service_XPHL7.Services
         /// <summary>
         /// ค้นหาข้อมูลตามวันที่และคำค้นหา รวมทั้ง IPD และ OPD
         /// </summary>
-        public List<DrugDispenseipd> GetAllDispenseDataByDateAndSearch(DateTime date, string searchText)
+        public List<DrugDispenseipd> GetAllDispenseDataByDateAndSearch(DateTime date, string searchText, bool includeIPD = true, bool includeOPD = true)
         {
-            _logger.LogInfo($"GetAllDispenseDataByDateAndSearch: Date={date:yyyy-MM-dd}, Search={searchText}");
-
             var result = new List<DrugDispenseipd>();
 
-            // ค้นหา IPD data
-            var ipdData = GetDispenseDataByDateAndSearch(date, searchText);
-            result.AddRange(ipdData);
-
-            // ค้นหา OPD data และแปลงเป็น IPD type
-            var opdData = GetDispenseOpdDataByDateAndSearch(date, searchText);
-            var convertedOpdData = opdData.Select(opd => new DrugDispenseipd
+            try
             {
-                DrugDispenseipdId = opd.DrugDispenseopdId,
-                PrescId = opd.PrescId,
-                DrugRequestMsgType = opd.DrugRequestMsgType,
-                Hl7Data = opd.Hl7Data,
-                DrugDispenseDatetime = opd.DrugDispenseDatetime,
-                RecieveStatus = opd.RecieveStatus,
-                RecieveStatusDatetime = opd.RecieveStatusDatetime,
-                RecieveOrderType = opd.RecieveOrderType ?? "OPD"
-            }).ToList();
+                using (var connection = new MySqlConnection(_connectionString))
+                {
+                    connection.Open();
 
-            result.AddRange(convertedOpdData);
+                    // ⭐ Search ใน IPD table
+                    if (includeIPD && CheckTableExists("drug_dispense_ipd"))
+                    {
+                        try
+                        {
+                            string ipdQuery = @"
+                        SELECT 
+                            drug_dispense_ipd_id as DrugDispenseipdId,
+                            drug_dispense_datetime as DrugDispenseDatetime,
+                            hl7_data as Hl7Data,
+                            recieve_status as RecieveStatus,
+                            recieve_status_datetime as RecieveStatusDatetime,
+                            'IPD' as RecieveOrderType
+                        FROM drug_dispense_ipd
+                        WHERE DATE(drug_dispense_datetime) = @Date
+                        AND recieve_status IN ('Y', 'F')
+                        AND (
+                            CAST(hl7_data AS CHAR) LIKE @SearchText
+                        )
+                        ORDER BY drug_dispense_datetime DESC";
 
-            _logger.LogInfo($"GetAllDispenseDataByDateAndSearch: Total {result.Count} records (IPD: {ipdData.Count}, OPD: {convertedOpdData.Count})");
+                            using (var command = new MySqlCommand(ipdQuery, connection))
+                            {
+                                command.Parameters.AddWithValue("@Date", date.Date);
+                                command.Parameters.AddWithValue("@SearchText", $"%{searchText}%");
+
+                                using (var reader = command.ExecuteReader())
+                                {
+                                    while (reader.Read())
+                                    {
+                                        result.Add(ReadDrugDispenseFromReader(reader));
+                                    }
+                                }
+                            }
+                            Console.WriteLine($"[IPD Search] Found {result.Count} records");
+                        }
+                        catch (Exception ipdEx)
+                        {
+                            Console.WriteLine($"Error searching IPD table: {ipdEx.Message}");
+                        }
+                    }
+
+                    // ⭐ Search ใน OPD table
+                    if (includeOPD && CheckTableExists("drug_dispense_opd"))
+                    {
+                        try
+                        {
+                            string opdQuery = @"
+                        SELECT 
+                            drug_dispense_opd_id as DrugDispenseipdId,
+                            drug_dispense_datetime as DrugDispenseDatetime,
+                            hl7_data as Hl7Data,
+                            recieve_status as RecieveStatus,
+                            recieve_status_datetime as RecieveStatusDatetime,
+                            'OPD' as RecieveOrderType
+                        FROM drug_dispense_opd
+                        WHERE DATE(drug_dispense_datetime) = @Date
+                        AND recieve_status IN ('Y', 'F')
+                        AND (
+                            CAST(hl7_data AS CHAR) LIKE @SearchText
+                        )
+                        ORDER BY drug_dispense_datetime DESC";
+
+                            using (var command = new MySqlCommand(opdQuery, connection))
+                            {
+                                command.Parameters.AddWithValue("@Date", date.Date);
+                                command.Parameters.AddWithValue("@SearchText", $"%{searchText}%");
+
+                                using (var reader = command.ExecuteReader())
+                                {
+                                    int opdCount = 0;
+                                    while (reader.Read())
+                                    {
+                                        result.Add(ReadDrugDispenseFromReader(reader));
+                                        opdCount++;
+                                    }
+                                    Console.WriteLine($"[OPD Search] Found {opdCount} records");
+                                }
+                            }
+                        }
+                        catch (Exception opdEx)
+                        {
+                            Console.WriteLine($"Error searching OPD table: {opdEx.Message}");
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error in GetAllDispenseDataByDateAndSearch: {ex.Message}");
+            }
 
             return result;
         }
 
+        public bool CheckTableExists(string tableName)
+        {
+            try
+            {
+                using (var connection = new MySqlConnection(_connectionString))
+                {
+                    connection.Open();
+
+                    string query = @"
+                SELECT COUNT(*) 
+                FROM information_schema.TABLES 
+                WHERE TABLE_SCHEMA = DATABASE() 
+                AND TABLE_NAME = @TableName";
+
+                    using (var command = new MySqlCommand(query, connection))
+                    {
+                        command.Parameters.AddWithValue("@TableName", tableName);
+
+                        var count = Convert.ToInt32(command.ExecuteScalar());
+                        return count > 0;
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error checking table '{tableName}': {ex.Message}");
+                return false;
+            }
+        }
+
+        private DrugDispenseipd ReadDrugDispenseFromReader(MySqlDataReader reader)
+        {
+            return new DrugDispenseipd
+            {
+                DrugDispenseipdId = reader.GetInt32("DrugDispenseipdId"),
+                DrugDispenseDatetime = reader.GetDateTime("DrugDispenseDatetime"),
+                Hl7Data = reader["Hl7Data"] as byte[],
+                RecieveStatus = reader.GetString("RecieveStatus")[0],
+                RecieveStatusDatetime = reader.IsDBNull(reader.GetOrdinal("RecieveStatusDatetime"))
+                    ? (DateTime?)null
+                    : reader.GetDateTime("RecieveStatusDatetime"),
+                RecieveOrderType = reader.GetString("RecieveOrderType")
+            };
+        }
         #endregion
     }
 }
