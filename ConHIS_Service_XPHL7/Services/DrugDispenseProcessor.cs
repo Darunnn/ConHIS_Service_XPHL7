@@ -635,7 +635,7 @@ namespace ConHIS_Service_XPHL7.Services
 
             DateTime? headerDt = result?.MessageHeader != null ? (DateTime?)result.MessageHeader.MessageDateTime : null;
             int totalPrescriptions = result?.PharmacyDispense?.Count() ?? 0;
-
+          
             var prescriptions = result?.PharmacyDispense?
                 .Select((d, index) =>
                 {
@@ -655,11 +655,11 @@ namespace ConHIS_Service_XPHL7.Services
 
                     return new
                     {
-                        UniqID = $"{d?.Dispensegivecode?.UniqID ?? ""}-{FormatDate(d?.Prescriptiondate, "yyyyMMdd") ?? DateTime.Now.ToString("yyyyMMdd")}",
+                        UniqID = $"{d?.Dispensegivecode?.UniqID ?? ""}-{DateTime.Now.ToString("yyyyMMdd")}",
                         f_prescriptionno = result?.CommonOrder?.PlacerOrderNumber,
                         f_seq = n?.SetID ?? 0,
                         f_seqmax = totalPrescriptions,
-                        f_prescriptiondate = FormatDate(d?.Prescriptiondate, "yyyyMMdd"),
+                        f_prescriptiondate = (FormatDate(result?.MessageHeader.MessageDateTime, "yyyyMMdd") ?? DateTime.Now.ToString("yyyyMMdd")),
                         f_ordercreatedate = FormatDate(result?.CommonOrder?.TransactionDateTime, "yyyy-MM-dd HH:mm:ss"),
                         f_ordertargetdate = FormatDate(headerDt, "yyyy-MM-dd"),
                         f_ordertargettime = null as string,
@@ -684,7 +684,8 @@ namespace ConHIS_Service_XPHL7.Services
         ? result.CommonOrder.EnterersLocation.Split('^')[1]
         : null as string,
                         f_prioritycode = !string.IsNullOrEmpty(d?.prioritycode)
-                            ? d.prioritycode.Substring(0, Math.Min(d.prioritycode.Length, 10)) : d?.RXD31 ?? null as string,
+                                    ? SafeSubstring(d.prioritycode, 10)
+                                    : null as string,
                         f_prioritydesc = !string.IsNullOrEmpty(d?.prioritycode)
                                     ? SafeSubstring(d.prioritycode, 50)
                                     : null as string,

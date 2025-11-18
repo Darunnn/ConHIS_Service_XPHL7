@@ -391,7 +391,7 @@ namespace ConHIS_Service_XPHL7.Models
         public string RXD16 { get; set; }               // RXD-16
         public string RXD17 { get; set; }                         // RXD-17
 
-        public DateTime? Prescriptiondate { get; set; } // RXD-18
+        public string RXD18 { get; set; } // RXD-18
         public string RXD19 { get; set; }             // RXD-19
 
         public string RXD20 { get; set; }          // RXD-20

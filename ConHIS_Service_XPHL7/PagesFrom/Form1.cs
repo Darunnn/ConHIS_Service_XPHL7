@@ -527,8 +527,10 @@ namespace ConHIS_Service_XPHL7
                         string hl7String = "";
                         try
                         {
-                            string utf8 = Encoding.UTF8.GetString(data.Hl7Data);
-                            hl7String = utf8;
+                            //string utf8 = Encoding.UTF8.GetString(data.Hl7Data);
+                            //hl7String = utf8;
+                            string tis = Encoding.GetEncoding("TIS-620").GetString(data.Hl7Data);
+                            hl7String = tis;
                         }
                         catch (Exception ex)
                         {
@@ -2268,8 +2270,7 @@ namespace ConHIS_Service_XPHL7
                 );
             }
         }
-        #endregion
 
-    
+        #endregion
     }
 }
