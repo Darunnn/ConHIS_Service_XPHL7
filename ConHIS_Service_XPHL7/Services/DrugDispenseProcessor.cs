@@ -122,14 +122,18 @@ namespace ConHIS_Service_XPHL7.Services
             cancellationToken.ThrowIfCancellationRequested();
 
             // Convert byte array to string
-            string hl7String;
+            string hl7String = "";
             try
             {
-                Encoding tisEncoding = null;
-                try { tisEncoding = Encoding.GetEncoding("TIS-620"); } catch { }
-                if (tisEncoding == null) { try { tisEncoding = Encoding.GetEncoding(874); } catch { } }
-                if (tisEncoding != null) { hl7String = tisEncoding.GetString(data.Hl7Data); }
-                else { hl7String = Encoding.UTF8.GetString(data.Hl7Data); }
+                // Encoding tisEncoding = null;
+                // try { tisEncoding = Encoding.GetEncoding("TIS-620"); } catch { }
+                // if (tisEncoding == null) { try { tisEncoding = Encoding.GetEncoding(874); } catch { } }
+                // if (tisEncoding != null) { hl7String = tisEncoding.GetString(data.Hl7Data); }
+                // else { hl7String = Encoding.UTF8.GetString(data.Hl7Data); }
+                string utf8 = Encoding.UTF8.GetString(data.Hl7Data);
+                // string cp875 = Encoding.GetEncoding(874).GetString(data.Hl7Data);
+                //string tis =Encoding.GetEncoding("TIS-620").GetString(data.Hl7Data);
+                hl7String = utf8;
             }
             catch (Exception ex)
             {
@@ -340,14 +344,18 @@ namespace ConHIS_Service_XPHL7.Services
             cancellationToken.ThrowIfCancellationRequested();
 
             // Convert byte array to string
-            string hl7String;
+            string hl7String="";
             try
             {
-                Encoding tisEncoding = null;
-                try { tisEncoding = Encoding.GetEncoding("TIS-620"); } catch { }
-                if (tisEncoding == null) { try { tisEncoding = Encoding.GetEncoding(874); } catch { } }
-                if (tisEncoding != null) { hl7String = tisEncoding.GetString(data.Hl7Data); }
-                else { hl7String = Encoding.UTF8.GetString(data.Hl7Data); }
+                // Encoding tisEncoding = null;
+                // try { tisEncoding = Encoding.GetEncoding("TIS-620"); } catch { }
+                // if (tisEncoding == null) { try { tisEncoding = Encoding.GetEncoding(874); } catch { } }
+                // if (tisEncoding != null) { hl7String = tisEncoding.GetString(data.Hl7Data); }
+                // else { hl7String = Encoding.UTF8.GetString(data.Hl7Data); }
+                string utf8 = Encoding.UTF8.GetString(data.Hl7Data);
+                // string cp875 = Encoding.GetEncoding(874).GetString(data.Hl7Data);
+                //string tis =Encoding.GetEncoding("TIS-620").GetString(data.Hl7Data);
+                hl7String = utf8;
             }
             catch (Exception ex)
             {
@@ -644,7 +652,7 @@ namespace ConHIS_Service_XPHL7.Services
 
                     return new
                     {
-                        UniqID = $"{d?.Dispensegivecode?.UniqID ?? ""}-{FormatDate(d?.Prescriptiondate, "yyyyMMdd") ?? ""}",
+                        UniqID = $"{d?.Dispensegivecode?.UniqID ?? ""}-{FormatDate(d?.Prescriptiondate, "yyyyMMdd") ?? DateTime.Now.ToString("yyyyMMdd")}",
                         f_prescriptionno = result?.CommonOrder?.PlacerOrderNumber,
                         f_seq = n?.SetID ?? 0,
                         f_seqmax = totalPrescriptions,
@@ -662,15 +670,16 @@ namespace ConHIS_Service_XPHL7.Services
                         f_orderacceptdate = FormatDate(result?.CommonOrder?.TransactionDateTime, "yyyy-MM-dd HH:mm:ss"),
                         f_orderacceptfromip = null as string,
                         f_pharmacylocationcode = !string.IsNullOrEmpty(d?.Departmentcode)
-                                    ? d.Departmentcode.Split(' ')[0]
-                                    : !string.IsNullOrEmpty(result?.CommonOrder?.EnterersLocation)
-                                        ? result.CommonOrder.EnterersLocation.Split(' ')[0]
-                                        : null as string,
+    ? d.Departmentcode.Split('^')[0]
+    : !string.IsNullOrEmpty(result?.CommonOrder?.EnterersLocation)
+        ? result.CommonOrder.EnterersLocation.Split('^')[0]
+        : null as string,
+
                         f_pharmacylocationdesc = !string.IsNullOrEmpty(d?.Departmentname)
-                                    ? SafeSubstring(d.Departmentname, 100)
-                                    : !string.IsNullOrEmpty(result?.CommonOrder?.EnterersLocation)
-                                        ? SafeSubstring(result.CommonOrder.EnterersLocation, 100)
-                                        : null as string,
+    ? SafeSubstring(d.Departmentname, 100)
+    : !string.IsNullOrEmpty(result?.CommonOrder?.EnterersLocation) && result.CommonOrder.EnterersLocation.Contains('^')
+        ? result.CommonOrder.EnterersLocation.Split('^')[1]
+        : null as string,
                         f_prioritycode = !string.IsNullOrEmpty(d?.prioritycode)
                             ? d.prioritycode.Substring(0, Math.Min(d.prioritycode.Length, 10)) : d?.RXD31 ?? null as string,
                         f_prioritydesc = !string.IsNullOrEmpty(d?.prioritycode)
@@ -705,8 +714,8 @@ namespace ConHIS_Service_XPHL7.Services
                         f_orderitemnameTH = d?.Dispensegivecode?.DrugNameThai ?? null as string,
                         f_orderitemnamegeneric = null as string,
                         f_orderqty = d?.QTY ?? 0,
-                        f_orderunitcode = d?.Usageunit?.ID ?? null as string,
-                        f_orderunitdesc = d?.Usageunit?.Name ?? null as string,
+                        f_orderunitcode = d?.Dispensegivecode?.DrugUnit ?? d?.Usageunit?.ID ?? null as string,
+                        f_orderunitdesc = d?.Dispensegivecode?.DrugUnit ?? d?.Usageunit?.Name ?? null as string,
                         f_dosage = d?.Dose ?? 0,
                         f_dosageunit = d?.Usageunit?.Name ?? null as string,
                         f_dosagetext = d?.Strengthunit ?? null as string,

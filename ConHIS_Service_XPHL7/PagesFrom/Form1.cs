@@ -527,24 +527,27 @@ namespace ConHIS_Service_XPHL7
 
                             _logger?.LogInfo($"📝 Processing record {dispenseId} with {data.Hl7Data.Length} bytes");
 
-                            // ⭐ ถอด encoding จาก byte[] เป็น string
-                            string hl7String;
-                            try
-                            {
-                                Encoding tisEncoding = null;
-                                try { tisEncoding = Encoding.GetEncoding("TIS-620"); }
-                                catch { }
-                                if (tisEncoding == null) { try { tisEncoding = Encoding.GetEncoding(874); } catch { } }
-                                if (tisEncoding != null) { hl7String = tisEncoding.GetString(data.Hl7Data); }
-                                else { hl7String = Encoding.UTF8.GetString(data.Hl7Data); }
-                            }
-                            catch (Exception encEx)
-                            {
-                                _logger?.LogWarning($"Encoding fallback to UTF8 for {dispenseId}: {encEx.Message}");
-                                hl7String = Encoding.UTF8.GetString(data.Hl7Data);
-                            }
+                        // ⭐ ถอด encoding จาก byte[] เป็น string
+                        string hl7String = "";
+                        try
+                        {
+                            // Encoding tisEncoding = null;
+                            // try { tisEncoding = Encoding.GetEncoding("TIS-620"); } catch { }
+                            // if (tisEncoding == null) { try { tisEncoding = Encoding.GetEncoding(874); } catch { } }
+                            // if (tisEncoding != null) { hl7String = tisEncoding.GetString(data.Hl7Data); }
+                            // else { hl7String = Encoding.UTF8.GetString(data.Hl7Data); }
+                            string utf8 = Encoding.UTF8.GetString(data.Hl7Data);
+                            // string cp875 = Encoding.GetEncoding(874).GetString(data.Hl7Data);
+                            //string tis =Encoding.GetEncoding("TIS-620").GetString(data.Hl7Data);
+                            hl7String = utf8;
+                        }
+                        catch (Exception ex)
+                        {
+                            _logger.LogWarning($"Failed to decode HL7 data with TIS-620: {ex.Message}. Falling back to UTF8.");
+                            hl7String = Encoding.UTF8.GetString(data.Hl7Data);
+                        }
 
-                            if (string.IsNullOrWhiteSpace(hl7String))
+                        if (string.IsNullOrWhiteSpace(hl7String))
                             {
                                 _logger?.LogWarning($"⚠️ Record {dispenseId} HL7 string is empty after decoding - Skipped");
                                 skippedCount++;

@@ -347,14 +347,53 @@ namespace ConHIS_Service_XPHL7.Services
             var drugComponents = GetField(fields, 2).Split(COMPONENT_SEPARATOR[0]);
             var rawDrugName = GetComponent(drugComponents, 4) ?? "";
             var drugParts = rawDrugName.Split(new[] { ';' }, StringSplitOptions.RemoveEmptyEntries)
-                           .Select(p => p.Trim())
-                           .ToArray();
+                .Select(p => p.Trim())
+                .ToArray();
 
             // เตรียมค่า
-            string drugName = drugParts.Length > 0 ? drugParts[0] + ";" : "";
-            string drugNamePrint = drugParts.Length > 1 ? drugParts[1] + ";" : "";
-            string drugNameThai = drugParts.Length > 2 ? drugParts[2] + ";" : "";
+            string drugName = drugParts.Length > 0 ? drugParts[0] : "";
+            string drugNamePrint = drugParts.Length > 1 ? drugParts[1] : "";
+            string drugNameThai = drugParts.Length > 2 ? drugParts[2] : "";
+            string drugUnit = "";
+            string cleanedDrugName = drugName;
 
+            if (!string.IsNullOrEmpty(drugName))
+            {
+                // รายการหน่วยที่เป็นไปได้
+                var knownUnits = new[] { "ขวด", "เม็ด", "แคปซูล", "ซอง", "หลอด", "กล่อง", "แผง", "ชิ้น", "ขนาด", "วอน", "ลูก", "ก้อน", "ถุง" };
+
+                // 1. ลองหาจากเครื่องหมาย - ก่อน
+                var lastDashIndex = drugName.LastIndexOf('-');
+                if (lastDashIndex >= 0 && lastDashIndex < drugName.Length - 1)
+                {
+                    var candidate = drugName.Substring(lastDashIndex + 1).Trim();
+
+                    // ตรวจสอบว่าเป็นหน่วยที่รู้จักหรือไม่
+                    if (knownUnits.Any(u => candidate.Contains(u)))
+                    {
+                        drugUnit = candidate;
+                        // ตัด drugUnit ออกจาก drugName
+                        cleanedDrugName = drugName.Substring(0, lastDashIndex).Trim();
+                    }
+                }
+
+                // 2. ถ้ายังไม่เจอ ลองค้นหาจากคำที่รู้จักในทั้ง string
+                if (string.IsNullOrEmpty(drugUnit))
+                {
+                    foreach (var unit in knownUnits)
+                    {
+                        if (drugName.Contains(unit))
+                        {
+                            drugUnit = unit;
+                            // ตัดหน่วยออก
+                            cleanedDrugName = drugName.Replace(unit, "").Trim();
+                            // ตัด - หรือช่องว่างที่เหลือท้ายสุด
+                            cleanedDrugName = cleanedDrugName.TrimEnd('-', ' ');
+                            break;
+                        }
+                    }
+                }
+            }
             var staffComponents = GetField(fields, 5).Split(COMPONENT_SEPARATOR[0]);
 
             // **การแก้ไขหลัก: รวม field 7 ที่ถูกแยกโดย pipe**
@@ -398,9 +437,9 @@ namespace ConHIS_Service_XPHL7.Services
             // แยก components ของ field 7 ที่แก้ไขแล้ว
             var SubstandComponents = adjustedFieldsArray[7].Split(COMPONENT_SEPARATOR[0]);
             var usageParts = (GetComponent(SubstandComponents, 4) ?? "")
-                            .Split(new[] { ';' }, StringSplitOptions.RemoveEmptyEntries)
-                            .Select(p => p.Trim())
-                            .ToArray();
+                 .Split(new[] { ';' }, StringSplitOptions.RemoveEmptyEntries)
+                 .Select(p => p.Trim())
+                 .ToArray();
 
             var usageUnitComponents = GetField(adjustedFieldsArray, 11).Split(COMPONENT_SEPARATOR[0]);
             var DoctorComponents = GetField(adjustedFieldsArray, 14).Split(COMPONENT_SEPARATOR[0]);
@@ -442,9 +481,10 @@ namespace ConHIS_Service_XPHL7.Services
                     UniqID = GetComponent(drugComponents, 1),
                     RXD203 = GetComponent(drugComponents, 2),
                     Identifier = GetComponent(drugComponents, 3),
-                    DrugName = drugName,
+                    DrugName = cleanedDrugName,
                     DrugNamePrint = drugNamePrint,
-                    DrugNameThai = drugNameThai
+                    DrugNameThai = drugNameThai,
+                    DrugUnit = drugUnit
                 },
                 DateTimeDispensed = ParseDateTime(GetField(adjustedFieldsArray, 3)),
                 RXD4 = ParseInt(GetField(adjustedFieldsArray, 4)),
@@ -457,7 +497,7 @@ namespace ConHIS_Service_XPHL7.Services
                 Substand = new Substand
                 {
                     RXD701 = GetComponent(SubstandComponents, 0),
-                    Medicinalproperties = GetComponent(SubstandComponents, 1), 
+                    Medicinalproperties = GetComponent(SubstandComponents, 1),
                     Labelhelp = GetComponent(SubstandComponents, 2),
                     RXD704 = GetComponent(SubstandComponents, 3),
                     Usageline1 = usageParts.Length > 0 ? usageParts[0] : "",
@@ -521,14 +561,53 @@ namespace ConHIS_Service_XPHL7.Services
             var drugComponents = GetField(fields, 2).Split(COMPONENT_SEPARATOR[0]);
             var rawDrugName = GetComponent(drugComponents, 4) ?? "";
             var drugParts = rawDrugName.Split(new[] { ';' }, StringSplitOptions.RemoveEmptyEntries)
-                           .Select(p => p.Trim())
-                           .ToArray();
+                .Select(p => p.Trim())
+                .ToArray();
 
             // เตรียมค่า
-            string drugName = drugParts.Length > 0 ? drugParts[0] + ";" : "";
-            string drugNamePrint = drugParts.Length > 1 ? drugParts[1] + ";" : "";
-            string drugNameThai = drugParts.Length > 2 ? drugParts[2] + ";" : "";
+            string drugName = drugParts.Length > 0 ? drugParts[0] : "";
+            string drugNamePrint = drugParts.Length > 1 ? drugParts[1] : "";
+            string drugNameThai = drugParts.Length > 2 ? drugParts[2] : "";
+            string drugUnit = "";
+            string cleanedDrugName = drugName;
 
+            if (!string.IsNullOrEmpty(drugName))
+            {
+                // รายการหน่วยที่เป็นไปได้
+                var knownUnits = new[] { "ขวด", "เม็ด", "แคปซูล", "ซอง", "หลอด", "กล่อง", "แผง", "ชิ้น", "ขนาด", "วอน", "ลูก", "ก้อน", "ถุง" };
+
+                // 1. ลองหาจากเครื่องหมาย - ก่อน
+                var lastDashIndex = drugName.LastIndexOf('-');
+                if (lastDashIndex >= 0 && lastDashIndex < drugName.Length - 1)
+                {
+                    var candidate = drugName.Substring(lastDashIndex + 1).Trim();
+
+                    // ตรวจสอบว่าเป็นหน่วยที่รู้จักหรือไม่
+                    if (knownUnits.Any(u => candidate.Contains(u)))
+                    {
+                        drugUnit = candidate;
+                        // ตัด drugUnit ออกจาก drugName
+                        cleanedDrugName = drugName.Substring(0, lastDashIndex).Trim();
+                    }
+                }
+
+                // 2. ถ้ายังไม่เจอ ลองค้นหาจากคำที่รู้จักในทั้ง string
+                if (string.IsNullOrEmpty(drugUnit))
+                {
+                    foreach (var unit in knownUnits)
+                    {
+                        if (drugName.Contains(unit))
+                        {
+                            drugUnit = unit;
+                            // ตัดหน่วยออก
+                            cleanedDrugName = drugName.Replace(unit, "").Trim();
+                            // ตัด - หรือช่องว่างที่เหลือท้ายสุด
+                            cleanedDrugName = cleanedDrugName.TrimEnd('-', ' ');
+                            break;
+                        }
+                    }
+                }
+            }
             var staffComponents = GetField(fields, 5).Split(COMPONENT_SEPARATOR[0]);
 
             // **การแก้ไขหลัก: รวม field 7 ที่ถูกแยกโดย pipe**
@@ -572,9 +651,9 @@ namespace ConHIS_Service_XPHL7.Services
             // แยก components ของ field 7 ที่แก้ไขแล้ว
             var SubstandComponents = adjustedFieldsArray[7].Split(COMPONENT_SEPARATOR[0]);
             var usageParts = (GetComponent(SubstandComponents, 4) ?? "")
-                            .Split(new[] { ';' }, StringSplitOptions.RemoveEmptyEntries)
-                            .Select(p => p.Trim())
-                            .ToArray();
+                 .Split(new[] { ';' }, StringSplitOptions.RemoveEmptyEntries)
+                 .Select(p => p.Trim())
+                 .ToArray();
 
             var usageUnitComponents = GetField(adjustedFieldsArray, 11).Split(COMPONENT_SEPARATOR[0]);
             var DoctorComponents = GetField(adjustedFieldsArray, 14).Split(COMPONENT_SEPARATOR[0]);
@@ -616,9 +695,10 @@ namespace ConHIS_Service_XPHL7.Services
                     UniqID = GetComponent(drugComponents, 1),
                     RXD203 = GetComponent(drugComponents, 2),
                     Identifier = GetComponent(drugComponents, 3),
-                    DrugName = drugName,
+                    DrugName = cleanedDrugName,
                     DrugNamePrint = drugNamePrint,
-                    DrugNameThai = drugNameThai
+                    DrugNameThai = drugNameThai,
+                    DrugUnit = drugUnit
                 },
                 DateTimeDispensed = ParseDateTime(GetField(adjustedFieldsArray, 3)),
                 RXD4 = ParseInt(GetField(adjustedFieldsArray, 4)),

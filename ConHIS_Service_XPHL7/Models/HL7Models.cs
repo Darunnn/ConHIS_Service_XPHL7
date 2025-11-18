@@ -419,7 +419,8 @@ namespace ConHIS_Service_XPHL7.Models
         public string Identifier { get; set; }  // RXD-2.4
         public string DrugName  { get; set; }     // RXD-2.5
         public string DrugNamePrint { get; set; }  // RXD-2.6
-        public string DrugNameThai { get; set; }      // RXD-2.7
+        public string DrugNameThai { get; set; }
+        public string DrugUnit { get; set; }// RXD-2.7
     }
     public class Modifystaff
     {
