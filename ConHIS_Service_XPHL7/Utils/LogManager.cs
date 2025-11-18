@@ -20,7 +20,6 @@ namespace ConHIS_Service_XPHL7.Utils
             get => _logRetentionDays;
             set => _logRetentionDays = value > 0 ? value : 30;
         }
-
         public LogManager(string logFolder = "log", int logRetentionDays = 30)
         {
             var appFolder = AppDomain.CurrentDomain.BaseDirectory ?? Environment.CurrentDirectory;
@@ -33,7 +32,6 @@ namespace ConHIS_Service_XPHL7.Utils
 
             LogInfo($"LogManager initialized with retention period: {_logRetentionDays} days (from App.config)");
         }
-
         /// <summary>
         /// อ่านค่า LogRetentionDays จาก App.config
         /// </summary>
@@ -59,31 +57,6 @@ namespace ConHIS_Service_XPHL7.Utils
                 return defaultValue;
             }
         }
-
-        /// <summary>
-        /// อัปเดตค่า LogRetentionDays ชั่วคราว (ใช้ได้เฉพาะ session นี้)
-        /// เมื่อปิดโปรแกรมแล้วเปิดใหม่จะกลับไปอ่าน App.config
-        /// </summary>
-        public void UpdateLogRetentionDaysTemporary(int days)
-        {
-            try
-            {
-                if (days <= 0)
-                {
-                    throw new ArgumentException("Days must be greater than 0", nameof(days));
-                }
-
-                _logRetentionDays = days;
-
-                LogInfo($"LogRetentionDays temporarily updated to: {days} days (for this session only)");
-            }
-            catch (Exception ex)
-            {
-                LogError("Error updating log retention days", ex);
-                throw;
-            }
-        }
-
         /// <summary>
         /// รีโหลดค่า LogRetentionDays จาก App.config
         /// </summary>

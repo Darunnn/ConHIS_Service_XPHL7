@@ -130,10 +130,11 @@ namespace ConHIS_Service_XPHL7.Services
                 // if (tisEncoding == null) { try { tisEncoding = Encoding.GetEncoding(874); } catch { } }
                 // if (tisEncoding != null) { hl7String = tisEncoding.GetString(data.Hl7Data); }
                 // else { hl7String = Encoding.UTF8.GetString(data.Hl7Data); }
-                string utf8 = Encoding.UTF8.GetString(data.Hl7Data);
+                //string utf8 = Encoding.UTF8.GetString(data.Hl7Data);
+               // hl7String = utf8;
                 // string cp875 = Encoding.GetEncoding(874).GetString(data.Hl7Data);
-                //string tis =Encoding.GetEncoding("TIS-620").GetString(data.Hl7Data);
-                hl7String = utf8;
+                string tis =Encoding.GetEncoding("TIS-620").GetString(data.Hl7Data);
+                hl7String = tis;
             }
             catch (Exception ex)
             {
@@ -150,9 +151,9 @@ namespace ConHIS_Service_XPHL7.Services
                 hl7Message = _hl7Service.ParseHL7Message(hl7String);
                 var orderNo = hl7Message?.CommonOrder?.PlacerOrderNumber;
                 _logger.LogInfo($"HL7 raw data saved to hl7_raw/hl7_data_raw_{data.PrescId}.txt");
-                _logger.LogRawHL7Data(data.DrugDispenseipdId.ToString(), data.RecieveOrderType?.ToString(), orderNo, hl7String, "hl7_raw");
+                _logger.LogRawHL7Data(data.DrugDispenseipdId.ToString(), data.RecieveOrderType?.ToString(), orderNo, hl7String, "hl7_raw_ipd");
                 _logger.LogInfo($"Parsed HL7 message for IPD prescription ID: {data.PrescId}");
-                _logger.LogParsedHL7Data(data.DrugDispenseipdId.ToString(), hl7Message, "hl7_parsed");
+                _logger.LogParsedHL7Data(data.DrugDispenseipdId.ToString(), hl7Message, "hl7_parsed_ipd");
             }
             catch (OperationCanceledException)
             {
@@ -352,10 +353,12 @@ namespace ConHIS_Service_XPHL7.Services
                 // if (tisEncoding == null) { try { tisEncoding = Encoding.GetEncoding(874); } catch { } }
                 // if (tisEncoding != null) { hl7String = tisEncoding.GetString(data.Hl7Data); }
                 // else { hl7String = Encoding.UTF8.GetString(data.Hl7Data); }
-                string utf8 = Encoding.UTF8.GetString(data.Hl7Data);
+                // string utf8 = Encoding.UTF8.GetString(data.Hl7Data);
+                //hl7String = utf8;
                 // string cp875 = Encoding.GetEncoding(874).GetString(data.Hl7Data);
-                //string tis =Encoding.GetEncoding("TIS-620").GetString(data.Hl7Data);
-                hl7String = utf8;
+
+                string tis = Encoding.GetEncoding("TIS-620").GetString(data.Hl7Data);
+                hl7String = tis;
             }
             catch (Exception ex)
             {
@@ -371,7 +374,7 @@ namespace ConHIS_Service_XPHL7.Services
 
                 hl7Message = _hl7Service.ParseHL7Message(hl7String);
                 var orderNo = hl7Message?.CommonOrder?.PlacerOrderNumber;
-                _logger.LogInfo($"HL7 raw data saved to hl7_raw/hl7_data_raw_opd_{data.PrescId}.txt");
+                _logger.LogInfo($"HL7 raw data saved to hl7_raw/hl7_data_raw_opd_{data.PrescId}.log");
                 _logger.LogRawHL7Data(data.DrugDispenseopdId.ToString(), data.RecieveOrderType?.ToString(), orderNo, hl7String, "hl7_raw_opd");
                 _logger.LogInfo($"Parsed HL7 message for OPD prescription ID: {data.PrescId}");
                 _logger.LogParsedHL7Data(data.DrugDispenseopdId.ToString(), hl7Message, "hl7_parsed_opd");
@@ -726,10 +729,10 @@ namespace ConHIS_Service_XPHL7.Services
                         f_psychotropic = "0",
                         f_binlocation = null as string,
                         f_itemidentify = string.IsNullOrWhiteSpace(d?.Substand?.RXD701) &&
-                                                 string.IsNullOrWhiteSpace(d?.Substand?.Medicinalproperties) &&
-                                                 string.IsNullOrWhiteSpace(d?.Substand?.Labelhelp)
+                                                 string.IsNullOrWhiteSpace(d?.Substand?.Medicinalproperties) 
+                                                 
                                     ? null as string
-                                    : SafeJoin(d?.Substand?.RXD701, d?.Substand?.Medicinalproperties, d?.Substand?.Labelhelp),
+                                    : SafeJoin(d?.Substand?.RXD701, d?.Substand?.Medicinalproperties),
                         f_itemlotno = null as string,
                         f_itemlotexpire = null as string,
                         f_instructioncode = d?.Usagecode?.Instructioncode ?? null as string,

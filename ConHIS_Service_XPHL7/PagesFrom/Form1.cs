@@ -31,7 +31,7 @@ namespace ConHIS_Service_XPHL7
         [DllImport("user32.dll", CharSet = CharSet.Auto)]
         static extern IntPtr SendMessage(IntPtr hWnd, UInt32 Msg, IntPtr wParam, IntPtr lParam);
         private const UInt32 WM_CLOSE = 0x0010;
-       private bool _wasServiceRunningBeforeDisconnection = false;
+      // private bool _wasServiceRunningBeforeDisconnection = false;
 
         // Background service components
        // private CancellationTokenSource _backgroundCancellationTokenSource = null;
@@ -74,7 +74,7 @@ namespace ConHIS_Service_XPHL7
         #region Additional Variables for Table Status
         private bool _ipdTableExists = false;
         private bool _opdTableExists = false;
-        private bool _hasCheckedTables = false;
+       // private bool _hasCheckedTables = false;
         #endregion
 
         // ⭐ เพิ่ม Method ตรวจสอบว่า Table มีอยู่หรือไม่
@@ -163,7 +163,7 @@ namespace ConHIS_Service_XPHL7
         {
             _hasNotifiedDisconnection = false;
             _hasNotifiedReconnection = false;
-            _wasServiceRunningBeforeDisconnection = false;
+           // _wasServiceRunningBeforeDisconnection = false;
         }
 
         // ⭐ เริ่ม Connection Monitor
@@ -258,7 +258,7 @@ namespace ConHIS_Service_XPHL7
                                 _logger?.LogInfo("Rechecking database tables after reconnection...");
                                 _ipdTableExists = await CheckTableExists("drug_dispense_ipd");
                                 _opdTableExists = await CheckTableExists("drug_dispense_opd");
-                                _hasCheckedTables = true;
+                                //_hasCheckedTables = true;
 
                                 _logger?.LogInfo($"Table Status - IPD: {(_ipdTableExists ? "EXISTS" : "NOT FOUND")}, OPD: {(_opdTableExists ? "EXISTS" : "NOT FOUND")}");
 
@@ -323,7 +323,7 @@ namespace ConHIS_Service_XPHL7
                             // ⭐ รีเซ็ตสถานะ table
                             _ipdTableExists = false;
                             _opdTableExists = false;
-                            _hasCheckedTables = false;
+                           // _hasCheckedTables = false;
 
                             // ⭐ อัปเดตปุ่มให้ disabled
                             UpdateServiceButtonStates();
@@ -386,7 +386,7 @@ namespace ConHIS_Service_XPHL7
                     // ⭐ รีเซ็ตสถานะ table เมื่อเกิด error
                     _ipdTableExists = false;
                     _opdTableExists = false;
-                    _hasCheckedTables = false;
+                    //_hasCheckedTables = false;
 
                     // ⭐ อัปเดตปุ่มให้ disabled
                     UpdateServiceButtonStates();
@@ -506,8 +506,6 @@ namespace ConHIS_Service_XPHL7
                 var hl7Service = new HL7Service();
                 int loadedCount = 0;
                 int skippedCount = 0;
-                int rawLogSuccessCount = 0;
-                int parsedLogSuccessCount = 0;
                 int ipdRecordCount = 0;
                 int opdRecordCount = 0;
 
@@ -567,23 +565,8 @@ namespace ConHIS_Service_XPHL7
                         _logger?.LogInfo($"=== Processing Record {dispenseId} ===");
                         _logger?.LogInfo($"DispenseId: {dispenseId}, ServiceType: {serviceType}, HL7 Length: {hl7String.Length} chars");
 
-                        // บันทึก RAW HL7
-                        bool rawLogSuccess = false;
-                        try
-                        {
-                            if (_logger != null)
-                            {
-                                string logFolder = serviceType == "OPD" ? "hl7_raw_opd" : "hl7_raw";
-                                _logger.LogRawHL7Data(dispenseId, serviceType, dispenseId, hl7String, logFolder);
-                                rawLogSuccess = true;
-                                rawLogSuccessCount++;
-                                _logger.LogInfo($"✓ RAW HL7 saved for {dispenseId} in {logFolder}");
-                            }
-                        }
-                        catch (Exception logEx)
-                        {
-                            _logger?.LogError($"✗ Failed to save RAW HL7 for {dispenseId}: {logEx.Message}", logEx);
-                        }
+                      
+                       
 
                         // Parse HL7
                         HL7Message hl7Message = null;
@@ -600,28 +583,8 @@ namespace ConHIS_Service_XPHL7
                             continue;
                         }
 
-                        // บันทึก Parsed HL7
-                        bool parsedLogSuccess = false;
-                        try
-                        {
-                            if (_logger != null)
-                            {
-                                string logFolder = serviceType == "OPD" ? "hl7_parsed_opd" : "hl7_parsed";
-                                _logger.LogParsedHL7Data(dispenseId, hl7Message, logFolder);
-                                parsedLogSuccess = true;
-                                parsedLogSuccessCount++;
-                                _logger.LogInfo($"✓ Parsed HL7 saved for {dispenseId} in {logFolder}");
-                            }
-                        }
-                        catch (Exception logEx)
-                        {
-                            _logger?.LogError($"✗ Failed to save Parsed HL7 for {dispenseId}: {logEx.Message}", logEx);
-                        }
 
-                        if (!rawLogSuccess && parsedLogSuccess)
-                        {
-                            _logger?.LogWarning($"⚠️ Anomaly detected: Record {dispenseId} - RAW failed, Parsed succeeded");
-                        }
+
 
                         // ประมวลผลข้อมูลต่อ
                         DateTime timeCheckDate = DateTime.Now;
@@ -778,7 +741,7 @@ namespace ConHIS_Service_XPHL7
                     _logger.LogInfo("Checking database tables...");
                     _ipdTableExists = await CheckTableExists("drug_dispense_ipd");
                     _opdTableExists = await CheckTableExists("drug_dispense_opd");
-                    _hasCheckedTables = true;
+                    //_hasCheckedTables = true;
 
                     _logger.LogInfo($"Table Status - IPD: {(_ipdTableExists ? "EXISTS" : "NOT FOUND")}, OPD: {(_opdTableExists ? "EXISTS" : "NOT FOUND")}");
 

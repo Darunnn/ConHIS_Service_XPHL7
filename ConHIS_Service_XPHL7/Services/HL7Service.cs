@@ -360,7 +360,7 @@ namespace ConHIS_Service_XPHL7.Services
             if (!string.IsNullOrEmpty(drugName))
             {
                 // รายการหน่วยที่เป็นไปได้
-                var knownUnits = new[] { "ขวด", "เม็ด", "แคปซูล", "ซอง", "หลอด", "กล่อง", "แผง", "ชิ้น", "ขนาด", "วอน", "ลูก", "ก้อน", "ถุง" };
+                var knownUnits = new[] { "ขวด", "เม็ด", "แคปซูล", "ซอง", "หลอด", "กล่อง", "แผง", "ชิ้น", "ขนาด", "วอน", "ลูก", "ก้อน", "ถุง", "VIAL" };
 
                 // 1. ลองหาจากเครื่องหมาย - ก่อน
                 var lastDashIndex = drugName.LastIndexOf('-');
@@ -574,7 +574,7 @@ namespace ConHIS_Service_XPHL7.Services
             if (!string.IsNullOrEmpty(drugName))
             {
                 // รายการหน่วยที่เป็นไปได้
-                var knownUnits = new[] { "ขวด", "เม็ด", "แคปซูล", "ซอง", "หลอด", "กล่อง", "แผง", "ชิ้น", "ขนาด", "วอน", "ลูก", "ก้อน", "ถุง" };
+                var knownUnits = new[] { "ขวด", "เม็ด", "แคปซูล", "ซอง", "หลอด", "กล่อง", "แผง", "ชิ้น", "ขนาด", "วอน", "ลูก", "ก้อน", "ถุง", "VIAL" };
 
                 // 1. ลองหาจากเครื่องหมาย - ก่อน
                 var lastDashIndex = drugName.LastIndexOf('-');
