@@ -493,7 +493,7 @@ namespace ConHIS_Service_XPHL7.Services
         {
             try
             {
-                int prescId = type == DispenseType.IPD
+                string prescId = type == DispenseType.IPD
                     ? ((DrugDispenseipd)data).PrescId
                     : ((DrugDispenseopd)data).PrescId;
 
@@ -536,7 +536,7 @@ namespace ConHIS_Service_XPHL7.Services
             }
             catch (Exception ex)
             {
-                int prescId = type == DispenseType.IPD
+                string prescId = type == DispenseType.IPD
                     ? ((DrugDispenseipd)data).PrescId
                     : ((DrugDispenseopd)data).PrescId;
                 _logger.LogError($"Error in ProcessNewOrder for {type} {prescId}", ex);
@@ -548,7 +548,7 @@ namespace ConHIS_Service_XPHL7.Services
         {
             try
             {
-                int prescId = type == DispenseType.IPD
+                string prescId = type == DispenseType.IPD
                     ? ((DrugDispenseipd)data).PrescId
                     : ((DrugDispenseopd)data).PrescId;
 
@@ -591,7 +591,7 @@ namespace ConHIS_Service_XPHL7.Services
             }
             catch (Exception ex)
             {
-                int prescId = type == DispenseType.IPD
+                string prescId = type == DispenseType.IPD
                     ? ((DrugDispenseipd)data).PrescId
                     : ((DrugDispenseopd)data).PrescId;
                 _logger.LogError($"Error in ProcessReplaceOrder for {type} {prescId}", ex);

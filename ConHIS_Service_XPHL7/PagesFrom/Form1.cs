@@ -31,12 +31,12 @@ namespace ConHIS_Service_XPHL7
         [DllImport("user32.dll", CharSet = CharSet.Auto)]
         static extern IntPtr SendMessage(IntPtr hWnd, UInt32 Msg, IntPtr wParam, IntPtr lParam);
         private const UInt32 WM_CLOSE = 0x0010;
-        private bool _wasServiceRunningBeforeDisconnection = false;
+       private bool _wasServiceRunningBeforeDisconnection = false;
 
         // Background service components
-        private CancellationTokenSource _backgroundCancellationTokenSource = null;
-        private Timer _backgroundTimer;
-        private bool _isProcessing = false;
+       // private CancellationTokenSource _backgroundCancellationTokenSource = null;
+        //private Timer _backgroundTimer;
+        //private bool _isProcessing = false;
         private readonly int _intervalSeconds = 60;
 
         // ⭐ Connection Monitor - เพิ่มใหม่

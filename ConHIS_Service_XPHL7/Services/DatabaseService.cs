@@ -76,7 +76,7 @@ namespace ConHIS_Service_XPHL7.Services
                                 try
                                 {
                                     var orderType = reader.IsDBNull(recieveOrderTypeOrdinal) ? null : reader.GetString(recieveOrderTypeOrdinal);
-                                    var prescId = reader.GetInt32("presc_id");
+                                    var prescId = reader.GetString("presc_id");
                                     var hl7Data = reader["hl7_data"] as byte[];
 
                                     result.Add(new DrugDispenseipd
@@ -148,7 +148,7 @@ namespace ConHIS_Service_XPHL7.Services
                                 try
                                 {
                                     var orderType = reader.IsDBNull(recieveOrderTypeOrdinal) ? null : reader.GetString(recieveOrderTypeOrdinal);
-                                    var prescId = reader.GetInt32("presc_id");
+                                    var prescId = reader.GetString("presc_id");
 
                                     result.Add(new DrugDispenseipd
                                     {
@@ -216,7 +216,7 @@ namespace ConHIS_Service_XPHL7.Services
                                 try
                                 {
                                     var orderType = reader.IsDBNull(recieveOrderTypeOrdinal) ? null : reader.GetString(recieveOrderTypeOrdinal);
-                                    var prescId = reader.GetInt32("presc_id");
+                                    var prescId = reader.GetString("presc_id");
 
                                     result.Add(new DrugDispenseipd
                                     {
@@ -322,7 +322,7 @@ namespace ConHIS_Service_XPHL7.Services
                                 try
                                 {
                                     var orderType = reader.IsDBNull(recieveOrderTypeOrdinal) ? null : reader.GetString(recieveOrderTypeOrdinal);
-                                    var prescId = reader.GetInt32("presc_id");
+                                    var prescId = reader.GetString("presc_id");
                                     var hl7Data = reader["hl7_data"] as byte[];
 
                                     result.Add(new DrugDispenseopd
@@ -394,7 +394,7 @@ namespace ConHIS_Service_XPHL7.Services
                                 try
                                 {
                                     var orderType = reader.IsDBNull(recieveOrderTypeOrdinal) ? null : reader.GetString(recieveOrderTypeOrdinal);
-                                    var prescId = reader.GetInt32("presc_id");
+                                    var prescId = reader.GetString("presc_id");
 
                                     result.Add(new DrugDispenseopd
                                     {
@@ -484,7 +484,7 @@ namespace ConHIS_Service_XPHL7.Services
                                 {
                                     rowCount++;
                                     var orderType = reader.IsDBNull(recieveOrderTypeOrdinal) ? null : reader.GetString(recieveOrderTypeOrdinal);
-                                    var prescId = reader.GetInt32("presc_id");
+                                    var prescId = reader.GetString("presc_id");
 
                                     result.Add(new DrugDispenseopd
                                     {
