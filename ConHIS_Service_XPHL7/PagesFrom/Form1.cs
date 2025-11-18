@@ -113,6 +113,7 @@ namespace ConHIS_Service_XPHL7
             _processedDataTable = new DataTable();
             _processedDataTable.Columns.Add("Time Check", typeof(string));
             _processedDataTable.Columns.Add("Transaction DateTime", typeof(string));
+            _processedDataTable.Columns.Add("Service Type", typeof(string)); // ⭐ เพิ่ม column ใหม่
             _processedDataTable.Columns.Add("Order No", typeof(string));
             _processedDataTable.Columns.Add("HN", typeof(string));
             _processedDataTable.Columns.Add("Patient Name", typeof(string));
@@ -134,10 +135,11 @@ namespace ConHIS_Service_XPHL7
 
             try
             {
-                if (dataGridView.Columns.Count >= 9)
+                if (dataGridView.Columns.Count >= 10) // ⭐ เปลี่ยนจาก 9 เป็น 10
                 {
                     dataGridView.Columns["Time Check"].Width = 165;
                     dataGridView.Columns["Transaction DateTime"].Width = 165;
+                    dataGridView.Columns["Service Type"].Width = 80; // ⭐ เพิ่มความกว้าง column ใหม่
                     dataGridView.Columns["Order No"].Width = 110;
                     dataGridView.Columns["HN"].Width = 90;
                     dataGridView.Columns["Patient Name"].Width = 165;

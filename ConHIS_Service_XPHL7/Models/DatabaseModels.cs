@@ -12,6 +12,7 @@ namespace ConHIS_Service_XPHL7.Models
         public char RecieveStatus { get; set; } = 'N';
         public DateTime? RecieveStatusDatetime { get; set; }
         public string RecieveOrderType { get; set; }
+        
     }
 
 
@@ -25,6 +26,7 @@ namespace ConHIS_Service_XPHL7.Models
         public char RecieveStatus { get; set; } = 'N';
         public DateTime? RecieveStatusDatetime { get; set; }
         public string RecieveOrderType { get; set; }
+       
     }
 
 }
