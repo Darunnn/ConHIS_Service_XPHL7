@@ -668,10 +668,14 @@ namespace ConHIS_Service_XPHL7
                                 if (string.IsNullOrWhiteSpace(financialClass)) financialClass = "N/A";
                             }
 
-                            string orderControl = data.RecieveOrderType ?? hl7Message?.CommonOrder?.OrderControl ?? "N/A";
+                        string serviceType = orderType.Contains("IPD") ? "IPD" :
+                 orderType.Contains("OPD") ? "OPD" : "N/A";
 
-                            // ตัดสินใจแสดงบน Grid
-                            string status = "N/A";
+                        string orderControl = data.RecieveOrderType ??
+                                              hl7Message?.CommonOrder?.OrderControl ?? "N/A";
+
+                        // ตัดสินใจแสดงบน Grid
+                        string status = "N/A";
                             if (data.RecieveStatus == 'Y')
                             {
                                 status = "Success";
@@ -692,9 +696,9 @@ namespace ConHIS_Service_XPHL7
                                 continue;
                             }
 
-                            AddRowToGrid(timeCheck, transactionDateTime, orderNo, hn, patientName,
-                                       financialClass, orderControl, status, "Database Record", hl7Message);
-                            loadedCount++;
+                        AddRowToGrid(timeCheck, transactionDateTime, serviceType, orderNo, hn, patientName,
+       financialClass, orderControl, status, "Database Record", hl7Message);
+                        loadedCount++;
 
                             _logger?.LogInfo($"✓ Record {dispenseId} added to grid successfully");
                         }
@@ -1069,7 +1073,8 @@ namespace ConHIS_Service_XPHL7
         {
             try
             {
-                _filteredDataView.RowFilter = $"[FinancialClass] LIKE '%{orderType}%' OR [OrderControl] = '{orderType}'";
+                // ⭐ ใช้ Service Type column แทน FinancialClass/OrderControl
+                _filteredDataView.RowFilter = $"[Service Type] = '{orderType}'";
 
                 ApplyRowColors();
 
@@ -1144,24 +1149,26 @@ namespace ConHIS_Service_XPHL7
         #endregion
 
         #region GridView
-        private void AddRowToGrid(string time, string TransactionDateTime, string orderNo, string hn, string patientName,
-     string FinancialClass, string OrderControl, string status, string apiResponse, HL7Message hl7Data)
+        private void AddRowToGrid(string time, string transactionDateTime, string serviceType,
+     string orderNo, string hn, string patientName, string financialClass,
+     string orderControl, string status, string apiResponse, HL7Message hl7Data)
         {
             try
             {
-                // ⭐ ตรวจสอบ InvokeRequired ก่อน
                 if (dataGridView.InvokeRequired)
                 {
                     dataGridView.Invoke(new Action(() =>
                     {
-                        AddRowToGridDirect(time, TransactionDateTime, orderNo, hn, patientName, FinancialClass,
-                                          OrderControl, status, apiResponse, hl7Data);
+                        AddRowToGridDirect(time, transactionDateTime, serviceType, orderNo, hn,
+                                         patientName, financialClass, orderControl, status,
+                                         apiResponse, hl7Data);
                     }));
-                    return;  // ⭐ เพิ่ม return เพื่อไม่ให้ทำงานซ้ำ
+                    return;
                 }
 
-                AddRowToGridDirect(time, TransactionDateTime, orderNo, hn, patientName, FinancialClass,
-                                  OrderControl, status, apiResponse, hl7Data);
+                AddRowToGridDirect(time, transactionDateTime, serviceType, orderNo, hn,
+                                  patientName, financialClass, orderControl, status,
+                                  apiResponse, hl7Data);
             }
             catch (Exception ex)
             {
@@ -1170,14 +1177,16 @@ namespace ConHIS_Service_XPHL7
         }
 
         // ⭐ method ที่ทำงานจริง
-        private void AddRowToGridDirect(string time, string TransactionDateTime, string orderNo, string hn, string patientName,
-            string FinancialClass, string OrderControl, string status, string apiResponse, HL7Message hl7Data)
+        private void AddRowToGridDirect(string time, string transactionDateTime, string serviceType,
+    string orderNo, string hn, string patientName, string financialClass,
+    string orderControl, string status, string apiResponse, HL7Message hl7Data)
         {
             try
             {
                 int rowIndex = _processedDataTable.Rows.Count;
-                _processedDataTable.Rows.Add(time, TransactionDateTime, orderNo, hn, patientName,
-                                             FinancialClass, OrderControl, status, apiResponse);
+                _processedDataTable.Rows.Add(time, transactionDateTime, serviceType, orderNo, hn,
+                                             patientName, financialClass, orderControl, status,
+                                             apiResponse);
 
                 if (hl7Data != null)
                 {
@@ -1191,7 +1200,6 @@ namespace ConHIS_Service_XPHL7
                     dataGridView.FirstDisplayedScrollingRowIndex = dataGridView.Rows.Count - 1;
                 }
 
-                // ⭐ ใช้ RowCount - 1 แทน LastRow
                 int lastRowIndex = dataGridView.Rows.Count - 1;
                 if (lastRowIndex >= 0)
                 {
@@ -1904,6 +1912,8 @@ namespace ConHIS_Service_XPHL7
                     }
                 }
 
+                string serviceType = orderType; // "IPD" หรือ "OPD"
+
                 string orderControl = hl7Message?.CommonOrder?.OrderControl ?? "N/A";
 
                 // ⭐ Add to grid with error handling
@@ -1914,6 +1924,7 @@ namespace ConHIS_Service_XPHL7
                         AddRowToGrid(
                             DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss"),
                             transactionDateTime,
+                            serviceType,  // ⭐ เพิ่ม parameter ใหม่
                             orderNo,
                             hn,
                             patientName,
@@ -1924,7 +1935,9 @@ namespace ConHIS_Service_XPHL7
                             hl7Message
                         );
 
-                        _logger?.LogInfo($"[{orderType}] Order {orderNo} added to grid - Status: {(result.Success ? "Success" : "Failed")}");
+                        _logger?.LogInfo($"[{orderType}] Order {orderNo} added to grid - " +
+                                       $"ServiceType: {serviceType}, OrderControl: {orderControl}, " +
+                                       $"Status: {(result.Success ? "Success" : "Failed")}");
                     }
                     catch (Exception ex)
                     {
@@ -2132,17 +2145,17 @@ namespace ConHIS_Service_XPHL7
                 foreach (DataRow row in _processedDataTable.Rows)
                 {
                     string status = row["Status"]?.ToString() ?? "";
-                    string orderControl = row["OrderControl"]?.ToString() ?? "";
+                    string serviceType = row["Service Type"]?.ToString() ?? ""; // ⭐ ใช้ Service Type แทน
 
                     if (status == "Success")
                         successCount++;
                     else if (status == "Failed")
                         failedCount++;
 
-                    // นับ IPD/OPD ตาม OrderControl หรือ FinancialClass
-                    if (orderControl.Contains("IPD") || orderControl == "IPD")
+                    // ⭐ นับ IPD/OPD จาก Service Type column โดยตรง
+                    if (serviceType == "IPD")
                         ipdCount++;
-                    else if (orderControl.Contains("OPD") || orderControl == "OPD")
+                    else if (serviceType == "OPD")
                         opdCount++;
                 }
 
