@@ -20,6 +20,8 @@ namespace ConHIS_Service_XPHL7.Utils
             get => _logRetentionDays;
             set => _logRetentionDays = value > 0 ? value : 30;
         }
+        private static bool _hasLoggedInit = false;
+
         public LogManager(string logFolder = "log", int logRetentionDays = 30)
         {
             var appFolder = AppDomain.CurrentDomain.BaseDirectory ?? Environment.CurrentDirectory;
@@ -27,10 +29,14 @@ namespace ConHIS_Service_XPHL7.Utils
             Directory.CreateDirectory(desired);
             _logFolder = desired;
 
-            // 🔧 เปิดโปรแกรมทุกครั้งให้อ่านจาก App.config เสมอ
             _logRetentionDays = LoadLogRetentionDaysFromConfig(logRetentionDays);
 
-            LogInfo($"LogManager initialized with retention period: {_logRetentionDays} days (from App.config)");
+            // ⭐ Log เฉพาะครั้งแรกที่สร้าง
+            if (!_hasLoggedInit)
+            {
+                _hasLoggedInit = true;
+                LogInfo($"LogManager initialized with retention period: {_logRetentionDays} days (from App.config)");
+            }
         }
         /// <summary>
         /// อ่านค่า LogRetentionDays จาก App.config

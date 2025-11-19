@@ -25,6 +25,7 @@ namespace ConHIS_Service_XPHL7.Services
         public HL7Message ParsedMessage { get; set; }
         public object DispenseData { get; set; } // เปลี่ยนเป็น object เพื่อรองรับทั้ง IPD และ OPD
         public DispenseType Type { get; set; }
+        public DateTime? RecordDateTime { get; set; }
     }
 
     public class DrugDispenseProcessor
