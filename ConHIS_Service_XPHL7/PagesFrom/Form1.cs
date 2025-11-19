@@ -45,6 +45,9 @@ namespace ConHIS_Service_XPHL7
         private readonly int _connectionCheckIntervalSeconds = 10;
         private bool _isCheckingConnection = false;
         private DateTime? _lastDatabaseConnectionTime = null;
+        private Timer _dateChangeTimer;
+        private DateTime _currentMonitorDate;
+        private readonly int _dateCheckIntervalSeconds = 60; // เช็คทุก 60 วินาที
         private bool _hasNotifiedDisconnection = false;
         private bool _hasNotifiedReconnection = false;
 
@@ -522,7 +525,7 @@ namespace ConHIS_Service_XPHL7
                             continue;
                         }
 
-                        _logger?.LogInfo($"📝 Processing record {dispenseId} with {data.Hl7Data.Length} bytes");
+                        
 
                         string hl7String = "";
                         try
@@ -564,18 +567,13 @@ namespace ConHIS_Service_XPHL7
                         else if (serviceType == "OPD")
                             opdRecordCount++;
 
-                        _logger?.LogInfo($"=== Processing Record {dispenseId} ===");
-                        _logger?.LogInfo($"DispenseId: {dispenseId}, ServiceType: {serviceType}, HL7 Length: {hl7String.Length} chars");
-
-                      
-                       
 
                         // Parse HL7
                         HL7Message hl7Message = null;
                         try
                         {
                             hl7Message = hl7Service.ParseHL7Message(hl7String);
-                            _logger?.LogInfo($"✓ HL7 parsed successfully for {dispenseId}");
+                            
                         }
                         catch (Exception parseEx)
                         {
@@ -660,7 +658,7 @@ namespace ConHIS_Service_XPHL7
                                    financialClass, orderControl, status, "Database Record", hl7Message);
                         loadedCount++;
 
-                        _logger?.LogInfo($"✓ Record {dispenseId} added to grid successfully - ServiceType: {serviceType}, OrderControl: {orderControl}");
+                        
                     }
                     catch (Exception ex)
                     {
@@ -799,7 +797,7 @@ namespace ConHIS_Service_XPHL7
                 InitializePanelPaintEvents();
                 UpdateStatusFilterButtons();
                 StartConnectionMonitor();
-
+                StartDateChangeMonitor();
                 UpdateStatus("Ready - Services Stopped");
 
                 // ⭐ เปิดใช้งาน buttons ตามสถานะของ tables
@@ -907,7 +905,7 @@ namespace ConHIS_Service_XPHL7
                 searchTextBox.Text = string.Empty;
                 dateTimePicker.Value = DateTime.Today;
                 _currentStatusFilter = "All";
-
+                _currentMonitorDate = DateTime.Today;
                 await LoadDataBySelectedDate();
 
                 _logger.LogInfo("Data refreshed");
@@ -1182,6 +1180,7 @@ namespace ConHIS_Service_XPHL7
             StopIPDService();
             StopOPDService();
             StopConnectionMonitor();
+            StopDateChangeMonitor();
             _logger.LogInfo("Application closing - All services stopped");
         }
 
@@ -2203,6 +2202,98 @@ namespace ConHIS_Service_XPHL7
                 startStopOPDButton.BackColor = System.Drawing.Color.FromArgb(46, 204, 113);
             }
         }
+        #endregion
+
+        #region Date Change Monitor
+
+        private void StartDateChangeMonitor()
+        {
+            _currentMonitorDate = DateTime.Today;
+            var intervalMs = _dateCheckIntervalSeconds * 1000;
+            _dateChangeTimer = new Timer(DateChangeCallback, null, intervalMs, intervalMs);
+            _logger?.LogInfo($"Date change monitor started - checking every {_dateCheckIntervalSeconds} seconds");
+            _logger?.LogInfo($"Current monitor date: {_currentMonitorDate:yyyy-MM-dd}");
+        }
+
+        private void StopDateChangeMonitor()
+        {
+            _dateChangeTimer?.Dispose();
+            _dateChangeTimer = null;
+            _logger?.LogInfo("Date change monitor stopped");
+        }
+
+        private  void DateChangeCallback(object state)
+        {
+            try
+            {
+                DateTime today = DateTime.Today;
+
+                if (today != _currentMonitorDate)
+                {
+                   
+
+                    DateTime previousDate = _currentMonitorDate;
+                    _currentMonitorDate = today;
+
+                    if (this.IsHandleCreated && !this.IsDisposed)
+                    {
+                        this.Invoke(new Action(() =>
+                        {
+                            try
+                            {
+                                _logger?.LogInfo("Updating DateTimePicker to new date");
+
+                                _isInitializing = true;
+                                dateTimePicker.Value = today;
+                                _isInitializing = false;
+
+                                Task.Run(async () =>
+                                {
+                                    try
+                                    {
+                                        await LoadDataBySelectedDate();
+
+                                        this.Invoke(new Action(() =>
+                                        {
+                                            UpdateStatus($"✓ Date changed to {today:yyyy-MM-dd} - Data refreshed");
+                                        }));
+
+                                        this.BeginInvoke(new Action(() =>
+                                        {
+                                            ShowAutoCloseMessageBox(
+                                                $"📅 วันที่เปลี่ยนแล้ว!\n\n" +
+                                                $"จาก: {previousDate:yyyy-MM-dd}\n" +
+                                                $"เป็น: {today:yyyy-MM-dd}\n\n" +
+                                                $"🔄 ข้อมูลถูกรีเฟรชอัตโนมัติแล้ว",
+                                                "Date Changed",
+                                                1000,
+                                                false,
+                                                false
+                                            );
+                                        }));
+                                    }
+                                    catch (Exception ex)
+                                    {
+                                        _logger?.LogError("Error loading data for new date", ex);
+                                       
+                                    }
+                                });
+                            }
+                            catch (Exception ex)
+                            {
+                                _logger?.LogError("Error updating date in UI", ex);
+                               
+                            }
+                        }));
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogError("Error in date change monitor", ex);
+            }
+        }
+
         #endregion
 
         #region Settings
