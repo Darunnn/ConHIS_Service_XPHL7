@@ -150,6 +150,7 @@
     <Compile Include="Services\ApiService.cs" />
     <Compile Include="Services\DatabaseService.cs" />
     <Compile Include="Services\DrugDispenseProcessor.cs" />
+    <Compile Include="Services\Encodeing.cs" />
     <Compile Include="Services\HL7Service.cs" />
     <Compile Include="Utils\LogManager.cs" />
     <EmbeddedResource Include="PagesFrom\Form1.resx">

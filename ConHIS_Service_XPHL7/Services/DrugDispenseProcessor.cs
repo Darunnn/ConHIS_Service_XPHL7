@@ -34,7 +34,7 @@ namespace ConHIS_Service_XPHL7.Services
         private readonly HL7Service _hl7Service;
         private readonly ApiService _apiService;
         private readonly LogManager _logger = new LogManager();
-
+        private readonly EncodingService _encodingService;
         private List<int> _pendingUpdatedIds = new List<int>();
         private object _pendingUpdateLock = new object();
 
@@ -43,6 +43,9 @@ namespace ConHIS_Service_XPHL7.Services
             _databaseService = databaseService;
             _hl7Service = hl7Service;
             _apiService = apiService;
+            _encodingService = EncodingService.FromConnectionConfig(
+            msg => _logger.LogInfo(msg)
+        );
         }
 
         public class ApiResponse
@@ -123,25 +126,10 @@ namespace ConHIS_Service_XPHL7.Services
             cancellationToken.ThrowIfCancellationRequested();
 
             // Convert byte array to string
-            string hl7String = "";
-            try
-            {
-                // Encoding tisEncoding = null;
-                // try { tisEncoding = Encoding.GetEncoding("TIS-620"); } catch { }
-                // if (tisEncoding == null) { try { tisEncoding = Encoding.GetEncoding(874); } catch { } }
-                // if (tisEncoding != null) { hl7String = tisEncoding.GetString(data.Hl7Data); }
-                // else { hl7String = Encoding.UTF8.GetString(data.Hl7Data); }
-                //string utf8 = Encoding.UTF8.GetString(data.Hl7Data);
-               // hl7String = utf8;
-                // string cp875 = Encoding.GetEncoding(874).GetString(data.Hl7Data);
-                string tis =Encoding.GetEncoding("TIS-620").GetString(data.Hl7Data);
-                hl7String = tis;
-            }
-            catch (Exception ex)
-            {
-                _logger.LogWarning($"Failed to decode HL7 data with TIS-620: {ex.Message}. Falling back to UTF8.");
-                hl7String = Encoding.UTF8.GetString(data.Hl7Data);
-            }
+        
+                string hl7String = _encodingService.DecodeHl7Data(data.Hl7Data);
+            
+          
 
             // Parse HL7
             HL7Message hl7Message = null;
@@ -345,27 +333,8 @@ namespace ConHIS_Service_XPHL7.Services
         {
             cancellationToken.ThrowIfCancellationRequested();
 
-            // Convert byte array to string
-            string hl7String="";
-            try
-            {
-                // Encoding tisEncoding = null;
-                // try { tisEncoding = Encoding.GetEncoding("TIS-620"); } catch { }
-                // if (tisEncoding == null) { try { tisEncoding = Encoding.GetEncoding(874); } catch { } }
-                // if (tisEncoding != null) { hl7String = tisEncoding.GetString(data.Hl7Data); }
-                // else { hl7String = Encoding.UTF8.GetString(data.Hl7Data); }
-                // string utf8 = Encoding.UTF8.GetString(data.Hl7Data);
-                //hl7String = utf8;
-                // string cp875 = Encoding.GetEncoding(874).GetString(data.Hl7Data);
-
-                string tis = Encoding.GetEncoding("TIS-620").GetString(data.Hl7Data);
-                hl7String = tis;
-            }
-            catch (Exception ex)
-            {
-                _logger.LogWarning($"Failed to decode HL7 data with TIS-620: {ex.Message}. Falling back to UTF8.");
-                hl7String = Encoding.UTF8.GetString(data.Hl7Data);
-            }
+            
+            string hl7String = _encodingService.DecodeHl7Data(data.Hl7Data);
 
             // Parse HL7
             HL7Message hl7Message = null;

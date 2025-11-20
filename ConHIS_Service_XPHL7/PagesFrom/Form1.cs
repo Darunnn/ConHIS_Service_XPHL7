@@ -77,7 +77,7 @@ namespace ConHIS_Service_XPHL7
         private bool _opdTableExists = false;
         // private bool _hasCheckedTables = false;
         #endregion
-
+        private readonly EncodingService _encodingService;
         // ⭐ เพิ่ม Method ตรวจสอบว่า Table มีอยู่หรือไม่
         private async Task<bool> CheckTableExists(string tableName)
         {
@@ -451,12 +451,14 @@ namespace ConHIS_Service_XPHL7
 
         private async Task LoadDataBySelectedDate()
         {
+            
             try
             {
                 DateTime selectedDate = dateTimePicker.Value.Date;
                 string searchText = searchTextBox.Text.Trim();
+               
 
-                UpdateStatus($"Loading data for {selectedDate:yyyy-MM-dd}...");
+               UpdateStatus($"Loading data for {selectedDate:yyyy-MM-dd}...");
 
                 _processedDataTable.Rows.Clear();
                 _rowHL7Data.Clear();
