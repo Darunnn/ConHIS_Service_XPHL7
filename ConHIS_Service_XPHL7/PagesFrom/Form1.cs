@@ -38,7 +38,7 @@ namespace ConHIS_Service_XPHL7
         // private CancellationTokenSource _backgroundCancellationTokenSource = null;
         //private Timer _backgroundTimer;
         //private bool _isProcessing = false;
-        private  int _intervalSeconds = 5;
+        private int _intervalSeconds = 5;
 
         // ⭐ Connection Monitor - เพิ่มใหม่
         private Timer _connectionCheckTimer;
@@ -77,7 +77,7 @@ namespace ConHIS_Service_XPHL7
         private bool _opdTableExists = false;
         // private bool _hasCheckedTables = false;
         #endregion
-        private  EncodingService _encodingService;
+        private EncodingService _encodingService;
         // ⭐ เพิ่ม Method ตรวจสอบว่า Table มีอยู่หรือไม่
         private async Task<bool> CheckTableExists(string tableName)
         {
@@ -451,14 +451,14 @@ namespace ConHIS_Service_XPHL7
 
         private async Task LoadDataBySelectedDate()
         {
-            
+
             try
             {
                 DateTime selectedDate = dateTimePicker.Value.Date;
                 string searchText = searchTextBox.Text.Trim();
-               
 
-               UpdateStatus($"Loading data for {selectedDate:yyyy-MM-dd}...");
+
+                UpdateStatus($"Loading data for {selectedDate:yyyy-MM-dd}...");
 
                 _processedDataTable.Rows.Clear();
                 _rowHL7Data.Clear();
@@ -472,7 +472,7 @@ namespace ConHIS_Service_XPHL7
 
                 if (!_ipdTableExists && !_opdTableExists)
                 {
-                   
+
                     UpdateStatus("✗ No database tables available");
                     return;
                 }
@@ -520,18 +520,18 @@ namespace ConHIS_Service_XPHL7
                     {
                         if (data.Hl7Data == null || data.Hl7Data.Length == 0)
                         {
-                            
+
                             skippedCount++;
                             continue;
                         }
 
-                        
+
 
                         string hl7String = _encodingService.DecodeHl7Data(data.Hl7Data);
 
                         if (string.IsNullOrWhiteSpace(hl7String))
                         {
-                            
+
                             skippedCount++;
                             continue;
                         }
@@ -560,11 +560,11 @@ namespace ConHIS_Service_XPHL7
 
                         // Parse HL7
                         HL7Message hl7Message = null;
-                       
+
                         try
                         {
                             hl7Message = hl7Service.ParseHL7Message(hl7String);
-                            
+
                         }
                         catch (Exception parseEx)
                         {
@@ -637,7 +637,7 @@ namespace ConHIS_Service_XPHL7
                         }
                         else if (data.RecieveStatus == 'N')
                         {
-                           
+
                             skippedCount++;
                             continue;
                         }
@@ -647,7 +647,7 @@ namespace ConHIS_Service_XPHL7
                                    financialClass, orderControl, status, "Database Record", hl7Message);
                         loadedCount++;
 
-                        _logger?.LogInfo($"✓ Record {dispenseId} added to grid successfully - ServiceType: {serviceType}, OrderControl: {orderControl}");
+                        
                     }
                     catch (Exception ex)
                     {
@@ -684,7 +684,7 @@ namespace ConHIS_Service_XPHL7
                     UpdateStatus($"✗ No records found ({tableInfo})");
                 }
 
-               
+
             }
             catch (Exception ex)
             {
@@ -702,13 +702,13 @@ namespace ConHIS_Service_XPHL7
             _currentStatusFilter = "All";
             InitializeDataTable();
             UpdateConnectionStatus(false);
-         
+
             try
             {
-                
+
                 _appConfig = new AppConfig();
                 _appConfig.LoadConfiguration();
-               
+
                 _intervalSeconds = _appConfig.ProcessingIntervalSeconds;
 
                 if (_intervalSeconds < 5)
@@ -900,7 +900,7 @@ namespace ConHIS_Service_XPHL7
                             false
                         );
                     }));
-                  
+
                     return;
                 }
 
@@ -923,7 +923,7 @@ namespace ConHIS_Service_XPHL7
                             false
                         );
                     }));
-                   
+
                     _logger?.LogWarning($"[Export] No HL7 data found");
                     return;
                 }
@@ -967,7 +967,7 @@ namespace ConHIS_Service_XPHL7
                                 false
                             );
                         }));
-                       
+
 
                         // เปิด folder ที่เซฟไฟล์
                         if (MessageBox.Show(
@@ -994,7 +994,7 @@ namespace ConHIS_Service_XPHL7
                         false
                     );
                 }));
-                
+
             }
         }
 
@@ -1342,7 +1342,7 @@ namespace ConHIS_Service_XPHL7
             StopIPDService();
             StopOPDService();
             StopConnectionMonitor();
-           
+
         }
 
         private void AddViewButtonColumn()
@@ -1398,12 +1398,12 @@ namespace ConHIS_Service_XPHL7
         }
         private void DataGridView_ColumnHeaderMouseClick(object sender, DataGridViewCellMouseEventArgs e)
         {
-           
+
 
             // ⭐ เรียก ApplyRowColors หลังจาก sort เสร็จ
             this.BeginInvoke(new Action(() =>
             {
-               
+
                 ApplyRowColors();
             }));
         }

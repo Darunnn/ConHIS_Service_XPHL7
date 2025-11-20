@@ -126,10 +126,10 @@ namespace ConHIS_Service_XPHL7.Services
             cancellationToken.ThrowIfCancellationRequested();
 
             // Convert byte array to string
-        
-                string hl7String = _encodingService.DecodeHl7Data(data.Hl7Data);
-            
-          
+
+            string hl7String = _encodingService.DecodeHl7Data(data.Hl7Data);
+
+
 
             // Parse HL7
             HL7Message hl7Message = null;
@@ -333,7 +333,7 @@ namespace ConHIS_Service_XPHL7.Services
         {
             cancellationToken.ThrowIfCancellationRequested();
 
-            
+
             string hl7String = _encodingService.DecodeHl7Data(data.Hl7Data);
 
             // Parse HL7
@@ -605,7 +605,7 @@ namespace ConHIS_Service_XPHL7.Services
 
             DateTime? headerDt = result?.MessageHeader != null ? (DateTime?)result.MessageHeader.MessageDateTime : null;
             int totalPrescriptions = result?.PharmacyDispense?.Count() ?? 0;
-          
+
             var prescriptions = result?.PharmacyDispense?
                 .Select((d, index) =>
                 {

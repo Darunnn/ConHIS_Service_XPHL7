@@ -77,7 +77,7 @@ namespace ConHIS_Service_XPHL7.Services
                     {
                         Encoding tis620 = Encoding.GetEncoding("TIS-620");
                         hl7String = tis620.GetString(hl7Data);
-                        _logger?.Invoke($"Successfully decoded HL7 data with TIS-620 encoding ({hl7Data.Length} bytes)");
+                       
                     }
                     catch (Exception ex)
                     {
@@ -89,7 +89,7 @@ namespace ConHIS_Service_XPHL7.Services
                 {
                     // Use UTF-8 encoding
                     hl7String = Encoding.UTF8.GetString(hl7Data);
-                    _logger?.Invoke($"Successfully decoded HL7 data with UTF-8 encoding ({hl7Data.Length} bytes)");
+                    
                 }
             }
             catch (Exception ex)
