@@ -573,6 +573,7 @@ namespace ConHIS_Service_XPHL7
 
                         // Parse HL7
                         HL7Message hl7Message = null;
+                       
                         try
                         {
                             hl7Message = hl7Service.ParseHL7Message(hl7String);
