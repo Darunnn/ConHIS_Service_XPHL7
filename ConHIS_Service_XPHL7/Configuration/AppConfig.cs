@@ -20,8 +20,8 @@ namespace ConHIS_Service_XPHL7.Configuration
         public int ApiRetryDelaySeconds { get; private set; } = 5;
 
         // Processing Settings
-        public int ProcessingIntervalSeconds { get; private set; } = 30;
-        public int MaxProcessingBatchSize { get; private set; } = 50;
+        public int ProcessingIntervalSeconds { get; private set; } = 5;
+        public int MaxProcessingBatchSize { get; private set; } = 20;
         public bool AutoStart { get; private set; } = true;
 
         public bool LoadConfiguration()
@@ -149,25 +149,12 @@ namespace ConHIS_Service_XPHL7.Configuration
 ApiEndpoint=https://localhost:8080/api/conHIS/insertPrescription
 #ApiEndpoint=https://api-conhissystem.thanespgm.com/api/conHIS/insertPrescription
 #ApiEndpoint=http://192.168.0.47:3001/api/conHIS/insertPrescription
-
-# API timeout in seconds (default: 30)
 ApiTimeoutSeconds=30
-
-# API retry attempts when failed (default: 3)
 ApiRetryAttempts=3
-
-# API retry delay in seconds (default: 5)
 ApiRetryDelaySeconds=5
-
 # ===== PROCESSING SETTINGS =====
-# ระยะเวลาในการตรวจสอบข้อมูลใหม่ (วินาที)
-# ค่าที่แนะนำ: 15-60 วินาที
-ProcessingIntervalSeconds=30
-
-# จำนวนสูงสุดของ records ที่ประมวลผลในแต่ละรอบ
-MaxProcessingBatchSize=50
-
-# เริ่มการประมวลผลอัตโนมัติเมื่อเปิดโปรแกรม (true/false)
+ProcessingIntervalSeconds=5
+MaxProcessingBatchSize=20
 AutoStart=true
 ";
 

@@ -38,12 +38,12 @@ namespace ConHIS_Service_XPHL7
         // private CancellationTokenSource _backgroundCancellationTokenSource = null;
         //private Timer _backgroundTimer;
         //private bool _isProcessing = false;
-        private readonly int _intervalSeconds = 60;
+        private  int _intervalSeconds = 5;
 
         // ⭐ Connection Monitor - เพิ่มใหม่
         private Timer _connectionCheckTimer;
         private DateTime? _lastDatabaseDisconnectionTime = null;
-        private readonly int _connectionCheckIntervalSeconds = 10;
+        private readonly int _connectionCheckIntervalSeconds = 5;
         private bool _isCheckingConnection = false;
         private DateTime? _lastDatabaseConnectionTime = null;
         private bool _hasNotifiedDisconnection = false;
@@ -472,7 +472,7 @@ namespace ConHIS_Service_XPHL7
 
                 if (!_ipdTableExists && !_opdTableExists)
                 {
-                    _logger.LogWarning("⚠️ No tables available for querying");
+                   
                     UpdateStatus("✗ No database tables available");
                     return;
                 }
@@ -520,18 +520,18 @@ namespace ConHIS_Service_XPHL7
                     {
                         if (data.Hl7Data == null || data.Hl7Data.Length == 0)
                         {
-                            _logger?.LogWarning($"⚠️ Record {dispenseId} has no HL7 data - Skipped");
+                            
                             skippedCount++;
                             continue;
                         }
 
-                        _logger?.LogInfo($"📝 Processing record {dispenseId} with {data.Hl7Data.Length} bytes");
+                        
 
                         string hl7String = _encodingService.DecodeHl7Data(data.Hl7Data);
 
                         if (string.IsNullOrWhiteSpace(hl7String))
                         {
-                            _logger?.LogWarning($"⚠️ Record {dispenseId} HL7 string is empty after decoding - Skipped");
+                            
                             skippedCount++;
                             continue;
                         }
@@ -555,9 +555,6 @@ namespace ConHIS_Service_XPHL7
                         else if (serviceType == "OPD")
                             opdRecordCount++;
 
-                        _logger?.LogInfo($"=== Processing Record {dispenseId} ===");
-                        _logger?.LogInfo($"DispenseId: {dispenseId}, ServiceType: {serviceType}, HL7 Length: {hl7String.Length} chars");
-
 
 
 
@@ -567,7 +564,7 @@ namespace ConHIS_Service_XPHL7
                         try
                         {
                             hl7Message = hl7Service.ParseHL7Message(hl7String);
-                            _logger?.LogInfo($"✓ HL7 parsed successfully for {dispenseId}");
+                            
                         }
                         catch (Exception parseEx)
                         {
@@ -640,7 +637,7 @@ namespace ConHIS_Service_XPHL7
                         }
                         else if (data.RecieveStatus == 'N')
                         {
-                            _logger?.LogInfo($"⏭️ Record {dispenseId} has status 'N' - Logged but not displayed");
+                           
                             skippedCount++;
                             continue;
                         }
@@ -687,7 +684,7 @@ namespace ConHIS_Service_XPHL7
                     UpdateStatus($"✗ No records found ({tableInfo})");
                 }
 
-                _logger.LogInfo($"[LoadDataBySelectedDate] Complete - Displayed {dataGridView.Rows.Count} rows");
+               
             }
             catch (Exception ex)
             {
@@ -708,10 +705,20 @@ namespace ConHIS_Service_XPHL7
          
             try
             {
-                _logger.LogInfo("Loading configuration");
+                
                 _appConfig = new AppConfig();
                 _appConfig.LoadConfiguration();
-                _logger.LogInfo("Configuration loaded");
+               
+                _intervalSeconds = _appConfig.ProcessingIntervalSeconds;
+
+                if (_intervalSeconds < 5)
+                {
+                    _logger.LogWarning($"⚠️ Very fast interval ({_intervalSeconds}s) may cause high load!");
+                }
+                else if (_intervalSeconds <= 10)
+                {
+                    _logger.LogInfo($"ℹ️ Using fast interval ({_intervalSeconds}s) - Monitor system load");
+                }
                 _encodingService = EncodingService.FromConnectionConfig(_logger.LogInfo);
                 _logger.LogInfo($"Encoding Service initialized with: {_encodingService.CurrentEncoding}");
                 if (int.TryParse(System.Configuration.ConfigurationManager.AppSettings["LogRetentionDays"], out int retentionDays))
@@ -1335,7 +1342,7 @@ namespace ConHIS_Service_XPHL7
             StopIPDService();
             StopOPDService();
             StopConnectionMonitor();
-            _logger.LogInfo("Application closing - All services stopped");
+           
         }
 
         private void AddViewButtonColumn()
@@ -1391,12 +1398,12 @@ namespace ConHIS_Service_XPHL7
         }
         private void DataGridView_ColumnHeaderMouseClick(object sender, DataGridViewCellMouseEventArgs e)
         {
-            _logger?.LogInfo($"[Sort] Column '{dataGridView.Columns[e.ColumnIndex].Name}' clicked for sorting");
+           
 
             // ⭐ เรียก ApplyRowColors หลังจาก sort เสร็จ
             this.BeginInvoke(new Action(() =>
             {
-                _logger?.LogInfo("[Sort] Applying colors after sort");
+               
                 ApplyRowColors();
             }));
         }
