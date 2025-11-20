@@ -48,6 +48,9 @@ namespace ConHIS_Service_XPHL7.PagesFrom
         {
             var path = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, ConnFolder, ConnFile);
 
+            // Set default encoding
+            cmbEncoding.SelectedIndex = 0; // Default to UTF-8
+
             if (File.Exists(path))
             {
                 var lines = File.ReadAllLines(path);
@@ -63,6 +66,14 @@ namespace ConHIS_Service_XPHL7.PagesFrom
                         txtUserId.Text = line.Replace("User Id=", "").Trim().TrimEnd(';');
                     else if (line.StartsWith("Password="))
                         txtPassword.Text = line.Replace("Password=", "").Trim().TrimEnd(';');
+                    else if (line.StartsWith("Charset="))
+                    {
+                        var charset = line.Replace("Charset=", "").Trim().TrimEnd(';').ToLower();
+                        if (charset == "tis620" || charset == "tis-620")
+                            cmbEncoding.SelectedIndex = 1; // TIS-620
+                        else
+                            cmbEncoding.SelectedIndex = 0; // UTF-8
+                    }
                 }
             }
         }
@@ -127,11 +138,14 @@ namespace ConHIS_Service_XPHL7.PagesFrom
 
             try
             {
+                // Get charset based on selected encoding
+                string charset = cmbEncoding.SelectedIndex == 1 ? "tis620" : "utf8";
+
                 var connectionString = $"Server={txtServer.Text.Trim()};" +
                                      $"Database={txtDatabase.Text.Trim()};" +
                                      $"User Id={txtUserId.Text.Trim()};" +
                                      $"Password={txtPassword.Text.Trim()};" +
-                                     $"Charset=utf8;";
+                                     $"Charset={charset};";
 
                 await Task.Run(() =>
                 {
@@ -153,6 +167,7 @@ namespace ConHIS_Service_XPHL7.PagesFrom
                                     $"✅ การเชื่อมต่อสำเร็จ!\n\n" +
                                     $"Server: {txtServer.Text}\n" +
                                     $"Database: {txtDatabase.Text}\n" +
+                                    $"Encoding: {cmbEncoding.Text}\n" +
                                     $"MySQL Version: {version}",
                                     "Connection Successful",
                                     MessageBoxButtons.OK,
@@ -174,6 +189,7 @@ namespace ConHIS_Service_XPHL7.PagesFrom
                     $"• Server address และ port\n" +
                     $"• Database name\n" +
                     $"• Username และ Password\n" +
+                    $"• Encoding setting\n" +
                     $"• Network connectivity",
                     "Connection Failed",
                     MessageBoxButtons.OK,
@@ -186,7 +202,7 @@ namespace ConHIS_Service_XPHL7.PagesFrom
             }
         }
 
-        
+
 
         private void BtnSave_Click(object sender, EventArgs e)
         {
@@ -268,6 +284,14 @@ namespace ConHIS_Service_XPHL7.PagesFrom
                 return false;
             }
 
+            if (cmbEncoding.SelectedIndex == -1)
+            {
+                MessageBox.Show("กรุณาเลือก Encoding", "Validation Error", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                tabControl.SelectedTab = tabDatabase;
+                cmbEncoding.Focus();
+                return false;
+            }
+
             return true;
         }
 
@@ -306,11 +330,15 @@ namespace ConHIS_Service_XPHL7.PagesFrom
 
             var path = Path.Combine(directory, ConnFile);
 
+            // Determine charset based on selected encoding
+            string charset = cmbEncoding.SelectedIndex == 1 ? "TIS-620" : "UTF8";
+
             var content = new StringBuilder();
             content.AppendLine($"Server={txtServer.Text.Trim()};");
             content.AppendLine($"Database={txtDatabase.Text.Trim()};");
             content.AppendLine($"User Id={txtUserId.Text.Trim()};");
             content.AppendLine($"Password={txtPassword.Text.Trim()};");
+            content.AppendLine($"Charset={charset};");
 
             File.WriteAllText(path, content.ToString());
         }
@@ -379,7 +407,5 @@ namespace ConHIS_Service_XPHL7.PagesFrom
                 this.Close();
             }
         }
-
-
     }
 }

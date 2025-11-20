@@ -651,7 +651,7 @@ namespace ConHIS_Service_XPHL7.Services
         /// <summary>
         /// ดึงข้อมูลตามวันที่ รวมทั้ง IPD และ OPD
         /// </summary>
-        public List<DrugDispenseipd> GetAllDispenseDataByDate(DateTime startDate, DateTime endDate, bool includeIPD = true, bool includeOPD = true)
+        public List<DrugDispenseipd> GetAllDispenseDataByDate(DateTime date, bool includeIPD = true, bool includeOPD = true)
         {
             var result = new List<DrugDispenseipd>();
 
@@ -675,14 +675,17 @@ namespace ConHIS_Service_XPHL7.Services
                             recieve_status_datetime as RecieveStatusDatetime,
                             'IPD' as RecieveOrderType
                         FROM drug_dispense_ipd
-                        WHERE DATE(drug_dispense_datetime) BETWEEN @StartDate AND @EndDate
+                     WHERE(  DATE(recieve_status_datetime) = @Date
+                             OR
+                             DATE(drug_dispense_datetime) = @Date
+                          )
+
                         AND recieve_status IN ('Y', 'F')
                         ORDER BY drug_dispense_datetime DESC";
 
                             using (var command = new MySqlCommand(ipdQuery, connection))
                             {
-                                command.Parameters.AddWithValue("@StartDate", startDate.Date);
-                                command.Parameters.AddWithValue("@EndDate", endDate.Date);
+                                command.Parameters.AddWithValue("@Date", date.Date);
 
                                 using (var reader = command.ExecuteReader())
                                 {
@@ -692,11 +695,11 @@ namespace ConHIS_Service_XPHL7.Services
                                     }
                                 }
                             }
-                            Console.WriteLine($"[IPD] Retrieved {result.Count} records");
+                            _logger.LogInfo($"[IPD] Retrieved {result.Count} records for date {date:yyyy-MM-dd}");
                         }
                         catch (Exception ipdEx)
                         {
-                            Console.WriteLine($"Error querying IPD table: {ipdEx.Message}");
+                            _logger.LogError($"Error querying IPD table: {ipdEx.Message}", ipdEx);
                         }
                     }
 
@@ -714,14 +717,16 @@ namespace ConHIS_Service_XPHL7.Services
                             recieve_status_datetime as RecieveStatusDatetime,
                             'OPD' as RecieveOrderType
                         FROM drug_dispense_opd
-                        WHERE DATE(drug_dispense_datetime) BETWEEN @StartDate AND @EndDate
+                       WHERE(DATE(recieve_status_datetime) = @Date
+                             OR
+                             DATE(drug_dispense_datetime) = @Date
+                            )
                         AND recieve_status IN ('Y', 'F')
                         ORDER BY drug_dispense_datetime DESC";
 
                             using (var command = new MySqlCommand(opdQuery, connection))
                             {
-                                command.Parameters.AddWithValue("@StartDate", startDate.Date);
-                                command.Parameters.AddWithValue("@EndDate", endDate.Date);
+                                command.Parameters.AddWithValue("@Date", date.Date);
 
                                 using (var reader = command.ExecuteReader())
                                 {
@@ -731,25 +736,26 @@ namespace ConHIS_Service_XPHL7.Services
                                         result.Add(ReadDrugDispenseFromReader(reader));
                                         opdCount++;
                                     }
-                                    Console.WriteLine($"[OPD] Retrieved {opdCount} records");
+                                    _logger.LogInfo($"[OPD] Retrieved {opdCount} records for date {date:yyyy-MM-dd}");
                                 }
                             }
                         }
                         catch (Exception opdEx)
                         {
-                            Console.WriteLine($"Error querying OPD table: {opdEx.Message}");
+                            _logger.LogError($"Error querying OPD table: {opdEx.Message}", opdEx);
                         }
                     }
                 }
+
+                _logger.LogInfo($"[Total] Retrieved {result.Count} records for date {date:yyyy-MM-dd}");
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"Error in GetAllDispenseDataByDate: {ex.Message}");
+                _logger.LogError($"Error in GetAllDispenseDataByDate: {ex.Message}", ex);
             }
 
             return result;
         }
-
         /// <summary>
         /// ค้นหาข้อมูลตามวันที่และคำค้นหา รวมทั้ง IPD และ OPD
         /// </summary>
@@ -777,11 +783,13 @@ namespace ConHIS_Service_XPHL7.Services
                             recieve_status_datetime as RecieveStatusDatetime,
                             'IPD' as RecieveOrderType
                         FROM drug_dispense_ipd
-                        WHERE DATE(drug_dispense_datetime) = @Date
+                        WHERE(  DATE(recieve_status_datetime) = @Date
+                             OR
+                             DATE(drug_dispense_datetime) = @Date
+                            )
+                     
                         AND recieve_status IN ('Y', 'F')
-                        AND (
-                            CAST(hl7_data AS CHAR) LIKE @SearchText
-                        )
+                        AND CAST(hl7_data AS CHAR) LIKE @SearchText
                         ORDER BY drug_dispense_datetime DESC";
 
                             using (var command = new MySqlCommand(ipdQuery, connection))
@@ -797,11 +805,11 @@ namespace ConHIS_Service_XPHL7.Services
                                     }
                                 }
                             }
-                            Console.WriteLine($"[IPD Search] Found {result.Count} records");
+                            _logger.LogInfo($"[IPD Search] Found {result.Count} records for '{searchText}' on {date:yyyy-MM-dd}");
                         }
                         catch (Exception ipdEx)
                         {
-                            Console.WriteLine($"Error searching IPD table: {ipdEx.Message}");
+                            _logger.LogError($"Error searching IPD table: {ipdEx.Message}", ipdEx);
                         }
                     }
 
@@ -819,11 +827,12 @@ namespace ConHIS_Service_XPHL7.Services
                             recieve_status_datetime as RecieveStatusDatetime,
                             'OPD' as RecieveOrderType
                         FROM drug_dispense_opd
-                        WHERE DATE(drug_dispense_datetime) = @Date
+                       WHERE(  DATE(recieve_status_datetime) = @Date
+                             OR
+                             DATE(drug_dispense_datetime) = @Date
+                            )
                         AND recieve_status IN ('Y', 'F')
-                        AND (
-                            CAST(hl7_data AS CHAR) LIKE @SearchText
-                        )
+                        AND CAST(hl7_data AS CHAR) LIKE @SearchText
                         ORDER BY drug_dispense_datetime DESC";
 
                             using (var command = new MySqlCommand(opdQuery, connection))
@@ -839,25 +848,26 @@ namespace ConHIS_Service_XPHL7.Services
                                         result.Add(ReadDrugDispenseFromReader(reader));
                                         opdCount++;
                                     }
-                                    Console.WriteLine($"[OPD Search] Found {opdCount} records");
+                                    _logger.LogInfo($"[OPD Search] Found {opdCount} records for '{searchText}' on {date:yyyy-MM-dd}");
                                 }
                             }
                         }
                         catch (Exception opdEx)
                         {
-                            Console.WriteLine($"Error searching OPD table: {opdEx.Message}");
+                            _logger.LogError($"Error searching OPD table: {opdEx.Message}", opdEx);
                         }
                     }
                 }
+
+                _logger.LogInfo($"[Total Search] Found {result.Count} records for '{searchText}' on {date:yyyy-MM-dd}");
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"Error in GetAllDispenseDataByDateAndSearch: {ex.Message}");
+                _logger.LogError($"Error in GetAllDispenseDataByDateAndSearch: {ex.Message}", ex);
             }
 
             return result;
         }
-
         public bool CheckTableExists(string tableName)
         {
             try

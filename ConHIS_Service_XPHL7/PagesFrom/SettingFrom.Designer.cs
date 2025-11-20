@@ -20,6 +20,8 @@
             this.tabControl = new System.Windows.Forms.TabControl();
             this.tabDatabase = new System.Windows.Forms.TabPage();
             this.grpDatabase = new System.Windows.Forms.GroupBox();
+            this.cmbEncoding = new System.Windows.Forms.ComboBox();
+            this.lblEncoding = new System.Windows.Forms.Label();
             this.lblConnectionStatus = new System.Windows.Forms.Label();
             this.btnTestConnection = new System.Windows.Forms.Button();
             this.txtPassword = new System.Windows.Forms.TextBox();
@@ -88,6 +90,8 @@
             // 
             // grpDatabase
             // 
+            this.grpDatabase.Controls.Add(this.cmbEncoding);
+            this.grpDatabase.Controls.Add(this.lblEncoding);
             this.grpDatabase.Controls.Add(this.lblConnectionStatus);
             this.grpDatabase.Controls.Add(this.btnTestConnection);
             this.grpDatabase.Controls.Add(this.txtPassword);
@@ -107,11 +111,34 @@
             this.grpDatabase.TabStop = false;
             this.grpDatabase.Text = "Database Connection (connectdatabase.ini)";
             // 
+            // cmbEncoding
+            // 
+            this.cmbEncoding.DropDownStyle = System.Windows.Forms.ComboBoxStyle.DropDownList;
+            this.cmbEncoding.Font = new System.Drawing.Font("Tahoma", 10F);
+            this.cmbEncoding.FormattingEnabled = true;
+            this.cmbEncoding.Items.AddRange(new object[] {
+            "UTF-8",
+            "TIS-620"});
+            this.cmbEncoding.Location = new System.Drawing.Point(150, 197);
+            this.cmbEncoding.Name = "cmbEncoding";
+            this.cmbEncoding.Size = new System.Drawing.Size(200, 24);
+            this.cmbEncoding.TabIndex = 11;
+            // 
+            // lblEncoding
+            // 
+            this.lblEncoding.AutoSize = true;
+            this.lblEncoding.Font = new System.Drawing.Font("Tahoma", 9F);
+            this.lblEncoding.Location = new System.Drawing.Point(30, 200);
+            this.lblEncoding.Name = "lblEncoding";
+            this.lblEncoding.Size = new System.Drawing.Size(62, 14);
+            this.lblEncoding.TabIndex = 10;
+            this.lblEncoding.Text = "Encoding:";
+            // 
             // lblConnectionStatus
             // 
             this.lblConnectionStatus.Font = new System.Drawing.Font("Tahoma", 9F, System.Drawing.FontStyle.Bold);
             this.lblConnectionStatus.ForeColor = System.Drawing.Color.Gray;
-            this.lblConnectionStatus.Location = new System.Drawing.Point(278, 201);
+            this.lblConnectionStatus.Location = new System.Drawing.Point(278, 241);
             this.lblConnectionStatus.Name = "lblConnectionStatus";
             this.lblConnectionStatus.Size = new System.Drawing.Size(205, 35);
             this.lblConnectionStatus.TabIndex = 9;
@@ -126,7 +153,7 @@
             this.btnTestConnection.FlatStyle = System.Windows.Forms.FlatStyle.Flat;
             this.btnTestConnection.Font = new System.Drawing.Font("Tahoma", 9F, System.Drawing.FontStyle.Bold);
             this.btnTestConnection.ForeColor = System.Drawing.Color.White;
-            this.btnTestConnection.Location = new System.Drawing.Point(118, 202);
+            this.btnTestConnection.Location = new System.Drawing.Point(118, 242);
             this.btnTestConnection.Name = "btnTestConnection";
             this.btnTestConnection.Size = new System.Drawing.Size(150, 35);
             this.btnTestConnection.TabIndex = 8;
@@ -507,17 +534,6 @@
             this.tabDatabase.ResumeLayout(false);
             this.grpDatabase.ResumeLayout(false);
             this.grpDatabase.PerformLayout();
-            this.tabAPI.ResumeLayout(false);
-            this.grpAPI.ResumeLayout(false);
-            this.grpAPI.PerformLayout();
-            ((System.ComponentModel.ISupportInitialize)(this.numApiRetryDelay)).EndInit();
-            ((System.ComponentModel.ISupportInitialize)(this.numApiRetry)).EndInit();
-            ((System.ComponentModel.ISupportInitialize)(this.numApiTimeout)).EndInit();
-            this.tabLog.ResumeLayout(false);
-            this.grpLog.ResumeLayout(false);
-            this.grpLog.PerformLayout();
-            ((System.ComponentModel.ISupportInitialize)(this.numLogRetention)).EndInit();
-            this.ResumeLayout(false);
 
         }
 
@@ -527,6 +543,7 @@
         private System.Windows.Forms.TabPage tabDatabase;
         private System.Windows.Forms.TabPage tabAPI;
         private System.Windows.Forms.TabPage tabLog;
+        private System.Windows.Forms.TabPage tabEncode;
         private System.Windows.Forms.GroupBox grpDatabase;
         private System.Windows.Forms.Label lblConnectionStatus;
         private System.Windows.Forms.Button btnTestConnection;
@@ -556,6 +573,9 @@
         private System.Windows.Forms.Label lblLogRetention;
         private System.Windows.Forms.Button btnSave;
         private System.Windows.Forms.Button btnCancel;
-
+        private System.Windows.Forms.Label lblEncoding;
+        private System.Windows.Forms.ComboBox cmbEncoding;
+        
+           
     }
 }

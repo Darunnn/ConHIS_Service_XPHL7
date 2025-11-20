@@ -10,6 +10,7 @@ using System.Runtime.InteropServices;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
+using System.Transactions;
 using System.Windows.Forms;
 using Timer = System.Threading.Timer;
 
@@ -31,10 +32,10 @@ namespace ConHIS_Service_XPHL7
         [DllImport("user32.dll", CharSet = CharSet.Auto)]
         static extern IntPtr SendMessage(IntPtr hWnd, UInt32 Msg, IntPtr wParam, IntPtr lParam);
         private const UInt32 WM_CLOSE = 0x0010;
-      // private bool _wasServiceRunningBeforeDisconnection = false;
+        // private bool _wasServiceRunningBeforeDisconnection = false;
 
         // Background service components
-       // private CancellationTokenSource _backgroundCancellationTokenSource = null;
+        // private CancellationTokenSource _backgroundCancellationTokenSource = null;
         //private Timer _backgroundTimer;
         //private bool _isProcessing = false;
         private readonly int _intervalSeconds = 60;
@@ -45,9 +46,6 @@ namespace ConHIS_Service_XPHL7
         private readonly int _connectionCheckIntervalSeconds = 10;
         private bool _isCheckingConnection = false;
         private DateTime? _lastDatabaseConnectionTime = null;
-        private Timer _dateChangeTimer;
-        private DateTime _currentMonitorDate;
-        private readonly int _dateCheckIntervalSeconds = 60; // เช็คทุก 60 วินาที
         private bool _hasNotifiedDisconnection = false;
         private bool _hasNotifiedReconnection = false;
 
@@ -73,12 +71,11 @@ namespace ConHIS_Service_XPHL7
         private bool _wasOPDRunningBeforeDisconnection = false;
 
         #endregion
-        // ⭐ เพิ่มตัวแปรป้องกันการโหลดซ้ำ
-        private bool _isLoadingData = false;
+
         #region Additional Variables for Table Status
         private bool _ipdTableExists = false;
         private bool _opdTableExists = false;
-       // private bool _hasCheckedTables = false;
+        // private bool _hasCheckedTables = false;
         #endregion
 
         // ⭐ เพิ่ม Method ตรวจสอบว่า Table มีอยู่หรือไม่
@@ -94,14 +91,13 @@ namespace ConHIS_Service_XPHL7
                 return false;
             }
         }
-
-        private bool _hasInitialized = false;
         public Form1()
         {
             InitializeComponent();
             this.Load += Form1_Load;
             this.FormClosing += Form1_FormClosing;
             _logger = new LogManager();
+
         }
 
         private void InitializeDataTable()
@@ -168,7 +164,7 @@ namespace ConHIS_Service_XPHL7
         {
             _hasNotifiedDisconnection = false;
             _hasNotifiedReconnection = false;
-           // _wasServiceRunningBeforeDisconnection = false;
+            // _wasServiceRunningBeforeDisconnection = false;
         }
 
         // ⭐ เริ่ม Connection Monitor
@@ -328,7 +324,7 @@ namespace ConHIS_Service_XPHL7
                             // ⭐ รีเซ็ตสถานะ table
                             _ipdTableExists = false;
                             _opdTableExists = false;
-                           // _hasCheckedTables = false;
+                            // _hasCheckedTables = false;
 
                             // ⭐ อัปเดตปุ่มให้ disabled
                             UpdateServiceButtonStates();
@@ -479,25 +475,19 @@ namespace ConHIS_Service_XPHL7
                     return;
                 }
 
-                // ⭐ เพิ่ม Debug Log
-                _logger.LogInfo($"=== LOADING DATA ===");
-                _logger.LogInfo($"Selected Date: {selectedDate:yyyy-MM-dd}");
-                _logger.LogInfo($"Search Text: '{searchText}'");
-                _logger.LogInfo($"IPD Table: {_ipdTableExists}, OPD Table: {_opdTableExists}");
-
                 dispenseData = await Task.Run(() =>
                 {
                     try
                     {
                         if (!string.IsNullOrEmpty(searchText))
                         {
-                            _logger.LogInfo($"Querying with search: {searchText}");
+                            _logger.LogInfo($"Search: {searchText} on {selectedDate:yyyy-MM-dd} (Tables: IPD={_ipdTableExists}, OPD={_opdTableExists})");
                             return _databaseService.GetAllDispenseDataByDateAndSearch(selectedDate, searchText, _ipdTableExists, _opdTableExists);
                         }
                         else
                         {
-                            _logger.LogInfo($"Querying date range: {selectedDate:yyyy-MM-dd} to {selectedDate:yyyy-MM-dd}");
-                            return _databaseService.GetAllDispenseDataByDate(selectedDate, selectedDate, _ipdTableExists, _opdTableExists);
+                            _logger.LogInfo($"Load: {selectedDate:yyyy-MM-dd} (Tables: IPD={_ipdTableExists}, OPD={_opdTableExists})");
+                            return _databaseService.GetAllDispenseDataByDate(selectedDate, _ipdTableExists, _opdTableExists);
                         }
                     }
                     catch (Exception ex)
@@ -512,14 +502,7 @@ namespace ConHIS_Service_XPHL7
                     dispenseData = new List<DrugDispenseipd>();
                 }
 
-                // ⭐ เพิ่ม Debug Log - แสดงข้อมูลที่ได้จาก Database
-                _logger.LogInfo($"Database returned {dispenseData.Count} records");
-
-                if (dispenseData.Count > 0)
-                {
-                    _logger.LogInfo($"First record date: {dispenseData[0].DrugDispenseDatetime:yyyy-MM-dd HH:mm:ss}");
-                    _logger.LogInfo($"Last record date: {dispenseData[dispenseData.Count - 1].DrugDispenseDatetime:yyyy-MM-dd HH:mm:ss}");
-                }
+                _logger.LogInfo($"[LoadDataBySelectedDate] Database returned {dispenseData.Count} records");
 
                 var hl7Service = new HL7Service();
                 int loadedCount = 0;
@@ -540,11 +523,13 @@ namespace ConHIS_Service_XPHL7
                             continue;
                         }
 
+                        _logger?.LogInfo($"📝 Processing record {dispenseId} with {data.Hl7Data.Length} bytes");
+
                         string hl7String = "";
                         try
                         {
-                            string tis = Encoding.GetEncoding("TIS-620").GetString(data.Hl7Data);
-                            hl7String = tis;
+                            string utf8 = Encoding.UTF8.GetString(data.Hl7Data);
+                            hl7String = utf8;
                         }
                         catch (Exception ex)
                         {
@@ -559,6 +544,8 @@ namespace ConHIS_Service_XPHL7
                             continue;
                         }
 
+                        // ⭐⭐⭐ แก้ไขตรงนี้ - ใช้ RecieveOrderType เป็นตัวกำหนด Service Type เท่านั้น
+                        // ไม่ใช้เป็น orderControl
                         string serviceType = "N/A";
                         if (!string.IsNullOrEmpty(data.RecieveOrderType))
                         {
@@ -567,29 +554,41 @@ namespace ConHIS_Service_XPHL7
                             else if (data.RecieveOrderType.Contains("OPD"))
                                 serviceType = "OPD";
                             else
-                                serviceType = data.RecieveOrderType;
+                                serviceType = data.RecieveOrderType; // ถ้าเป็นค่าอื่นๆ ก็เอาไปเลย
                         }
 
+                        // นับจำนวน IPD/OPD
                         if (serviceType == "IPD")
                             ipdRecordCount++;
                         else if (serviceType == "OPD")
                             opdRecordCount++;
 
+                        _logger?.LogInfo($"=== Processing Record {dispenseId} ===");
+                        _logger?.LogInfo($"DispenseId: {dispenseId}, ServiceType: {serviceType}, HL7 Length: {hl7String.Length} chars");
+
+
+
+
+                        // Parse HL7
                         HL7Message hl7Message = null;
                         try
                         {
                             hl7Message = hl7Service.ParseHL7Message(hl7String);
+                            _logger?.LogInfo($"✓ HL7 parsed successfully for {dispenseId}");
                         }
                         catch (Exception parseEx)
                         {
                             _logger?.LogError($"✗ Failed to parse HL7 for {dispenseId}: {parseEx.Message}", parseEx);
+                            _logger?.LogReadError(dispenseId, $"Parse Error: {parseEx.Message}\n{parseEx.StackTrace}");
                             skippedCount++;
                             continue;
                         }
 
-                        // ⭐ แก้ไข: ใช้วันที่จากหลายแหล่ง และ validate
-                        DateTime timeCheckDate = DateTime.Now;
 
+
+
+                        // ประมวลผลข้อมูลต่อ
+                        DateTime timeCheckDate = DateTime.Now;
                         if (data.RecieveStatusDatetime.HasValue && data.RecieveStatusDatetime.Value != DateTime.MinValue)
                         {
                             timeCheckDate = data.RecieveStatusDatetime.Value;
@@ -603,15 +602,10 @@ namespace ConHIS_Service_XPHL7
                             timeCheckDate = hl7Message.CommonOrder.TransactionDateTime.Value;
                         }
 
-                        // ⭐ Debug Log - แสดงวันที่ที่จะใช้แสดงผล
-                        _logger?.LogInfo($"Record {dispenseId} - TimeCheck: {timeCheckDate:yyyy-MM-dd HH:mm:ss}, Status: {data.RecieveStatus}");
-
                         string timeCheck = timeCheckDate.ToString("yyyy-MM-dd HH:mm:ss");
 
-                        DateTime? transactionDt = hl7Message?.CommonOrder?.TransactionDateTime;
-                        string transactionDateTime = (transactionDt.HasValue && transactionDt.Value != DateTime.MinValue)
-                            ? transactionDt.Value.ToString("yyyy-MM-dd HH:mm:ss")
-                            : "N/A";
+                        DateTime timetransactionDt = data.DrugDispenseDatetime;
+                        string transactionDateTime = timetransactionDt.ToString("yyyy-MM-dd HH:mm:ss");
 
                         string orderNo = hl7Message?.CommonOrder?.PlacerOrderNumber ?? "N/A";
                         string hn = hl7Message?.PatientIdentification?.PatientIDExternal ??
@@ -633,8 +627,10 @@ namespace ConHIS_Service_XPHL7
                             if (string.IsNullOrWhiteSpace(financialClass)) financialClass = "N/A";
                         }
 
+                        // ⭐⭐⭐ แก้ไขตรงนี้ - เอา OrderControl จาก HL7 ตรงๆ ไม่ใช้ RecieveOrderType
                         string orderControl = hl7Message?.CommonOrder?.OrderControl ?? "N/A";
 
+                        // ตัดสินใจแสดงบน Grid
                         string status = "N/A";
                         if (data.RecieveStatus == 'Y')
                         {
@@ -651,23 +647,29 @@ namespace ConHIS_Service_XPHL7
                         }
                         else if (data.RecieveStatus == 'N')
                         {
-                            _logger?.LogInfo($"⏭️ Record {dispenseId} has status 'N' - Skipped (not displayed)");
+                            _logger?.LogInfo($"⏭️ Record {dispenseId} has status 'N' - Logged but not displayed");
                             skippedCount++;
                             continue;
                         }
 
+                        // ⭐⭐⭐ ส่ง serviceType และ orderControl แยกกัน
                         AddRowToGrid(timeCheck, transactionDateTime, serviceType, orderNo, hn, patientName,
                                    financialClass, orderControl, status, "Database Record", hl7Message);
                         loadedCount++;
+
+                        _logger?.LogInfo($"✓ Record {dispenseId} added to grid successfully - ServiceType: {serviceType}, OrderControl: {orderControl}");
                     }
                     catch (Exception ex)
                     {
                         _logger?.LogError($"❌ Error loading record {dispenseId}: {ex.Message}", ex);
+                        _logger?.LogReadError(
+                            dispenseId,
+                            $"Failed to process record: {ex.Message}\nStackTrace: {ex.StackTrace}"
+                        );
                         skippedCount++;
                     }
                 }
 
-                // ⭐ ไม่ควร apply filter ที่นี่ - ให้แสดงทั้งหมดก่อน
                 _currentStatusFilter = "All";
                 _filteredDataView.RowFilter = string.Empty;
 
@@ -683,22 +685,16 @@ namespace ConHIS_Service_XPHL7
                 else if (_opdTableExists)
                     tableInfo = "OPD only";
 
-                // ⭐ เพิ่ม Debug Log - แสดงผลลัพธ์
-                _logger.LogInfo($"=== LOAD COMPLETE ===");
-                _logger.LogInfo($"Total from DB: {dispenseData.Count}");
-                _logger.LogInfo($"Loaded to Grid: {loadedCount}");
-                _logger.LogInfo($"Skipped: {skippedCount}");
-                _logger.LogInfo($"Grid Rows: {dataGridView.Rows.Count}");
-                _logger.LogInfo($"IPD: {ipdRecordCount}, OPD: {opdRecordCount}");
-
                 if (loadedCount > 0)
                 {
                     UpdateStatus($"✓ Loaded {loadedCount} records ({tableInfo}) | IPD={ipdRecordCount}, OPD={opdRecordCount}");
                 }
                 else
                 {
-                    UpdateStatus($"✗ No records found for {selectedDate:yyyy-MM-dd} ({tableInfo})");
+                    UpdateStatus($"✗ No records found ({tableInfo})");
                 }
+
+                _logger.LogInfo($"[LoadDataBySelectedDate] Complete - Displayed {dataGridView.Rows.Count} rows");
             }
             catch (Exception ex)
             {
@@ -711,14 +707,6 @@ namespace ConHIS_Service_XPHL7
 
         private async void Form1_Load(object sender, EventArgs e)
         {
-            // ⭐ ป้องกันการทำงานซ้ำ
-            if (_hasInitialized)
-            {
-                _logger?.LogWarning("Form1_Load called multiple times - Skipped");
-                return;
-            }
-            _hasInitialized = true;
-
             _logger.LogInfo("Start Interface");
             UpdateStatus("Initializing...");
             _currentStatusFilter = "All";
@@ -742,17 +730,21 @@ namespace ConHIS_Service_XPHL7
                 _databaseService = new DatabaseService(_appConfig.ConnectionString);
 
                 bool dbConnected = await Task.Run(() => _databaseService.TestConnection());
+                UpdateConnectionStatus(dbConnected);
 
                 if (dbConnected)
                 {
                     _logger.LogInfo("DatabaseService initialized successfully");
 
+                    // ⭐ ตรวจสอบว่า Tables มีอยู่หรือไม่
                     _logger.LogInfo("Checking database tables...");
                     _ipdTableExists = await CheckTableExists("drug_dispense_ipd");
                     _opdTableExists = await CheckTableExists("drug_dispense_opd");
+                    //_hasCheckedTables = true;
 
                     _logger.LogInfo($"Table Status - IPD: {(_ipdTableExists ? "EXISTS" : "NOT FOUND")}, OPD: {(_opdTableExists ? "EXISTS" : "NOT FOUND")}");
 
+                    // ⭐ แสดง warning ถ้า table ไม่มี
                     if (!_ipdTableExists || !_opdTableExists)
                     {
                         string missingTables = "";
@@ -765,6 +757,7 @@ namespace ConHIS_Service_XPHL7
 
                         _logger.LogWarning($"⚠️ Missing tables: {missingTables}");
 
+                        // แสดง MessageBox แจ้งเตือน
                         this.BeginInvoke(new Action(() =>
                         {
                             ShowAutoCloseMessageBox(
@@ -774,38 +767,39 @@ namespace ConHIS_Service_XPHL7
                                 $"OPD Service: {(_opdTableExists ? "Available" : "Disabled")}\n\n" +
                                 $"Please create the missing tables to enable all features.",
                                 "Database Warning",
-                                3000,
-                                false,
-                                false
+                                 3000,
+                                 false,
+                                 false
                             );
                         }));
                     }
 
+                    // ⭐ Update button states based on table availability
                     UpdateServiceButtonStates();
 
                     _isInitializing = true;
                     dateTimePicker.Value = DateTime.Today;
                     _isInitializing = false;
 
-                    UpdateConnectionStatus(true);
                     await LoadDataBySelectedDate();
                 }
                 else
                 {
                     _logger.LogWarning("Initial database connection failed");
-                    UpdateConnectionStatus(false);
                 }
 
                 var apiService = new ApiService(AppConfig.ApiEndpoint);
                 var hl7Service = new HL7Service();
                 _processor = new DrugDispenseProcessor(_databaseService, hl7Service, apiService);
 
+
                 InitializePanelPaintEvents();
                 UpdateStatusFilterButtons();
                 StartConnectionMonitor();
-                StartDateChangeMonitor();
+
                 UpdateStatus("Ready - Services Stopped");
 
+                // ⭐ เปิดใช้งาน buttons ตามสถานะของ tables
                 UpdateServiceButtonStates();
                 manualCheckButton.Enabled = true;
                 exportButton.Enabled = true;
@@ -818,7 +812,6 @@ namespace ConHIS_Service_XPHL7
                 UpdateConnectionStatus(false);
             }
         }
-
 
 
 
@@ -885,10 +878,10 @@ namespace ConHIS_Service_XPHL7
 
         private async void DateTimePicker_ValueChanged(object sender, EventArgs e)
         {
-            // ⭐ ข้ามทั้ง initializing และ loading
-            if (_isInitializing || _isLoadingData)
+            // ⭐ ข้ามการโหลดเมื่อกำลังเริ่มต้น
+            if (_isInitializing)
             {
-                _logger?.LogInfo("Skipping load during initialization or while already loading");
+                _logger.LogInfo("Skipping load during initialization");
                 return;
             }
 
@@ -911,7 +904,7 @@ namespace ConHIS_Service_XPHL7
                 searchTextBox.Text = string.Empty;
                 dateTimePicker.Value = DateTime.Today;
                 _currentStatusFilter = "All";
-                _currentMonitorDate = DateTime.Today;
+
                 await LoadDataBySelectedDate();
 
                 _logger.LogInfo("Data refreshed");
@@ -1186,7 +1179,6 @@ namespace ConHIS_Service_XPHL7
             StopIPDService();
             StopOPDService();
             StopConnectionMonitor();
-            StopDateChangeMonitor();
             _logger.LogInfo("Application closing - All services stopped");
         }
 
@@ -1393,7 +1385,7 @@ namespace ConHIS_Service_XPHL7
         {
             if (!_ipdTableExists)
             {
-               
+
                 _logger.LogWarning("Attempted to start IPD Service but table doesn't exist");
                 return;
             }
@@ -1412,7 +1404,7 @@ namespace ConHIS_Service_XPHL7
         {
             if (!_opdTableExists)
             {
-               
+
                 _logger.LogWarning("Attempted to start OPD Service but table doesn't exist");
                 return;
             }
@@ -1549,7 +1541,7 @@ namespace ConHIS_Service_XPHL7
                     _logger.LogWarning("Manual check skipped OPD - table doesn't exist");
                 }
 
-               
+
 
                 await Task.WhenAll(tasks);
             }
@@ -1766,27 +1758,32 @@ namespace ConHIS_Service_XPHL7
         }
 
         // ⭐ Helper Methods
-        // ⭐ แก้ไข ProcessOrderResult ให้ใช้แหล่งวันที่เดียวกัน
         private void ProcessOrderResult(Services.ProcessResult result, ref int remainingCount, string orderType, CancellationToken cancellationToken)
         {
             try
             {
+                // ⭐ ตรวจสอบ cancellation ก่อน
                 if (cancellationToken.IsCancellationRequested)
                 {
+                    _logger?.LogInfo($"[{orderType}] Processing cancelled for order");
                     return;
                 }
 
                 var hl7Message = result.ParsedMessage;
                 string orderNo = hl7Message?.CommonOrder?.PlacerOrderNumber ?? "N/A";
 
+                // ⭐ Thread-safe decrement
                 int currentRemaining = Interlocked.Decrement(ref remainingCount);
 
+                // ⭐ ป้องกัน negative count
                 if (currentRemaining < 0)
                 {
+                    _logger?.LogWarning($"[{orderType}] Remaining count went negative, resetting to 0");
                     Interlocked.Exchange(ref remainingCount, 0);
                     currentRemaining = 0;
                 }
 
+                // ⭐ Update UI อย่าง thread-safe
                 if (this.IsHandleCreated && !this.IsDisposed)
                 {
                     this.BeginInvoke(new Action(() =>
@@ -1818,58 +1815,35 @@ namespace ConHIS_Service_XPHL7
                     }));
                 }
 
+                // ⭐ Update last success
                 if (result.Success)
                 {
                     UpdateLastSuccess(orderNo);
-                }
-
-                // ⭐ แก้ไข: กำหนด recordDateTime จาก HL7 Message เป็นหลัก ไม่ใช้ DateTime.Now
-                DateTime recordDateTime;
-
-                if (hl7Message?.CommonOrder?.TransactionDateTime != null &&
-                    hl7Message.CommonOrder.TransactionDateTime.HasValue &&
-                    hl7Message.CommonOrder.TransactionDateTime.Value != DateTime.MinValue)
-                {
-                    // ใช้วันที่จาก HL7 TransactionDateTime
-                    recordDateTime = hl7Message.CommonOrder.TransactionDateTime.Value;
+                    _logger?.LogInfo($"[{orderType}] Order {orderNo} processed successfully");
                 }
                 else
                 {
-                    // ถ้าไม่มี TransactionDateTime ให้ใช้วันที่จาก result หรือ current time
-                    recordDateTime = result.RecordDateTime ?? DateTime.Now;
+                    _logger?.LogWarning($"[{orderType}] Order {orderNo} failed: {result.Message}");
                 }
 
-                DateTime recordDate = recordDateTime.Date;
-                DateTime selectedDate = DateTime.Today;
-
-                if (this.IsHandleCreated && !this.IsDisposed)
-                {
-                    try
-                    {
-                        this.Invoke(new Action(() =>
-                        {
-                            selectedDate = dateTimePicker.Value.Date;
-                        }));
-                    }
-                    catch
-                    {
-                        // Ignore if unable to read selected date
-                    }
-                }
-
-                // ⭐ ตรวจสอบว่าวันที่ตรงกับ filter หรือไม่
-                if (recordDate != selectedDate)
-                {
-                    // ไม่แสดงบน Grid ถ้าวันที่ไม่ตรงกับ filter
-                    return;
-                }
-
-                // Extract ข้อมูลเพื่อแสดงบน Grid
+                // ⭐ Extract HL7 data safely
                 string hn = hl7Message?.PatientIdentification?.PatientIDExternal ??
                            hl7Message?.PatientIdentification?.PatientIDInternal ?? "N/A";
 
-                string timeCheck = recordDateTime.ToString("yyyy-MM-dd HH:mm:ss");
-                string transactionDateTime = recordDateTime.ToString("yyyy-MM-dd HH:mm:ss");
+                string transactionDateTime = "N/A";
+                if (hl7Message?.CommonOrder?.TransactionDateTime != null &&
+                    hl7Message.CommonOrder.TransactionDateTime.HasValue)
+                {
+                    try
+                    {
+                        transactionDateTime = hl7Message.CommonOrder.TransactionDateTime.Value
+                            .ToString("yyyy-MM-dd HH:mm:ss");
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger?.LogWarning($"[{orderType}] Error formatting transaction date: {ex.Message}");
+                    }
+                }
 
                 string patientName = "N/A";
                 if (hl7Message?.PatientIdentification?.OfficialName != null)
@@ -1893,17 +1867,19 @@ namespace ConHIS_Service_XPHL7
                     }
                 }
 
-                string serviceType = orderType;
+                string serviceType = orderType; // "IPD" หรือ "OPD"
+
                 string orderControl = hl7Message?.CommonOrder?.OrderControl ?? "N/A";
 
+                // ⭐ Add to grid with error handling
                 if (this.IsHandleCreated && !this.IsDisposed)
                 {
                     try
                     {
                         AddRowToGrid(
-                            timeCheck,
+                            DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss"),
                             transactionDateTime,
-                            serviceType,
+                            serviceType,  // ⭐ เพิ่ม parameter ใหม่
                             orderNo,
                             hn,
                             patientName,
@@ -1913,16 +1889,26 @@ namespace ConHIS_Service_XPHL7
                             result.ApiResponse ?? result.Message ?? "N/A",
                             hl7Message
                         );
+
+                        _logger?.LogInfo($"[{orderType}] Order {orderNo} added to grid - " +
+                                       $"ServiceType: {serviceType}, OrderControl: {orderControl}, " +
+                                       $"Status: {(result.Success ? "Success" : "Failed")}");
                     }
                     catch (Exception ex)
                     {
                         _logger?.LogError($"[{orderType}] Error adding order {orderNo} to grid", ex);
                     }
                 }
+                else
+                {
+                    _logger?.LogWarning($"[{orderType}] Form disposed, skipping grid update for order {orderNo}");
+                }
             }
             catch (Exception ex)
             {
                 _logger?.LogError($"[{orderType}] Critical error in ProcessOrderResult", ex);
+
+                // ⭐ ลอง update status แม้เกิด error
 
                 if (this.IsHandleCreated && !this.IsDisposed)
                 {
@@ -1931,6 +1917,8 @@ namespace ConHIS_Service_XPHL7
                         UpdateStatus($"[{orderType}] Error processing order: {ex.Message}");
                     }));
                 }
+
+
             }
         }
         private void UpdateButtonState(Button button, bool isRunning, string text)
@@ -2214,98 +2202,6 @@ namespace ConHIS_Service_XPHL7
         }
         #endregion
 
-        #region Date Change Monitor
-
-        private void StartDateChangeMonitor()
-        {
-            _currentMonitorDate = DateTime.Today;
-            var intervalMs = _dateCheckIntervalSeconds * 1000;
-            _dateChangeTimer = new Timer(DateChangeCallback, null, intervalMs, intervalMs);
-            _logger?.LogInfo($"Date change monitor started - checking every {_dateCheckIntervalSeconds} seconds");
-            _logger?.LogInfo($"Current monitor date: {_currentMonitorDate:yyyy-MM-dd}");
-        }
-
-        private void StopDateChangeMonitor()
-        {
-            _dateChangeTimer?.Dispose();
-            _dateChangeTimer = null;
-            _logger?.LogInfo("Date change monitor stopped");
-        }
-
-        private  void DateChangeCallback(object state)
-        {
-            try
-            {
-                DateTime today = DateTime.Today;
-
-                if (today != _currentMonitorDate)
-                {
-                   
-
-                    DateTime previousDate = _currentMonitorDate;
-                    _currentMonitorDate = today;
-
-                    if (this.IsHandleCreated && !this.IsDisposed)
-                    {
-                        this.Invoke(new Action(() =>
-                        {
-                            try
-                            {
-                                _logger?.LogInfo("Updating DateTimePicker to new date");
-
-                                _isInitializing = true;
-                                dateTimePicker.Value = today;
-                                _isInitializing = false;
-
-                                Task.Run(async () =>
-                                {
-                                    try
-                                    {
-                                        await LoadDataBySelectedDate();
-
-                                        this.Invoke(new Action(() =>
-                                        {
-                                            UpdateStatus($"✓ Date changed to {today:yyyy-MM-dd} - Data refreshed");
-                                        }));
-
-                                        this.BeginInvoke(new Action(() =>
-                                        {
-                                            ShowAutoCloseMessageBox(
-                                                $"📅 วันที่เปลี่ยนแล้ว!\n\n" +
-                                                $"จาก: {previousDate:yyyy-MM-dd}\n" +
-                                                $"เป็น: {today:yyyy-MM-dd}\n\n" +
-                                                $"🔄 ข้อมูลถูกรีเฟรชอัตโนมัติแล้ว",
-                                                "Date Changed",
-                                                1000,
-                                                false,
-                                                false
-                                            );
-                                        }));
-                                    }
-                                    catch (Exception ex)
-                                    {
-                                        _logger?.LogError("Error loading data for new date", ex);
-                                       
-                                    }
-                                });
-                            }
-                            catch (Exception ex)
-                            {
-                                _logger?.LogError("Error updating date in UI", ex);
-                               
-                            }
-                        }));
-                    }
-                }
-            }
-            catch (Exception ex)
-            {
-                _logger?.LogError("Error in date change monitor", ex);
-            }
-        }
-
-        #endregion
-
         #region Settings
         private void SettingsButton_Click(object sender, EventArgs e)
         {
@@ -2371,7 +2267,8 @@ namespace ConHIS_Service_XPHL7
                 );
             }
         }
-
         #endregion
+
+
     }
 }
