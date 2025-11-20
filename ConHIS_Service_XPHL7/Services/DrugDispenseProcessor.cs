@@ -520,7 +520,7 @@ namespace ConHIS_Service_XPHL7.Services
                 string prescId = type == DispenseType.IPD
                     ? ((DrugDispenseipd)data).PrescId
                     : ((DrugDispenseopd)data).PrescId;
-               
+                _logger.LogError($"Error in ProcessNewOrder for {type} {prescId}", ex);
                 throw;
             }
         }

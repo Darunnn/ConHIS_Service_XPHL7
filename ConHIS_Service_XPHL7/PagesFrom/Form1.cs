@@ -77,7 +77,7 @@ namespace ConHIS_Service_XPHL7
         private bool _opdTableExists = false;
         // private bool _hasCheckedTables = false;
         #endregion
-        private readonly EncodingService _encodingService;
+        private  EncodingService _encodingService;
         // ⭐ เพิ่ม Method ตรวจสอบว่า Table มีอยู่หรือไม่
         private async Task<bool> CheckTableExists(string tableName)
         {
@@ -527,17 +527,7 @@ namespace ConHIS_Service_XPHL7
 
                         _logger?.LogInfo($"📝 Processing record {dispenseId} with {data.Hl7Data.Length} bytes");
 
-                        string hl7String = "";
-                        try
-                        {
-                            string utf8 = Encoding.UTF8.GetString(data.Hl7Data);
-                            hl7String = utf8;
-                        }
-                        catch (Exception ex)
-                        {
-                            _logger.LogWarning($"Failed to decode HL7 data with TIS-620: {ex.Message}. Falling back to UTF8.");
-                            hl7String = Encoding.UTF8.GetString(data.Hl7Data);
-                        }
+                        string hl7String = _encodingService.DecodeHl7Data(data.Hl7Data);
 
                         if (string.IsNullOrWhiteSpace(hl7String))
                         {
@@ -722,7 +712,8 @@ namespace ConHIS_Service_XPHL7
                 _appConfig = new AppConfig();
                 _appConfig.LoadConfiguration();
                 _logger.LogInfo("Configuration loaded");
-
+                _encodingService = EncodingService.FromConnectionConfig(_logger.LogInfo);
+                _logger.LogInfo($"Encoding Service initialized with: {_encodingService.CurrentEncoding}");
                 if (int.TryParse(System.Configuration.ConfigurationManager.AppSettings["LogRetentionDays"], out int retentionDays))
                 {
                     _logger.LogRetentionDays = retentionDays;
