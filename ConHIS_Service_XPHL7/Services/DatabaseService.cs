@@ -913,5 +913,87 @@ namespace ConHIS_Service_XPHL7.Services
             };
         }
         #endregion
+
+        // เพิ่ม methods เหล่านี้ใน DatabaseService.cs
+
+        #region Export Methods
+
+        /// <summary>
+        /// ดึงข้อมูล HL7 Binary Data ตาม Order No และ Order Type
+        /// </summary>
+        public byte[] GetHL7DataByOrderNoAndType(string orderNo, string orderType)
+        {
+            _logger.LogInfo($"[GetHL7DataByOrderNoAndType] Start - OrderNo={orderNo}, OrderType={orderType}");
+
+            try
+            {
+                if (string.IsNullOrWhiteSpace(orderNo) || string.IsNullOrWhiteSpace(orderType))
+                {
+                    _logger.LogWarning("[GetHL7DataByOrderNoAndType] OrderNo or OrderType is empty");
+                    return null;
+                }
+
+                using (var connection = new MySqlConnection(_connectionString))
+                {
+                    connection.Open();
+
+                    string tableName = orderType == "IPD" ? "drug_dispense_ipd" : "drug_dispense_opd";
+                    string idColumn = orderType == "IPD" ? "drug_dispense_ipd_id" : "drug_dispense_opd_id";
+
+                    // ตรวจสอบว่า table มีอยู่หรือไม่
+                    if (!CheckTableExists(tableName))
+                    {
+                        _logger.LogWarning($"[GetHL7DataByOrderNoAndType] Table '{tableName}' does not exist");
+                        return null;
+                    }
+
+                    // Query โดยค้นหาจาก HL7 Data ที่มี Order No
+                    string query = $@"
+                SELECT hl7_data, {idColumn}
+                FROM {tableName}
+                WHERE CAST(hl7_data AS CHAR) LIKE @OrderNoPattern
+                ORDER BY drug_dispense_datetime DESC
+                LIMIT 1";
+
+                    using (var command = new MySqlCommand(query, connection))
+                    {
+                        command.Parameters.AddWithValue("@OrderNoPattern", $"%{orderNo}%");
+                        command.CommandTimeout = 30;
+
+                        using (var reader = command.ExecuteReader())
+                        {
+                            if (reader.Read())
+                            {
+                                var hl7Data = reader["hl7_data"] as byte[];
+                                var id = reader.GetInt32(idColumn);
+
+                                if (hl7Data != null && hl7Data.Length > 0)
+                                {
+                                    _logger.LogInfo($"[GetHL7DataByOrderNoAndType] Found HL7 data - ID={id}, Size={hl7Data.Length} bytes");
+                                    return hl7Data;
+                                }
+                                else
+                                {
+                                    _logger.LogWarning($"[GetHL7DataByOrderNoAndType] HL7 data is null or empty for ID={id}");
+                                }
+                            }
+                            else
+                            {
+                                _logger.LogWarning($"[GetHL7DataByOrderNoAndType] No record found for OrderNo={orderNo}, OrderType={orderType}");
+                            }
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError($"[GetHL7DataByOrderNoAndType] Error: {ex.Message}", ex);
+            }
+
+            return null;
+        }
+       
+
+        #endregion
     }
 }

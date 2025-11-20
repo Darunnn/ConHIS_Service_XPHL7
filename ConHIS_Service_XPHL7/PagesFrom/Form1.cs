@@ -705,7 +705,7 @@ namespace ConHIS_Service_XPHL7
             _currentStatusFilter = "All";
             InitializeDataTable();
             UpdateConnectionStatus(false);
-
+         
             try
             {
                 _logger.LogInfo("Loading configuration");
@@ -792,7 +792,7 @@ namespace ConHIS_Service_XPHL7
                 StartConnectionMonitor();
 
                 UpdateStatus("Ready - Services Stopped");
-
+                InitializeExportButton();
                 // ⭐ เปิดใช้งาน buttons ตามสถานะของ tables
                 UpdateServiceButtonStates();
                 manualCheckButton.Enabled = true;
@@ -809,62 +809,204 @@ namespace ConHIS_Service_XPHL7
 
 
 
-        #region Export
-        //private void ExportButton_Click(object sender, EventArgs e)
-        //{
+        // เพิ่ม code เหล่านี้ใน Form1.cs
 
+        #region Export HL7 Data
 
-        //    try
-        //    {
-        //        using (var saveFileDialog = new SaveFileDialog())
-        //        {
-        //            saveFileDialog.Filter = "CSV files (*.csv)|*.csv|All files (*.*)|*.*";
-        //            saveFileDialog.FileName = $"DrugDispense_{DateTime.Now:yyyyMMdd_HHmmss}.csv";
-        //            saveFileDialog.InitialDirectory = Environment.GetFolderPath(Environment.SpecialFolder.Desktop);
+        // ตัวแปรเก็บข้อมูลแถวที่เลือก
+        private string _selectedOrderNo = null;
+        private string _selectedServiceType = null;
+        private int _selectedRowIndex = -1;
 
-        //            if (saveFileDialog.ShowDialog() == DialogResult.OK)
-        //            {
-        //                ExportToCSV(saveFileDialog.FileName);
-
-        //                _logger.LogInfo($"Data exported to: {saveFileDialog.FileName}");
-        //            }
-        //        }
-        //    }
-        //    catch (Exception ex)
-        //    {
-        //        _logger.LogError("Export error", ex);
-
-        //    }
-        //}
-
-        private void ExportToCSV(string filePath)
+        // เพิ่มใน InitializeComponent หรือ Form1_Load
+        private void InitializeExportButton()
         {
-            var csv = new StringBuilder();
+            // Enable/Disable export button based on selection
+            dataGridView.SelectionChanged += DataGridView_SelectionChanged;
 
-            var headers = new string[_processedDataTable.Columns.Count];
-            for (int i = 0; i < _processedDataTable.Columns.Count; i++)
+            // เพิ่มปุ่มเข้า groupBox2
+            if (!groupBox2.Controls.Contains(exportButton))
             {
-                headers[i] = _processedDataTable.Columns[i].ColumnName;
+                exportButton.Location = new System.Drawing.Point(575, 20);
+                exportButton.Size = new System.Drawing.Size(120, 32);
+                exportButton.Text = "📥 Export HL7";
+                exportButton.Enabled = false;
+                exportButton.Visible = true;
+                groupBox2.Controls.Add(exportButton);
             }
-            csv.AppendLine(string.Join(",", headers));
-
-            foreach (DataRow row in _processedDataTable.Rows)
-            {
-                var fields = new string[_processedDataTable.Columns.Count];
-                for (int i = 0; i < _processedDataTable.Columns.Count; i++)
-                {
-                    var value = row[i].ToString();
-                    if (value.Contains(",") || value.Contains("\"") || value.Contains("\n"))
-                    {
-                        value = $"\"{value.Replace("\"", "\"\"")}\"";
-                    }
-                    fields[i] = value;
-                }
-                csv.AppendLine(string.Join(",", fields));
-            }
-
-            File.WriteAllText(filePath, csv.ToString(), Encoding.UTF8);
         }
+
+        private void DataGridView_SelectionChanged(object sender, EventArgs e)
+        {
+            try
+            {
+                if (dataGridView.SelectedRows.Count > 0)
+                {
+                    var selectedRow = dataGridView.SelectedRows[0];
+
+                    // ดึงข้อมูลจาก row ที่เลือก
+                    _selectedOrderNo = selectedRow.Cells["Order No"]?.Value?.ToString();
+                    _selectedServiceType = selectedRow.Cells["Service Type"]?.Value?.ToString();
+
+                    // หา actual row index ใน DataTable
+                    if (_filteredDataView.Count > 0 && selectedRow.Index < _filteredDataView.Count)
+                    {
+                        DataRowView rowView = _filteredDataView[selectedRow.Index];
+                        _selectedRowIndex = _processedDataTable.Rows.IndexOf(rowView.Row);
+                    }
+
+                    // Enable export button ถ้ามีข้อมูลครบ
+                    exportButton.Enabled = !string.IsNullOrEmpty(_selectedOrderNo) &&
+                                           !string.IsNullOrEmpty(_selectedServiceType);
+
+                    _logger?.LogInfo($"Row selected - OrderNo: {_selectedOrderNo}, ServiceType: {_selectedServiceType}");
+                }
+                else
+                {
+                    // ไม่มีแถวที่เลือก
+                    _selectedOrderNo = null;
+                    _selectedServiceType = null;
+                    _selectedRowIndex = -1;
+                    exportButton.Enabled = false;
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogError("Error in SelectionChanged event", ex);
+                exportButton.Enabled = false;
+            }
+        }
+
+        private void ExportButton_Click(object sender, EventArgs e)
+        {
+            try
+            {
+                if (string.IsNullOrEmpty(_selectedOrderNo) || string.IsNullOrEmpty(_selectedServiceType))
+                {
+                    MessageBox.Show(
+                        "กรุณาเลือกแถวข้อมูลที่ต้องการ Export",
+                        "No Selection",
+                        MessageBoxButtons.OK,
+                        MessageBoxIcon.Warning
+                    );
+                    return;
+                }
+
+                _logger?.LogInfo($"[Export] Start - OrderNo: {_selectedOrderNo}, ServiceType: {_selectedServiceType}");
+
+                // ดึงข้อมูล HL7 Binary จาก Database
+                byte[] hl7Data = _databaseService.GetHL7DataByOrderNoAndType(_selectedOrderNo, _selectedServiceType);
+
+                if (hl7Data == null || hl7Data.Length == 0)
+                {
+                    MessageBox.Show(
+                        $"ไม่พบข้อมูล HL7 สำหรับ:\n" +
+                        $"Order No: {_selectedOrderNo}\n" +
+                        $"Service Type: {_selectedServiceType}",
+                        "Data Not Found",
+                        MessageBoxButtons.OK,
+                        MessageBoxIcon.Warning
+                    );
+                    _logger?.LogWarning($"[Export] No HL7 data found");
+                    return;
+                }
+
+                _logger?.LogInfo($"[Export] Retrieved HL7 data - Size: {hl7Data.Length} bytes");
+
+                // แสดง SaveFileDialog
+                using (var saveFileDialog = new SaveFileDialog())
+                {
+                    // ทำความสะอาดชื่อไฟล์
+                    string safeOrderNo = SanitizeFileName(_selectedOrderNo);
+                    string safeServiceType = SanitizeFileName(_selectedServiceType);
+
+                    saveFileDialog.Filter = "HL7 Binary Files (*.bin)|*.bin|HL7 Text Files (*.hl7)|*.hl7|All Files (*.*)|*.*";
+                    saveFileDialog.FilterIndex = 1;
+                    saveFileDialog.FileName = $"HL7_{safeServiceType}_{safeOrderNo}_{DateTime.Now:yyyyMMdd_HHmmss}";
+                    saveFileDialog.InitialDirectory = Environment.GetFolderPath(Environment.SpecialFolder.Desktop);
+                    saveFileDialog.Title = "Export HL7 Data";
+
+                    if (saveFileDialog.ShowDialog() == DialogResult.OK)
+                    {
+                        string filePath = saveFileDialog.FileName;
+
+                        // เขียนไฟล์ Binary
+                        File.WriteAllBytes(filePath, hl7Data);
+
+                        _logger?.LogInfo($"[Export] Success - File saved to: {filePath}");
+
+                        // แสดงข้อความสำเร็จ
+                        MessageBox.Show(
+                            $"✓ Export สำเร็จ!\n\n" +
+                            $"Order No: {_selectedOrderNo}\n" +
+                            $"Service Type: {_selectedServiceType}\n" +
+                            $"File Size: {FormatFileSize(hl7Data.Length)}\n" +
+                            $"Location: {filePath}",
+                            "Export Success",
+                            MessageBoxButtons.OK,
+                            MessageBoxIcon.Information
+                        );
+
+                        // เปิด folder ที่เซฟไฟล์
+                        if (MessageBox.Show(
+                            "ต้องการเปิด Folder ที่เก็บไฟล์หรือไม่?",
+                            "Open Folder",
+                            MessageBoxButtons.YesNo,
+                            MessageBoxIcon.Question) == DialogResult.Yes)
+                        {
+                            System.Diagnostics.Process.Start("explorer.exe", $"/select,\"{filePath}\"");
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogError("[Export] Error exporting HL7 data", ex);
+                MessageBox.Show(
+                    $"เกิดข้อผิดพลาดในการ Export:\n\n{ex.Message}",
+                    "Export Error",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Error
+                );
+            }
+        }
+
+        // Helper: ทำความสะอาดชื่อไฟล์
+        private string SanitizeFileName(string fileName)
+        {
+            if (string.IsNullOrEmpty(fileName))
+                return "unknown";
+
+            var invalidChars = Path.GetInvalidFileNameChars();
+            var result = new StringBuilder(fileName.Length);
+
+            foreach (var c in fileName)
+            {
+                if (Array.IndexOf(invalidChars, c) >= 0)
+                    result.Append('_');
+                else
+                    result.Append(c);
+            }
+
+            return result.ToString();
+        }
+
+        // Helper: Format File Size
+        private string FormatFileSize(long bytes)
+        {
+            string[] sizes = { "B", "KB", "MB", "GB" };
+            double len = bytes;
+            int order = 0;
+
+            while (len >= 1024 && order < sizes.Length - 1)
+            {
+                order++;
+                len = len / 1024;
+            }
+
+            return $"{len:0.##} {sizes[order]}";
+        }
+
         #endregion
 
         #region Search and Filter

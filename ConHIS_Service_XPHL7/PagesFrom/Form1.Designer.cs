@@ -154,11 +154,15 @@
             // 
             // exportButton
             // 
-            this.exportButton.Location = new System.Drawing.Point(0, 0);
+            this.exportButton.Location = new System.Drawing.Point(575, 20);
             this.exportButton.Name = "exportButton";
-            this.exportButton.Size = new System.Drawing.Size(0, 0);
-            this.exportButton.TabIndex = 99;
-            this.exportButton.Visible = false;
+            this.exportButton.Size = new System.Drawing.Size(120, 32);
+            this.exportButton.TabIndex = 4;
+            this.exportButton.Text = "📥 Export HL7";
+            this.exportButton.UseVisualStyleBackColor = true;
+            this.exportButton.Visible = true;
+            this.exportButton.Enabled = false; // Enable when row is selected
+            this.exportButton.Click += new System.EventHandler(this.ExportButton_Click);
             // 
             // settingsButton
             // 
@@ -422,6 +426,7 @@
             this.groupBox2.Controls.Add(this.startStopOPDButton);
             this.groupBox2.Controls.Add(this.manualCheckButton);
             this.groupBox2.Controls.Add(this.settingsButton);
+            this.groupBox2.Controls.Add(this.exportButton);
             this.groupBox2.Location = new System.Drawing.Point(15, 118);
             this.groupBox2.Name = "groupBox2";
             this.groupBox2.Size = new System.Drawing.Size(957, 62);
