@@ -622,7 +622,11 @@ namespace ConHIS_Service_XPHL7.Services
                     {
                         return string.Join(" ", parts.Where(x => !string.IsNullOrWhiteSpace(x)));
                     }
-
+                    var instructiondesc = new[] {
+                     d?.Substand?.Usageline1,
+                 d?.Substand?.Usageline2,
+                     d?.Substand?.Usageline3
+                    }.Where(x => !string.IsNullOrWhiteSpace(x));
                     return new
                     {
                         UniqID = $"{d?.Dispensegivecode?.UniqID ?? ""}-{DateTime.Now.ToString("yyyyMMdd")}",
@@ -688,8 +692,8 @@ namespace ConHIS_Service_XPHL7.Services
                         f_orderitemnameTH = d?.Dispensegivecode?.DrugNameThai ?? null as string,
                         f_orderitemnamegeneric = null as string,
                         f_orderqty = d?.QTY ?? 0,
-                        f_orderunitcode = d?.Dispensegivecode?.DrugUnit ?? d?.Usageunit?.ID ?? null as string,
-                        f_orderunitdesc = d?.Dispensegivecode?.DrugUnit ?? d?.Usageunit?.Name ?? null as string,
+                        f_orderunitcode = d?.Dispensegivecode?.DrugUnit ?? null as string,
+                        f_orderunitdesc = d?.Dispensegivecode?.DrugUnit ?? null as string,
                         f_dosage = d?.Dose ?? 0,
                         f_dosageunit = d?.Usageunit?.Name ?? null as string,
                         f_dosagetext = d?.Strengthunit ?? null as string,
@@ -700,14 +704,17 @@ namespace ConHIS_Service_XPHL7.Services
                         f_psychotropic = "0",
                         f_binlocation = null as string,
                         f_itemidentify = string.IsNullOrWhiteSpace(d?.Substand?.RXD701) &&
-                                                 string.IsNullOrWhiteSpace(d?.Substand?.Medicinalproperties) 
-                                                 
+                                                 string.IsNullOrWhiteSpace(d?.Substand?.Medicinalproperties)
+
                                     ? null as string
                                     : SafeJoin(d?.Substand?.RXD701, d?.Substand?.Medicinalproperties),
                         f_itemlotno = null as string,
                         f_itemlotexpire = null as string,
-                        f_instructioncode = d?.Usagecode?.Instructioncode ?? null as string,
-                        f_instructiondesc = null as string,
+                        f_instructioncode = d?.Substand?.RXD704 ?? null as string,
+
+                        f_instructiondesc = instructiondesc.Any()
+                                            ? string.Join(" ", instructiondesc)
+                                            : null as string,
                         f_frequencycode = string.IsNullOrWhiteSpace(d?.Usagecode?.Frequencycode)
                                      ? null as string
                                     : d.Usagecode.Frequencycode,

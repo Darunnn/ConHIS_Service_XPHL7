@@ -359,38 +359,33 @@ namespace ConHIS_Service_XPHL7.Services
 
             if (!string.IsNullOrEmpty(drugName))
             {
-                // รายการหน่วยที่เป็นไปได้
-                var knownUnits = new[] { "ขวด", "เม็ด", "แคปซูล", "ซอง", "หลอด", "กล่อง", "แผง", "ชิ้น", "ขนาด", "วอน", "ลูก", "ก้อน", "ถุง", "VIAL" };
+                var knownUnits = new[] { "ขวด", "เม็ด", "แคปซูล", "ซอง", "หลอด", "กล่อง", "แผง", "ชิ้น",
+                             "ขนาด", "วอน", "ลูก", "ก้อน", "ถุง", "VIAL" };
 
-                // 1. ลองหาจากเครื่องหมาย - ก่อน
-                var lastDashIndex = drugName.LastIndexOf('-');
-                if (lastDashIndex >= 0 && lastDashIndex < drugName.Length - 1)
+                // split ทั้งช่องว่างและเครื่องหมาย -
+                var parts = drugName
+                    .Split(new[] { ' ', '-' }, StringSplitOptions.RemoveEmptyEntries)
+                    .ToList();
+
+                if (parts.Count > 0)
                 {
-                    var candidate = drugName.Substring(lastDashIndex + 1).Trim();
 
-                    // ตรวจสอบว่าเป็นหน่วยที่รู้จักหรือไม่
-                    if (knownUnits.Any(u => candidate.Contains(u)))
+                    var lastPart = parts[parts.Count - 1].Trim();
+
+
+                    var lastPartClean = lastPart.TrimEnd('.', ';', ':');
+
+
+                    if (knownUnits.Any(u => lastPartClean.Equals(u, StringComparison.OrdinalIgnoreCase)))
                     {
-                        drugUnit = candidate;
-                        // ตัด drugUnit ออกจาก drugName
-                        cleanedDrugName = drugName.Substring(0, lastDashIndex).Trim();
+                        drugUnit = lastPartClean;
+
+                        parts.RemoveAt(parts.Count - 1);
+                        cleanedDrugName = string.Join(" ", parts).Trim();
                     }
-                }
-
-                // 2. ถ้ายังไม่เจอ ลองค้นหาจากคำที่รู้จักในทั้ง string
-                if (string.IsNullOrEmpty(drugUnit))
-                {
-                    foreach (var unit in knownUnits)
+                    else
                     {
-                        if (drugName.Contains(unit))
-                        {
-                            drugUnit = unit;
-                            // ตัดหน่วยออก
-                            cleanedDrugName = drugName.Replace(unit, "").Trim();
-                            // ตัด - หรือช่องว่างที่เหลือท้ายสุด
-                            cleanedDrugName = cleanedDrugName.TrimEnd('-', ' ');
-                            break;
-                        }
+                        cleanedDrugName = drugName.Trim();
                     }
                 }
             }
@@ -573,38 +568,33 @@ namespace ConHIS_Service_XPHL7.Services
 
             if (!string.IsNullOrEmpty(drugName))
             {
-                // รายการหน่วยที่เป็นไปได้
-                var knownUnits = new[] { "ขวด", "เม็ด", "แคปซูล", "ซอง", "หลอด", "กล่อง", "แผง", "ชิ้น", "ขนาด", "วอน", "ลูก", "ก้อน", "ถุง", "VIAL" };
+                var knownUnits = new[] { "ขวด", "เม็ด", "แคปซูล", "ซอง", "หลอด", "กล่อง", "แผง", "ชิ้น",
+                             "ขนาด", "วอน", "ลูก", "ก้อน", "ถุง", "VIAL" };
 
-                // 1. ลองหาจากเครื่องหมาย - ก่อน
-                var lastDashIndex = drugName.LastIndexOf('-');
-                if (lastDashIndex >= 0 && lastDashIndex < drugName.Length - 1)
+                // split ทั้งช่องว่างและเครื่องหมาย -
+                var parts = drugName
+                    .Split(new[] { ' ', '-' }, StringSplitOptions.RemoveEmptyEntries)
+                    .ToList();
+
+                if (parts.Count > 0)
                 {
-                    var candidate = drugName.Substring(lastDashIndex + 1).Trim();
+                  
+                    var lastPart = parts[parts.Count - 1].Trim();
 
-                    // ตรวจสอบว่าเป็นหน่วยที่รู้จักหรือไม่
-                    if (knownUnits.Any(u => candidate.Contains(u)))
+                   
+                    var lastPartClean = lastPart.TrimEnd('.', ';', ':');
+
+                    
+                    if (knownUnits.Any(u => lastPartClean.Equals(u, StringComparison.OrdinalIgnoreCase)))
                     {
-                        drugUnit = candidate;
-                        // ตัด drugUnit ออกจาก drugName
-                        cleanedDrugName = drugName.Substring(0, lastDashIndex).Trim();
+                        drugUnit = lastPartClean;
+
+                        parts.RemoveAt(parts.Count - 1);
+                        cleanedDrugName = string.Join(" ", parts).Trim();
                     }
-                }
-
-                // 2. ถ้ายังไม่เจอ ลองค้นหาจากคำที่รู้จักในทั้ง string
-                if (string.IsNullOrEmpty(drugUnit))
-                {
-                    foreach (var unit in knownUnits)
+                    else
                     {
-                        if (drugName.Contains(unit))
-                        {
-                            drugUnit = unit;
-                            // ตัดหน่วยออก
-                            cleanedDrugName = drugName.Replace(unit, "").Trim();
-                            // ตัด - หรือช่องว่างที่เหลือท้ายสุด
-                            cleanedDrugName = cleanedDrugName.TrimEnd('-', ' ');
-                            break;
-                        }
+                        cleanedDrugName = drugName.Trim();
                     }
                 }
             }

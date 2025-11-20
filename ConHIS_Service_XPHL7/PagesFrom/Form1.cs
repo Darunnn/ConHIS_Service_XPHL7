@@ -883,12 +883,17 @@ namespace ConHIS_Service_XPHL7
             {
                 if (string.IsNullOrEmpty(_selectedOrderNo) || string.IsNullOrEmpty(_selectedServiceType))
                 {
-                    MessageBox.Show(
-                        "กรุณาเลือกแถวข้อมูลที่ต้องการ Export",
-                        "No Selection",
-                        MessageBoxButtons.OK,
-                        MessageBoxIcon.Warning
-                    );
+                    this.BeginInvoke(new Action(() =>
+                    {
+                        ShowAutoCloseMessageBox(
+                           "กรุณาเลือกแถวข้อมูลที่ต้องการ Export",
+                           "No Selection",
+                            2000,
+                            false,
+                            false
+                        );
+                    }));
+                  
                     return;
                 }
 
@@ -899,14 +904,19 @@ namespace ConHIS_Service_XPHL7
 
                 if (hl7Data == null || hl7Data.Length == 0)
                 {
-                    MessageBox.Show(
+                    this.BeginInvoke(new Action(() =>
+                    {
+                        ShowAutoCloseMessageBox(
                         $"ไม่พบข้อมูล HL7 สำหรับ:\n" +
                         $"Order No: {_selectedOrderNo}\n" +
                         $"Service Type: {_selectedServiceType}",
                         "Data Not Found",
-                        MessageBoxButtons.OK,
-                        MessageBoxIcon.Warning
-                    );
+                            2000,
+                            false,
+                            false
+                        );
+                    }));
+                   
                     _logger?.LogWarning($"[Export] No HL7 data found");
                     return;
                 }
@@ -936,16 +946,21 @@ namespace ConHIS_Service_XPHL7
                         _logger?.LogInfo($"[Export] Success - File saved to: {filePath}");
 
                         // แสดงข้อความสำเร็จ
-                        MessageBox.Show(
+                        this.BeginInvoke(new Action(() =>
+                        {
+                            ShowAutoCloseMessageBox(
                             $"✓ Export สำเร็จ!\n\n" +
                             $"Order No: {_selectedOrderNo}\n" +
                             $"Service Type: {_selectedServiceType}\n" +
                             $"File Size: {FormatFileSize(hl7Data.Length)}\n" +
                             $"Location: {filePath}",
                             "Export Success",
-                            MessageBoxButtons.OK,
-                            MessageBoxIcon.Information
-                        );
+                                2000,
+                                false,
+                                false
+                            );
+                        }));
+                       
 
                         // เปิด folder ที่เซฟไฟล์
                         if (MessageBox.Show(
@@ -962,12 +977,17 @@ namespace ConHIS_Service_XPHL7
             catch (Exception ex)
             {
                 _logger?.LogError("[Export] Error exporting HL7 data", ex);
-                MessageBox.Show(
+                this.BeginInvoke(new Action(() =>
+                {
+                    ShowAutoCloseMessageBox(
                     $"เกิดข้อผิดพลาดในการ Export:\n\n{ex.Message}",
                     "Export Error",
-                    MessageBoxButtons.OK,
-                    MessageBoxIcon.Error
-                );
+                        2000,
+                        false,
+                        false
+                    );
+                }));
+                
             }
         }
 
