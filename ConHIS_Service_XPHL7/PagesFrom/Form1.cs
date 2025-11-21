@@ -583,11 +583,19 @@ namespace ConHIS_Service_XPHL7
                         {
                             timeCheckDate = data.RecieveStatusDatetime.Value;
                         }
-                        string timeCheck = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss");
+                        else if (data.DrugDispenseDatetime != DateTime.MinValue)
+                        {
+                            timeCheckDate = data.DrugDispenseDatetime;
+                        }
+                        else if (hl7Message?.CommonOrder?.TransactionDateTime.HasValue == true)
+                        {
+                            timeCheckDate = hl7Message.CommonOrder.TransactionDateTime.Value;
+                        }
 
-                        // ⭐⭐⭐ ส่วนสำคัญ - Transaction DateTime ต้องใช้จาก Database เท่านั้น
-                        string transactionDateTime = data.DrugDispenseDatetime.ToString("yyyy-MM-dd HH:mm:ss");
+                        string timeCheck = timeCheckDate.ToString("yyyy-MM-dd HH:mm:ss");
 
+                        DateTime timetransactionDt = data.DrugDispenseDatetime;
+                        string transactionDateTime = timetransactionDt.ToString("yyyy-MM-dd HH:mm:ss");
 
                         string orderNo = hl7Message?.CommonOrder?.PlacerOrderNumber ?? "N/A";
                         string hn = hl7Message?.PatientIdentification?.PatientIDExternal ??
@@ -1986,19 +1994,21 @@ namespace ConHIS_Service_XPHL7
                            hl7Message?.PatientIdentification?.PatientIDInternal ?? "N/A";
 
                 string transactionDateTime = "N/A";
-                if (hl7Message?.CommonOrder?.TransactionDateTime != null &&
-                    hl7Message.CommonOrder.TransactionDateTime.HasValue)
+                if (result.DrugDispenseDatetime.HasValue)
                 {
                     try
                     {
-                        transactionDateTime = hl7Message.CommonOrder.TransactionDateTime.Value
+                        transactionDateTime = result.DrugDispenseDatetime.Value
                             .ToString("yyyy-MM-dd HH:mm:ss");
                     }
                     catch (Exception ex)
                     {
-                        _logger?.LogWarning($"[{orderType}] Error formatting transaction date: {ex.Message}");
+                        _logger?.LogWarning($"[{orderType}] Error formatting drug dispense datetime: {ex.Message}");
                     }
                 }
+
+                // ⭐⭐⭐ เพิ่มส่วนนี้ - ดึง timeCheck จาก Database
+           
 
                 string patientName = "N/A";
                 if (hl7Message?.PatientIdentification?.OfficialName != null)

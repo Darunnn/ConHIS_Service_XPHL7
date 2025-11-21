@@ -26,6 +26,8 @@ namespace ConHIS_Service_XPHL7.Services
         public object DispenseData { get; set; } // เปลี่ยนเป็น object เพื่อรองรับทั้ง IPD และ OPD
         public DispenseType Type { get; set; }
         public DateTime? RecordDateTime { get; set; }
+        public DateTime? DrugDispenseDatetime { get; set; }  // จาก drug_dispense_datetime
+        
     }
 
     public class DrugDispenseProcessor
@@ -101,7 +103,8 @@ namespace ConHIS_Service_XPHL7.Services
                             Message = ex.Message,
                             DispenseData = data,
                             ParsedMessage = null,
-                            Type = DispenseType.IPD
+                            Type = DispenseType.IPD,
+                            DrugDispenseDatetime = data.DrugDispenseDatetime
                         });
                     }
                 }
@@ -164,7 +167,8 @@ namespace ConHIS_Service_XPHL7.Services
                     Message = errorMsg,
                     DispenseData = data,
                     ParsedMessage = null,
-                    Type = DispenseType.IPD
+                    Type = DispenseType.IPD,
+                    DrugDispenseDatetime = data.DrugDispenseDatetime
                 });
                 return;
             }
@@ -189,7 +193,9 @@ namespace ConHIS_Service_XPHL7.Services
                     Message = errorMsg,
                     DispenseData = data,
                     ParsedMessage = hl7Message,
-                    Type = DispenseType.IPD
+                    Type = DispenseType.IPD,
+                    DrugDispenseDatetime = data.DrugDispenseDatetime
+
                 });
                 return;
             }
@@ -237,7 +243,8 @@ namespace ConHIS_Service_XPHL7.Services
                     ApiResponse = apiResponse,
                     DispenseData = data,
                     ParsedMessage = hl7Message,
-                    Type = DispenseType.IPD
+                    Type = DispenseType.IPD,
+                    DrugDispenseDatetime = data.DrugDispenseDatetime
                 });
             }
             catch (OperationCanceledException)
@@ -256,7 +263,8 @@ namespace ConHIS_Service_XPHL7.Services
                     ApiResponse = null,
                     DispenseData = data,
                     ParsedMessage = hl7Message,
-                    Type = DispenseType.IPD
+                    Type = DispenseType.IPD,
+                    DrugDispenseDatetime = data.DrugDispenseDatetime
                 });
             }
         }
@@ -309,7 +317,8 @@ namespace ConHIS_Service_XPHL7.Services
                             Message = ex.Message,
                             DispenseData = data,
                             ParsedMessage = null,
-                            Type = DispenseType.OPD
+                            Type = DispenseType.OPD,
+                            DrugDispenseDatetime = data.DrugDispenseDatetime
                         });
                     }
                 }
@@ -369,7 +378,8 @@ namespace ConHIS_Service_XPHL7.Services
                     Message = errorMsg,
                     DispenseData = data,
                     ParsedMessage = null,
-                    Type = DispenseType.OPD
+                    Type = DispenseType.OPD,
+                    DrugDispenseDatetime = data.DrugDispenseDatetime
                 });
                 return;
             }
@@ -394,7 +404,8 @@ namespace ConHIS_Service_XPHL7.Services
                     Message = errorMsg,
                     DispenseData = data,
                     ParsedMessage = hl7Message,
-                    Type = DispenseType.OPD
+                    Type = DispenseType.OPD,
+                    DrugDispenseDatetime = data.DrugDispenseDatetime
                 });
                 return;
             }
@@ -442,7 +453,8 @@ namespace ConHIS_Service_XPHL7.Services
                     ApiResponse = apiResponse,
                     DispenseData = data,
                     ParsedMessage = hl7Message,
-                    Type = DispenseType.OPD
+                    Type = DispenseType.OPD,
+                    DrugDispenseDatetime = data.DrugDispenseDatetime
                 });
             }
             catch (OperationCanceledException)
@@ -461,7 +473,8 @@ namespace ConHIS_Service_XPHL7.Services
                     ApiResponse = null,
                     DispenseData = data,
                     ParsedMessage = hl7Message,
-                    Type = DispenseType.OPD
+                    Type = DispenseType.OPD,
+                    DrugDispenseDatetime = data.DrugDispenseDatetime
                 });
             }
         }
