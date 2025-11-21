@@ -204,7 +204,7 @@ namespace ConHIS_Service_XPHL7.Services
 
                     using (var cmd = new MySqlCommand(sql, conn))
                     {
-                        cmd.CommandTimeout = 30;
+                        cmd.CommandTimeout = 5;
 
                         using (var reader = cmd.ExecuteReader())
                         {
@@ -468,7 +468,7 @@ namespace ConHIS_Service_XPHL7.Services
 
                     using (var cmd = new MySqlCommand(sql, conn))
                     {
-                        cmd.CommandTimeout = 30;
+                        cmd.CommandTimeout = 5;
 
                         using (var reader = cmd.ExecuteReader())
                         {
@@ -958,7 +958,7 @@ namespace ConHIS_Service_XPHL7.Services
                     using (var command = new MySqlCommand(query, connection))
                     {
                         command.Parameters.AddWithValue("@OrderNoPattern", $"%{orderNo}%");
-                        command.CommandTimeout = 30;
+                        command.CommandTimeout = 5;
 
                         using (var reader = command.ExecuteReader())
                         {

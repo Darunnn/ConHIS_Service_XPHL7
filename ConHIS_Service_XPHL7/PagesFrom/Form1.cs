@@ -583,19 +583,11 @@ namespace ConHIS_Service_XPHL7
                         {
                             timeCheckDate = data.RecieveStatusDatetime.Value;
                         }
-                        else if (data.DrugDispenseDatetime != DateTime.MinValue)
-                        {
-                            timeCheckDate = data.DrugDispenseDatetime;
-                        }
-                        else if (hl7Message?.CommonOrder?.TransactionDateTime.HasValue == true)
-                        {
-                            timeCheckDate = hl7Message.CommonOrder.TransactionDateTime.Value;
-                        }
+                        string timeCheck = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss");
 
-                        string timeCheck = timeCheckDate.ToString("yyyy-MM-dd HH:mm:ss");
+                        // ⭐⭐⭐ ส่วนสำคัญ - Transaction DateTime ต้องใช้จาก Database เท่านั้น
+                        string transactionDateTime = data.DrugDispenseDatetime.ToString("yyyy-MM-dd HH:mm:ss");
 
-                        DateTime timetransactionDt = data.DrugDispenseDatetime;
-                        string transactionDateTime = timetransactionDt.ToString("yyyy-MM-dd HH:mm:ss");
 
                         string orderNo = hl7Message?.CommonOrder?.PlacerOrderNumber ?? "N/A";
                         string hn = hl7Message?.PatientIdentification?.PatientIDExternal ??
