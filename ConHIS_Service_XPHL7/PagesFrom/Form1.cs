@@ -662,7 +662,7 @@ namespace ConHIS_Service_XPHL7
 
                 _currentStatusFilter = "All";
                 _filteredDataView.RowFilter = string.Empty;
-
+                _filteredDataView.Sort = "[Time Check] DESC";
                 ApplyRowColors();
                 UpdateStatusSummary();
                 UpdateStatusFilterButtons();
@@ -1172,7 +1172,10 @@ namespace ConHIS_Service_XPHL7
                 {
                     _filteredDataView.RowFilter = $"[Status] = '{_currentStatusFilter}'";
                 }
-
+                if (string.IsNullOrEmpty(_filteredDataView.Sort))
+                {
+                    _filteredDataView.Sort = "[Time Check] DESC";
+                }
                 // ⭐ เรียก ApplyRowColors หลังจาก apply filter
                 ApplyRowColors();
 
@@ -1193,7 +1196,10 @@ namespace ConHIS_Service_XPHL7
             {
                 // ⭐ ใช้ Service Type column แทน FinancialClass/OrderControl
                 _filteredDataView.RowFilter = $"[Service Type] = '{orderType}'";
-
+                if (string.IsNullOrEmpty(_filteredDataView.Sort))
+                {
+                    _filteredDataView.Sort = "[Time Check] DESC";
+                }
                 ApplyRowColors();
 
                 int resultCount = _filteredDataView.Count;
@@ -1313,10 +1319,10 @@ namespace ConHIS_Service_XPHL7
 
                 UpdateStatusSummary();
 
-                if (dataGridView.Rows.Count > 0)
+                this.BeginInvoke(new Action(() =>
                 {
-                    dataGridView.FirstDisplayedScrollingRowIndex = dataGridView.Rows.Count - 1;
-                }
+                    ApplyRowColors();
+                }));
 
                 int lastRowIndex = dataGridView.Rows.Count - 1;
                 if (lastRowIndex >= 0)
@@ -1417,9 +1423,10 @@ namespace ConHIS_Service_XPHL7
 
             try
             {
+                // ⭐ หยุด redraw ชั่วคราวเพื่อ performance
+                dataGridView.SuspendLayout();
 
-
-                // ⭐ หา Status column index
+                // หา Status column index
                 int statusColumnIndex = -1;
                 for (int i = 0; i < dataGridView.Columns.Count; i++)
                 {
@@ -1436,48 +1443,33 @@ namespace ConHIS_Service_XPHL7
                     return;
                 }
 
-
-
-                // ⭐ Apply colors based on Status column by index
-                int successCount = 0;
-                int failedCount = 0;
-
+                // Apply colors
                 foreach (DataGridViewRow row in dataGridView.Rows)
                 {
                     try
                     {
-                        if (statusColumnIndex < row.Cells.Count && row.Cells[statusColumnIndex].Value != null)
+                        if (!row.IsNewRow && statusColumnIndex < row.Cells.Count)
                         {
-                            string status = row.Cells[statusColumnIndex].Value.ToString().Trim();
-
-
-
-                            // ⭐ ลบการตั้งค่าเดิม
-                            row.DefaultCellStyle.BackColor = System.Drawing.Color.White;
-
-                            if (status == "Success")
+                            var cell = row.Cells[statusColumnIndex];
+                            if (cell.Value != null)
                             {
-                                row.DefaultCellStyle.BackColor = System.Drawing.Color.LightGreen;
-                                row.DefaultCellStyle.SelectionBackColor = System.Drawing.Color.Green;
-                                successCount++;
+                                string status = cell.Value.ToString().Trim();
 
-                            }
-                            else if (status == "Failed")
-                            {
-                                row.DefaultCellStyle.BackColor = System.Drawing.Color.LightCoral;
-                                row.DefaultCellStyle.SelectionBackColor = System.Drawing.Color.Red;
-                                failedCount++;
-
-                            }
-                            else
-                            {
+                                // Reset default style
                                 row.DefaultCellStyle.BackColor = System.Drawing.Color.White;
+                                row.DefaultCellStyle.SelectionBackColor = System.Drawing.SystemColors.Highlight;
 
+                                if (status == "Success")
+                                {
+                                    row.DefaultCellStyle.BackColor = System.Drawing.Color.LightGreen;
+                                    row.DefaultCellStyle.SelectionBackColor = System.Drawing.Color.Green;
+                                }
+                                else if (status == "Failed")
+                                {
+                                    row.DefaultCellStyle.BackColor = System.Drawing.Color.LightCoral;
+                                    row.DefaultCellStyle.SelectionBackColor = System.Drawing.Color.Red;
+                                }
                             }
-                        }
-                        else
-                        {
-
                         }
                     }
                     catch (Exception ex)
@@ -1489,7 +1481,7 @@ namespace ConHIS_Service_XPHL7
 
 
                 // ⭐ Force refresh
-                dataGridView.Invalidate();
+                dataGridView.ResumeLayout();
                 dataGridView.Refresh();
             }
             catch (Exception ex)
