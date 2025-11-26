@@ -657,7 +657,7 @@ namespace ConHIS_Service_XPHL7.Services
                                     : !string.IsNullOrWhiteSpace(result?.CommonOrder?.OrderingProvider?.Name)
                                         ? result.CommonOrder.OrderingProvider.Name
                                         : null as string,
-                        f_orderacceptdate = FormatDate(result?.CommonOrder?.TransactionDateTime, "yyyy-MM-dd HH:mm:ss"),
+                        f_orderacceptdate = FormatDate(result?.MessageHeader?.MessageDateTime, "yyyy-MM-dd HH:mm:ss"),
                         f_orderacceptfromip = null as string,
                         f_pharmacylocationcode = !string.IsNullOrEmpty(d?.Departmentcode)
     ? d.Departmentcode.Split('^')[0]
