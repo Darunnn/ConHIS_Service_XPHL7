@@ -125,7 +125,7 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="Configuration\AppConfig.cs" />
-    <Compile Include="Models\HL7IPDModel.cs" />
+    <Compile Include="Models\HL7ModelsIPD.cs" />
     <Compile Include="PagesFrom\Form1.cs">
       <SubType>Form</SubType>
     </Compile>

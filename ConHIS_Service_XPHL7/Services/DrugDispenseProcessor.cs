@@ -948,7 +948,9 @@ namespace ConHIS_Service_XPHL7.Services
                 _logger.LogInfo($"Processing new order for {type} prescription: {prescId}");
 
                 var apiUrl = ConHIS_Service_XPHL7.Configuration.AppConfig.ApiEndpoint;
-                var bodyObj = CreatePrescriptionBody(hl7Message, data, type);
+                var bodyObj = type == DispenseType.IPD
+                    ? CreatePrescriptionBodyIPD(hl7Message, data, type)
+                    : CreatePrescriptionBody(hl7Message, data, type);
                 var bodyJson = JsonConvert.SerializeObject(bodyObj, Formatting.Indented);
 
                 _logger.LogInfo($"API URL: {apiUrl}");
@@ -999,7 +1001,9 @@ namespace ConHIS_Service_XPHL7.Services
                 _logger.LogInfo($"Processing replace order for {type} prescription: {prescId}");
 
                 var apiUrl = ConHIS_Service_XPHL7.Configuration.AppConfig.ApiEndpoint;
-                var bodyObj = CreatePrescriptionBody(hl7Message, data, type);
+                var bodyObj = type == DispenseType.IPD
+                    ? CreatePrescriptionBodyIPD(hl7Message, data, type)
+                    : CreatePrescriptionBody(hl7Message, data, type);
                 var bodyJson = JsonConvert.SerializeObject(bodyObj, Formatting.Indented);
 
                 _logger.LogInfo($"API URL: {apiUrl}");

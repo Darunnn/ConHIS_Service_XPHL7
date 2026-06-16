@@ -11,11 +11,13 @@ namespace ConHIS_Service_XPHL7.Services
     public class DatabaseService
     {
         private readonly string _connectionString;
+        private readonly string _ipdConnectionString;    
         private readonly LogManager _logger = new LogManager();
 
-        public DatabaseService(string connectionString)
+        public DatabaseService(string connectionString, string ipdConnectionString = null)
         {
             _connectionString = connectionString;
+            _ipdConnectionString = ipdConnectionString ?? connectionString; // fallback ถ้าไม่ได้ส่งมา
         }
 
         public bool TestConnection()
@@ -34,7 +36,22 @@ namespace ConHIS_Service_XPHL7.Services
                 return false;
             }
         }
-
+        public bool TestIPDConnection()
+        {
+            try
+            {
+                using (var conn = new MySqlConnection(_ipdConnectionString))
+                {
+                    conn.Open();
+                    return true;
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning($"Connection test failed (IPD): {ex.Message}");
+                return false;
+            }
+        }
         #region IPD Methods
 
         public List<DrugDispenseipd> GetPendingDispenseData()
@@ -43,7 +60,7 @@ namespace ConHIS_Service_XPHL7.Services
             _logger.LogInfo("GetPendingDispenseData (IPD): Start");
             try
             {
-                using (var conn = new MySqlConnection(_connectionString))
+                using (var conn = new MySqlConnection(_ipdConnectionString))
                 {
                     conn.Open();
                     _logger.LogInfo("Database connection opened for GetPendingDispenseData (IPD)");
@@ -110,7 +127,7 @@ namespace ConHIS_Service_XPHL7.Services
             _logger.LogInfo($"UpdateReceiveStatus (IPD): Start for ID {drugDispenseipdId}, status {status}");
             try
             {
-                using (var conn = new MySqlConnection(_connectionString))
+                using (var conn = new MySqlConnection(_ipdConnectionString))
                 {
                     conn.Open();
                     _logger.LogInfo("Database connection opened for UpdateReceiveStatus (IPD)");
@@ -141,7 +158,7 @@ namespace ConHIS_Service_XPHL7.Services
             _logger.LogInfo($"UpdateReceiveIPDStatusToPreview: Setting ID {drugDispenseipdId} to 'P' (Preview)");
             try
             {
-                using (var conn = new MySqlConnection(_connectionString))
+                using (var conn = new MySqlConnection(_ipdConnectionString))
                 {
                     conn.Open();
 
