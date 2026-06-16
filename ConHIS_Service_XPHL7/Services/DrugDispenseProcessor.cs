@@ -9,32 +9,30 @@ using System.Threading;
 
 namespace ConHIS_Service_XPHL7.Services
 {
-    // เพิ่ม enum สำหรับระบุประเภท
     public enum DispenseType
     {
         IPD,
         OPD
     }
 
-    // เพิ่ม class สำหรับส่งข้อมูลกลับไปแสดงบน Grid
     public class ProcessResult
     {
         public bool Success { get; set; }
         public string Message { get; set; }
         public string ApiResponse { get; set; }
         public HL7Message ParsedMessage { get; set; }
-        public object DispenseData { get; set; } // เปลี่ยนเป็น object เพื่อรองรับทั้ง IPD และ OPD
+        public object DispenseData { get; set; }
         public DispenseType Type { get; set; }
         public DateTime? RecordDateTime { get; set; }
-        public DateTime? DrugDispenseDatetime { get; set; }  // จาก drug_dispense_datetime
-        
+        public DateTime? DrugDispenseDatetime { get; set; }
     }
 
     public class DrugDispenseProcessor
     {
         private readonly DatabaseService _databaseService;
         private readonly HL7Service _hl7Service;
-        private readonly HL7ServiceIPD hL7ServiceIPD;
+        // ⭐ เพิ่ม: HL7ServiceIPD สำหรับ parse IPD ด้วย model แยก
+        private readonly HL7ServiceIPD _hl7ServiceIPD;
         private readonly ApiService _apiService;
         private readonly LogManager _logger = new LogManager();
         private readonly EncodingService _encodingService;
@@ -45,10 +43,12 @@ namespace ConHIS_Service_XPHL7.Services
         {
             _databaseService = databaseService;
             _hl7Service = hl7Service;
+            // ⭐ สร้าง HL7ServiceIPD ที่นี่ (ไม่ต้องรับจาก constructor เพราะไม่มี dependency)
+            _hl7ServiceIPD = new HL7ServiceIPD();
             _apiService = apiService;
             _encodingService = EncodingService.FromConnectionConfig(
-            msg => _logger.LogInfo(msg)
-        );
+                msg => _logger.LogInfo(msg)
+            );
         }
 
         public class ApiResponse
@@ -58,7 +58,488 @@ namespace ConHIS_Service_XPHL7.Services
             public string Message { get; set; }
         }
 
-        #region IPD Processing
+        #region IPD Preview Processing
+
+        /// <summary>
+        /// ประมวลผล IPD Pending Orders แบบ Preview:
+        ///   - Decode HL7
+        ///   - Log Raw (hl7_raw_ipd)
+        ///   - Parse ด้วย HL7ServiceIPD (model แยก)
+        ///   - Log Parsed (hl7_parsed_ipd)
+        ///   - อัปเดต DB → 'P'
+        ///   - ไม่ส่ง API
+        /// </summary>
+        public void ProcessPendingIPDOrdersPreview(
+            Action<string> logAction,
+            Action<ProcessResult> onProcessed = null,
+            CancellationToken cancellationToken = default)
+        {
+            _logger.LogInfo("Start ProcessPendingIPDOrdersPreview");
+
+            lock (_pendingUpdateLock)
+            {
+                _pendingUpdatedIds.Clear();
+            }
+
+            try
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+
+                var pendingData = _databaseService.GetPendingDispenseData();
+                _logger.LogInfo($"[IPD Preview] Found {pendingData.Count} pending IPD orders");
+                logAction($"[IPD Preview] Found {pendingData.Count} pending IPD orders");
+
+                foreach (var data in pendingData)
+                {
+                    cancellationToken.ThrowIfCancellationRequested();
+
+                    try
+                    {
+                        _logger.LogInfo($"[IPD Preview] Processing order {data.PrescId}");
+                        ProcessSingleIPDOrderPreview(data, logAction, onProcessed, cancellationToken);
+                    }
+                    catch (OperationCanceledException)
+                    {
+                        _logger.LogInfo($"[IPD Preview] Cancelled for order {data.PrescId}");
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogError($"[IPD Preview] Error processing order {data.PrescId}", ex);
+                        logAction($"[IPD Preview] Error: {ex.Message}");
+
+                        onProcessed?.Invoke(new ProcessResult
+                        {
+                            Success = false,
+                            Message = ex.Message,
+                            DispenseData = data,
+                            ParsedMessage = null,
+                            Type = DispenseType.IPD,
+                            DrugDispenseDatetime = data.DrugDispenseDatetime
+                        });
+                    }
+                }
+            }
+            catch (OperationCanceledException)
+            {
+                _logger.LogInfo("[IPD Preview] Cancelled by user");
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError("[IPD Preview] Critical error in ProcessPendingIPDOrdersPreview", ex);
+                logAction($"[IPD Preview] Critical error: {ex.Message}");
+            }
+        }
+
+        private void ProcessSingleIPDOrderPreview(
+            DrugDispenseipd data,
+            Action<string> logAction,
+            Action<ProcessResult> onProcessed,
+            CancellationToken cancellationToken)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+
+            // ── 1. Decode HL7 ──────────────────────────────────────────────
+            string hl7String = _encodingService.DecodeHl7Data(data.Hl7Data);
+
+            if (string.IsNullOrWhiteSpace(hl7String))
+            {
+                var emptyMsg = $"[IPD Preview] Empty HL7 data for PrescId={data.PrescId}";
+                _logger.LogWarning(emptyMsg);
+                logAction(emptyMsg);
+                _databaseService.UpdateReceiveStatus(data.DrugDispenseipdId, 'F');
+                onProcessed?.Invoke(new ProcessResult
+                {
+                    Success = false,
+                    Message = "Empty HL7 data",
+                    DispenseData = data,
+                    ParsedMessage = null,
+                    Type = DispenseType.IPD,
+                    DrugDispenseDatetime = data.DrugDispenseDatetime
+                });
+                return;
+            }
+
+            // ── 2. Log Raw ─────────────────────────────────────────────────
+            try
+            {
+                var orderNoRaw = ExtractPlacerOrderNoFromRaw(hl7String);
+                _logger.LogRawHL7Data(
+                    data.DrugDispenseipdId.ToString(),
+                    data.RecieveOrderType ?? "IPD",
+                    orderNoRaw,
+                    hl7String,
+                    "hl7_raw_ipd");
+                _logger.LogInfo($"[IPD Preview] Raw logged for ID={data.DrugDispenseipdId}");
+            }
+            catch (Exception rawEx)
+            {
+                _logger.LogWarning($"[IPD Preview] Failed to log raw HL7: {rawEx.Message}");
+            }
+
+            // ── 3. Parse HL7 ด้วย HL7ServiceIPD ───────────────────────────
+            HL7MessageIPD hl7MessageIPD = null;
+            HL7Message hl7MessageForUI = null;
+
+            try
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+
+                hl7MessageIPD = _hl7ServiceIPD.ParseHL7Message(hl7String);
+                var orderNo = hl7MessageIPD?.CommonOrder?.PlacerOrderNumber;
+                _logger.LogInfo($"[IPD Preview] Parsed OK - PrescId={data.PrescId}, OrderNo={orderNo}");
+
+                // บันทึก Parsed log (ด้วย IPD model เต็ม)
+                _logger.LogParsedHL7Data(
+                    data.DrugDispenseipdId.ToString(),
+                    hl7MessageIPD,
+                    "hl7_parsed_ipd");
+
+                logAction($"[IPD Preview] Parsed OK - OrderNo={orderNo}");
+
+                // Map IPD model → shared HL7Message สำหรับ UI
+                hl7MessageForUI = MapIPDToHL7Message(hl7MessageIPD);
+            }
+            catch (OperationCanceledException)
+            {
+                _logger.LogInfo($"[IPD Preview] Cancelled during parse for PrescId={data.PrescId}");
+                return;
+            }
+            catch (Exception parseEx)
+            {
+                var errMsg = $"[IPD Preview] Parse error for PrescId={data.PrescId}: {parseEx.Message}";
+                _logger.LogError(errMsg, parseEx);
+                _logger.LogReadError(data.DrugDispenseipdId.ToString(),
+                    $"Parse Error: {parseEx.Message}\n{parseEx.StackTrace}");
+                logAction(errMsg);
+                _databaseService.UpdateReceiveStatus(data.DrugDispenseipdId, 'F');
+                onProcessed?.Invoke(new ProcessResult
+                {
+                    Success = false,
+                    Message = errMsg,
+                    DispenseData = data,
+                    ParsedMessage = null,
+                    Type = DispenseType.IPD,
+                    DrugDispenseDatetime = data.DrugDispenseDatetime
+                });
+                return;
+            }
+
+            // ── 4. ตรวจสอบ MSH ────────────────────────────────────────────
+            if (hl7MessageIPD?.MessageHeader == null)
+            {
+                var errMsg = $"[IPD Preview] Invalid HL7 - MSH missing for PrescId={data.PrescId}";
+                _logger.LogError(errMsg);
+                logAction(errMsg);
+                _databaseService.UpdateReceiveStatus(data.DrugDispenseipdId, 'F');
+                onProcessed?.Invoke(new ProcessResult
+                {
+                    Success = false,
+                    Message = errMsg,
+                    DispenseData = data,
+                    ParsedMessage = hl7MessageForUI,
+                    Type = DispenseType.IPD,
+                    DrugDispenseDatetime = data.DrugDispenseDatetime
+                });
+                return;
+            }
+
+            // ── 5. อัปเดต DB → 'P' (Preview) ──────────────────────────────
+            try
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                _databaseService.UpdateReceiveIPDStatusToPreview(data.DrugDispenseipdId);
+                _logger.LogInfo($"[IPD Preview] DB updated to 'P' for ID={data.DrugDispenseipdId}");
+
+                lock (_pendingUpdateLock)
+                {
+                    _pendingUpdatedIds.Add(data.DrugDispenseipdId);
+                }
+            }
+            catch (OperationCanceledException)
+            {
+                _logger.LogInfo($"[IPD Preview] Cancelled before DB update for PrescId={data.PrescId}");
+                return;
+            }
+            catch (Exception dbEx)
+            {
+                _logger.LogError($"[IPD Preview] DB update failed for ID={data.DrugDispenseipdId}", dbEx);
+                logAction($"[IPD Preview] Warning: DB update failed - {dbEx.Message}");
+            }
+
+            // ── 6. ส่งผลกลับ UI ───────────────────────────────────────────
+            onProcessed?.Invoke(new ProcessResult
+            {
+                Success = true,
+                Message = "Preview - Parsed & Logged (API not called)",
+                ApiResponse = "Preview Only",
+                DispenseData = data,
+                ParsedMessage = hl7MessageForUI,
+                Type = DispenseType.IPD,
+                DrugDispenseDatetime = data.DrugDispenseDatetime
+            });
+
+            _logger.LogInfo($"[IPD Preview] Done for PrescId={data.PrescId}");
+        }
+
+        /// <summary>
+        /// Map HL7MessageIPD → HL7Message (shared/OPD model) เพื่อให้ Form1 แสดงได้
+        /// </summary>
+        private HL7Message MapIPDToHL7Message(HL7MessageIPD src)
+        {
+            if (src == null) return null;
+            var dest = new HL7Message();
+
+            // MSH
+            if (src.MessageHeader != null)
+            {
+                dest.MessageHeader = new MSH
+                {
+                    EncodingCharacters = src.MessageHeader.EncodingCharacters,
+                    SendingApplication = src.MessageHeader.SendingApplication,
+                    ReceivingApplication = src.MessageHeader.ReceivingApplication,
+                    SendingFacility = src.MessageHeader.SendingFacility,
+                    ReceivingFacility = src.MessageHeader.ReceivingFacility,
+                    MessageDateTime = src.MessageHeader.MessageDateTime,
+                    Security = src.MessageHeader.Security,
+                    MessageType = src.MessageHeader.MessageType,
+                    MessageControlID = src.MessageHeader.MessageControlID,
+                    ProcessingID = src.MessageHeader.ProcessingID,
+                    VersionID = src.MessageHeader.VersionID
+                };
+            }
+
+            // PID
+            if (src.PatientIdentification != null)
+            {
+                var pid = src.PatientIdentification;
+                dest.PatientIdentification = new PID
+                {
+                    SetID = pid.SetID,
+                    PatientIDExternal = pid.PatientIDExternal,
+                    PatientIDInternal = pid.PatientIDInternal,
+                    AlternatePatientID = pid.AlternatePatientID,
+                    OfficialName = pid.OfficialName != null ? new PatientName
+                    {
+                        LastName = pid.OfficialName.LastName,
+                        FirstName = pid.OfficialName.FirstName,
+                        MiddleName = pid.OfficialName.MiddleName,
+                        Suffix = pid.OfficialName.Suffix,
+                        Prefix = pid.OfficialName.Prefix,
+                        Degree = pid.OfficialName.Degree,
+                        NameTypeCode = pid.OfficialName.NameTypeCode,
+                        NameRepresentationCode = pid.OfficialName.NameRepresentationCode
+                    } : new PatientName(),
+                    DateOfBirth = pid.DateOfBirth,
+                    Sex = pid.Sex,
+                    PhoneNumberHome = pid.PhoneNumberHome,
+                    Marital = pid.Marital,
+                    Religion = pid.Religion
+                };
+            }
+
+            // PV1
+            if (src.PatientVisit != null)
+            {
+                var pv1 = src.PatientVisit;
+                dest.PatientVisit = new PV1
+                {
+                    PatientClass = pv1.PatientClass,
+                    AssignedPatientLocation = pv1.AssignedPatientLocation != null ? new AssignedLocation
+                    {
+                        PointOfCare = pv1.AssignedPatientLocation.PointOfCare,
+                        Room = pv1.AssignedPatientLocation.Room,
+                        Bed = pv1.AssignedPatientLocation.Bed
+                    } : new AssignedLocation(),
+                    VisitNumber = pv1.VisitNumber,
+                    FinancialClass = pv1.FinancialClass != null ? new FinancialClass
+                    {
+                        ID = pv1.FinancialClass.ID,
+                        Name = pv1.FinancialClass.Name
+                    } : new FinancialClass(),
+                    AdmitDateTime = pv1.AdmitDateTime,
+                    AdmittingDoctor = pv1.AdmittingDoctor != null ? new AdmittingDoctor
+                    {
+                        ID = pv1.AdmittingDoctor.ID,
+                        LastName = pv1.AdmittingDoctor.LastName,
+                        FirstName = pv1.AdmittingDoctor.FirstName,
+                        Prefix = pv1.AdmittingDoctor.Prefix
+                    } : new AdmittingDoctor(),
+                    PatientType = pv1.PatientType != null ? new PatientType
+                    {
+                        ID = pv1.PatientType.ID,
+                        Name = pv1.PatientType.Name
+                    } : new PatientType()
+                };
+            }
+
+            // ORC
+            if (src.CommonOrder != null)
+            {
+                var orc = src.CommonOrder;
+                dest.CommonOrder = new ORC
+                {
+                    OrderControl = orc.OrderControl,
+                    PlacerOrderNumber = orc.PlacerOrderNumber,
+                    FillerOrderNumber = orc.FillerOrderNumber,
+                    OrderStatus = orc.OrderStatus,
+                    TransactionDateTime = orc.TransactionDateTime,
+                    EnteredBy = orc.EnteredBy,
+                    EnteringDevice = orc.EnteringDevice,
+                    EnterersLocation = orc.EnterersLocation,
+                    PlacerGroup = orc.PlacerGroup != null ? new PlacerGroup
+                    {
+                        ID = orc.PlacerGroup.ID,
+                        Name = orc.PlacerGroup.Name
+                    } : new PlacerGroup(),
+                    VerifiedBy = orc.VerifiedBy != null ? new VerifiedBy
+                    {
+                        ID = orc.VerifiedBy.ID,
+                        LastName = orc.VerifiedBy.LastName,
+                        FirstName = orc.VerifiedBy.FirstName
+                    } : new VerifiedBy(),
+                    OrderingProvider = orc.OrderingProvider != null ? new OrderingProvider
+                    {
+                        ID = orc.OrderingProvider.ID,
+                        Name = orc.OrderingProvider.Name
+                    } : new OrderingProvider()
+                };
+            }
+
+            // RXD — IPD: DrugNamePrint → DrugNameThai (ใช้เป็น f_orderitemnameTH)
+            if (src.PharmacyDispense != null)
+            {
+                foreach (var rxdIPD in src.PharmacyDispense)
+                {
+                    dest.PharmacyDispense.Add(new RXD
+                    {
+                        IsRXE = rxdIPD.IsRXE,
+                        QTY = rxdIPD.QTY,
+                        Dispensegivecode = rxdIPD.Dispensegivecode != null ? new Dispensegivecode
+                        {
+                            Dispense = rxdIPD.Dispensegivecode.Dispense,
+                            UniqID = rxdIPD.Dispensegivecode.UniqID,
+                            RXD203 = rxdIPD.Dispensegivecode.RXD203,
+                            Identifier = rxdIPD.Dispensegivecode.Identifier,
+                            DrugName = rxdIPD.Dispensegivecode.DrugName,
+                            // IPD: DrugNamePrint เป็น Thai name (ต่างจาก OPD ที่ใช้ DrugNameThai)
+                            DrugNameThai = rxdIPD.Dispensegivecode.DrugNamePrint,
+                            DrugNamePrint = rxdIPD.Dispensegivecode.DrugNamePrint,
+                            DrugUnit = rxdIPD.Dispensegivecode.DrugUnit
+                        } : new Dispensegivecode(),
+                        DateTimeDispensed = rxdIPD.DateTimeDispensed,
+                        RXD4 = rxdIPD.RXD4,
+                        Dose = rxdIPD.Dose,
+                        Dosageform = rxdIPD.Dosageform,
+                        Strengthunit = rxdIPD.Strengthunit,
+                        Departmentcode = rxdIPD.Departmentcode,
+                        Departmentname = rxdIPD.Departmentname,
+                        prioritycode = rxdIPD.prioritycode,
+                        Actualdispense = rxdIPD.Actualdispense,
+                        Modifystaff = rxdIPD.Modifystaff != null ? new Modifystaff
+                        {
+                            StaffCode = rxdIPD.Modifystaff.StaffCode,
+                            StaffName = rxdIPD.Modifystaff.StaffName
+                        } : new Modifystaff(),
+                        Doctor = rxdIPD.Doctor != null ? new Doctor
+                        {
+                            ID = rxdIPD.Doctor.ID,
+                            Name = rxdIPD.Doctor.Name
+                        } : new Doctor(),
+                        Usageunit = rxdIPD.Usageunit != null ? new Usageunit
+                        {
+                            ID = rxdIPD.Usageunit.ID,
+                            Name = rxdIPD.Usageunit.Name
+                        } : new Usageunit(),
+                        Substand = rxdIPD.Substand != null ? new Substand
+                        {
+                            RXD701 = rxdIPD.Substand.RXD701,
+                            Medicinalproperties = rxdIPD.Substand.Medicinalproperties,
+                            Labelhelp = rxdIPD.Substand.Labelhelp,
+                            RXD704 = rxdIPD.Substand.RXD704,
+                            Usageline1 = rxdIPD.Substand.Usageline1,
+                            Usageline2 = rxdIPD.Substand.Usageline2,
+                            Usageline3 = rxdIPD.Substand.Usageline3,
+                            Noteprocessing = rxdIPD.Substand.Noteprocessing
+                        } : new Substand(),
+                        Usagecode = rxdIPD.Usagecode != null ? new Usagecode
+                        {
+                            Instructioncode = rxdIPD.Usagecode.Instructioncode,
+                            RXD3002 = rxdIPD.Usagecode.RXD3002,
+                            RXD3003 = rxdIPD.Usagecode.RXD3003,
+                            Frequencycode = rxdIPD.Usagecode.Frequencycode,
+                            Frequencydesc = rxdIPD.Usagecode.Frequencydesc,
+                            RXD3006 = rxdIPD.Usagecode.RXD3006,
+                            RXD3007 = rxdIPD.Usagecode.RXD3007
+                        } : new Usagecode(),
+                        Orderunitcode = rxdIPD.Orderunitcode != null ? new Orderunitcode
+                        {
+                            Nameeng = rxdIPD.Orderunitcode.Nameeng,
+                            Namethai = rxdIPD.Orderunitcode.Namethai
+                        } : new Orderunitcode(),
+                        RXD31 = rxdIPD.RXD31,
+                        RXD32 = rxdIPD.RXD32,
+                        RXD33 = rxdIPD.RXD33
+                    });
+                }
+            }
+
+            // RXR
+            if (src.RouteInfo != null)
+            {
+                foreach (var rxrIPD in src.RouteInfo)
+                {
+                    dest.RouteInfo.Add(new RXR
+                    {
+                        Route = rxrIPD.Route,
+                        site = rxrIPD.site,
+                        AdministrationDevice = rxrIPD.AdministrationDevice,
+                        AdministrationMethod = rxrIPD.AdministrationMethod,
+                        RoutingInstruction = rxrIPD.RoutingInstruction
+                    });
+                }
+            }
+
+            // NTE
+            if (src.Notes != null)
+            {
+                foreach (var nteIPD in src.Notes)
+                {
+                    dest.Notes.Add(new NTE
+                    {
+                        SetID = nteIPD.SetID,
+                        CommentType = nteIPD.CommentType,
+                        CommentNote = nteIPD.CommentNote
+                    });
+                }
+            }
+
+            return dest;
+        }
+
+        /// <summary>
+        /// ดึง PlacerOrderNumber คร่าวๆ จาก raw HL7 string (ก่อน parse เต็ม)
+        /// </summary>
+        private string ExtractPlacerOrderNoFromRaw(string hl7String)
+        {
+            try
+            {
+                var lines = hl7String.Split(new[] { "\r\n", "\n" }, StringSplitOptions.RemoveEmptyEntries);
+                foreach (var line in lines)
+                {
+                    if (line.StartsWith("ORC|", StringComparison.OrdinalIgnoreCase))
+                    {
+                        var fields = line.Split('|');
+                        return fields.Length > 2 ? fields[2] : "unknown";
+                    }
+                }
+            }
+            catch { /* silent */ }
+            return "unknown";
+        }
+
+        #endregion
+
+        #region IPD Processing (original — ส่ง API)
 
         public void ProcessPendingOrders(
             Action<string> logAction,
@@ -129,13 +610,8 @@ namespace ConHIS_Service_XPHL7.Services
         {
             cancellationToken.ThrowIfCancellationRequested();
 
-            // Convert byte array to string
-
             string hl7String = _encodingService.DecodeHl7Data(data.Hl7Data);
 
-
-
-            // Parse HL7
             HL7Message hl7Message = null;
             try
             {
@@ -176,7 +652,6 @@ namespace ConHIS_Service_XPHL7.Services
 
             cancellationToken.ThrowIfCancellationRequested();
 
-            // Check message format
             if (hl7Message == null || hl7Message.MessageHeader == null)
             {
                 var errorFields = new List<string>();
@@ -196,14 +671,12 @@ namespace ConHIS_Service_XPHL7.Services
                     ParsedMessage = hl7Message,
                     Type = DispenseType.IPD,
                     DrugDispenseDatetime = data.DrugDispenseDatetime
-
                 });
                 return;
             }
 
             cancellationToken.ThrowIfCancellationRequested();
 
-            // Determine order type
             var orderControl = !string.IsNullOrEmpty(data.RecieveOrderType) ? data.RecieveOrderType : hl7Message.CommonOrder?.OrderControl;
             _logger.LogInfo($"OrderControl: {orderControl} for IPD prescription ID: {data.PrescId}");
 
@@ -218,23 +691,15 @@ namespace ConHIS_Service_XPHL7.Services
                 {
                     apiResponse = ProcessNewOrder(data, hl7Message, DispenseType.IPD);
                     success = true;
-
                     _databaseService.UpdateReceiveStatus(data.DrugDispenseipdId, 'Y');
-                    lock (_pendingUpdateLock)
-                    {
-                        _pendingUpdatedIds.Add(data.DrugDispenseipdId);
-                    }
+                    lock (_pendingUpdateLock) { _pendingUpdatedIds.Add(data.DrugDispenseipdId); }
                 }
                 else if (orderControl == "RP")
                 {
                     apiResponse = ProcessReplaceOrder(data, hl7Message, DispenseType.IPD);
                     success = true;
-
                     _databaseService.UpdateReceiveStatus(data.DrugDispenseipdId, 'Y');
-                    lock (_pendingUpdateLock)
-                    {
-                        _pendingUpdatedIds.Add(data.DrugDispenseipdId);
-                    }
+                    lock (_pendingUpdateLock) { _pendingUpdatedIds.Add(data.DrugDispenseipdId); }
                 }
 
                 onProcessed?.Invoke(new ProcessResult
@@ -343,10 +808,8 @@ namespace ConHIS_Service_XPHL7.Services
         {
             cancellationToken.ThrowIfCancellationRequested();
 
-
             string hl7String = _encodingService.DecodeHl7Data(data.Hl7Data);
 
-            // Parse HL7
             HL7Message hl7Message = null;
             try
             {
@@ -387,7 +850,6 @@ namespace ConHIS_Service_XPHL7.Services
 
             cancellationToken.ThrowIfCancellationRequested();
 
-            // Check message format
             if (hl7Message == null || hl7Message.MessageHeader == null)
             {
                 var errorFields = new List<string>();
@@ -413,7 +875,6 @@ namespace ConHIS_Service_XPHL7.Services
 
             cancellationToken.ThrowIfCancellationRequested();
 
-            // Determine order type
             var orderControl = !string.IsNullOrEmpty(data.RecieveOrderType) ? data.RecieveOrderType : hl7Message.CommonOrder?.OrderControl;
             _logger.LogInfo($"OrderControl: {orderControl} for OPD prescription ID: {data.PrescId}");
 
@@ -428,23 +889,15 @@ namespace ConHIS_Service_XPHL7.Services
                 {
                     apiResponse = ProcessNewOrder(data, hl7Message, DispenseType.OPD);
                     success = true;
-
                     _databaseService.UpdateReceiveOpdStatus(data.DrugDispenseopdId, 'Y');
-                    lock (_pendingUpdateLock)
-                    {
-                        _pendingUpdatedIds.Add(data.DrugDispenseopdId);
-                    }
+                    lock (_pendingUpdateLock) { _pendingUpdatedIds.Add(data.DrugDispenseopdId); }
                 }
                 else if (orderControl == "RP")
                 {
                     apiResponse = ProcessReplaceOrder(data, hl7Message, DispenseType.OPD);
                     success = true;
-
                     _databaseService.UpdateReceiveOpdStatus(data.DrugDispenseopdId, 'Y');
-                    lock (_pendingUpdateLock)
-                    {
-                        _pendingUpdatedIds.Add(data.DrugDispenseopdId);
-                    }
+                    lock (_pendingUpdateLock) { _pendingUpdatedIds.Add(data.DrugDispenseopdId); }
                 }
 
                 onProcessed?.Invoke(new ProcessResult
@@ -495,12 +948,10 @@ namespace ConHIS_Service_XPHL7.Services
                 _logger.LogInfo($"Processing new order for {type} prescription: {prescId}");
 
                 var apiUrl = ConHIS_Service_XPHL7.Configuration.AppConfig.ApiEndpoint;
-                var apiMethod = "POST";
                 var bodyObj = CreatePrescriptionBody(hl7Message, data, type);
                 var bodyJson = JsonConvert.SerializeObject(bodyObj, Formatting.Indented);
 
                 _logger.LogInfo($"API URL: {apiUrl}");
-                _logger.LogInfo($"API Method: {apiMethod}");
                 _logger.LogInfo($"API Body: {bodyJson}");
 
                 var response = _apiService.SendToMiddlewareWithResponse(bodyObj);
@@ -512,11 +963,9 @@ namespace ConHIS_Service_XPHL7.Services
                     if (responseArray != null && responseArray.Length > 0)
                     {
                         var firstResponse = responseArray[0];
-                        _logger.LogInfo($"UniqID: {firstResponse.UniqID}, Status: {firstResponse.Status}, Message: {firstResponse.Message}");
-
                         if (firstResponse.Status)
                         {
-                            _logger.LogInfo($"Successfully processed {type} order: {prescId}, UniqID: {firstResponse.UniqID}");
+                            _logger.LogInfo($"Successfully processed {type} order: {prescId}");
                             return $"Success: {firstResponse.Message}";
                         }
                         else
@@ -550,12 +999,10 @@ namespace ConHIS_Service_XPHL7.Services
                 _logger.LogInfo($"Processing replace order for {type} prescription: {prescId}");
 
                 var apiUrl = ConHIS_Service_XPHL7.Configuration.AppConfig.ApiEndpoint;
-                var apiMethod = "POST";
                 var bodyObj = CreatePrescriptionBody(hl7Message, data, type);
                 var bodyJson = JsonConvert.SerializeObject(bodyObj, Formatting.Indented);
 
                 _logger.LogInfo($"API URL: {apiUrl}");
-                _logger.LogInfo($"API Method: {apiMethod}");
                 _logger.LogInfo($"API Body: {bodyJson}");
 
                 var response = _apiService.SendToMiddlewareWithResponse(bodyObj);
@@ -567,11 +1014,9 @@ namespace ConHIS_Service_XPHL7.Services
                     if (responseArray != null && responseArray.Length > 0)
                     {
                         var firstResponse = responseArray[0];
-                        _logger.LogInfo($"UniqID: {firstResponse.UniqID}, Status: {firstResponse.Status}, Message: {firstResponse.Message}");
-
                         if (firstResponse.Status)
                         {
-                            _logger.LogInfo($"Successfully processed {type} order: {prescId}, UniqID: {firstResponse.UniqID}");
+                            _logger.LogInfo($"Successfully processed {type} order: {prescId}");
                             return $"Success: {firstResponse.Message}";
                         }
                         else
@@ -636,13 +1081,15 @@ namespace ConHIS_Service_XPHL7.Services
                     {
                         return string.Join(" ", parts.Where(x => !string.IsNullOrWhiteSpace(x)));
                     }
+
                     var instructiondesc = new[] {
-                     d?.Substand?.Usageline1,
-                 d?.Substand?.Usageline2,
-                     d?.Substand?.Usageline3
+                        d?.Substand?.Usageline1,
+                        d?.Substand?.Usageline2,
+                        d?.Substand?.Usageline3
                     }.Where(x => !string.IsNullOrWhiteSpace(x));
+
                     var poc = result?.PatientVisit?.AssignedPatientLocation?.PointOfCare?.Trim();
-                   
+
                     return new
                     {
                         UniqID = $"{d?.Dispensegivecode?.UniqID ?? ""}-{DateTime.Now.ToString("yyyyMMdd")}",
@@ -663,22 +1110,17 @@ namespace ConHIS_Service_XPHL7.Services
                         f_orderacceptdate = FormatDate(result?.MessageHeader?.MessageDateTime, "yyyy-MM-dd HH:mm:ss"),
                         f_orderacceptfromip = null as string,
                         f_pharmacylocationcode = !string.IsNullOrEmpty(d?.Departmentcode)
-    ? d.Departmentcode.Split('^')[0]
-    : !string.IsNullOrEmpty(result?.CommonOrder?.EnterersLocation)
-        ? result.CommonOrder.EnterersLocation.Split('^')[0]
-        : null as string,
-
+                            ? d.Departmentcode.Split('^')[0]
+                            : !string.IsNullOrEmpty(result?.CommonOrder?.EnterersLocation)
+                                ? result.CommonOrder.EnterersLocation.Split('^')[0]
+                                : null as string,
                         f_pharmacylocationdesc = !string.IsNullOrEmpty(d?.Departmentname)
-    ? SafeSubstring(d.Departmentname, 100)
-    : !string.IsNullOrEmpty(result?.CommonOrder?.EnterersLocation) && result.CommonOrder.EnterersLocation.Contains('^')
-        ? result.CommonOrder.EnterersLocation.Split('^')[1]
-        : null as string,
-                        f_prioritycode = !string.IsNullOrEmpty(d?.prioritycode)
-                                    ? SafeSubstring(d.prioritycode, 10)
-                                    : null as string,
-                        f_prioritydesc = !string.IsNullOrEmpty(d?.prioritycode)
-                                    ? SafeSubstring(d.prioritycode, 50)
-                                    : null as string,
+                            ? SafeSubstring(d.Departmentname, 100)
+                            : !string.IsNullOrEmpty(result?.CommonOrder?.EnterersLocation) && result.CommonOrder.EnterersLocation.Contains('^')
+                                ? result.CommonOrder.EnterersLocation.Split('^')[1]
+                                : null as string,
+                        f_prioritycode = !string.IsNullOrEmpty(d?.prioritycode) ? SafeSubstring(d.prioritycode, 10) : null as string,
+                        f_prioritydesc = !string.IsNullOrEmpty(d?.prioritycode) ? SafeSubstring(d.prioritycode, 50) : null as string,
                         f_hn = result?.PatientIdentification?.PatientIDExternal ?? null as string,
                         f_an = result?.PatientVisit?.VisitNumber ?? null as string,
                         f_vn = result?.PatientVisit?.VisitNumber ?? null as string,
@@ -687,8 +1129,7 @@ namespace ConHIS_Service_XPHL7.Services
                                     ? SafeJoin(
                                         result.PatientIdentification.OfficialName.FirstName,
                                         result.PatientIdentification.OfficialName.MiddleName,
-                                        result.PatientIdentification.OfficialName.LastName
-                                      )
+                                        result.PatientIdentification.OfficialName.LastName)
                                     : result?.CommonOrder?.EnteredBy ?? null as string,
                         f_sex = result?.PatientIdentification?.Sex ?? null as string,
                         f_patientdob = FormatDate(result?.PatientIdentification?.DateOfBirth, "yyyy-MM-dd"),
@@ -719,24 +1160,15 @@ namespace ConHIS_Service_XPHL7.Services
                         f_narcoticFlg = "0",
                         f_psychotropic = "0",
                         f_binlocation = null as string,
-                        f_itemidentify = string.IsNullOrWhiteSpace(d?.Substand?.RXD701) &&
-                                                 string.IsNullOrWhiteSpace(d?.Substand?.Medicinalproperties)
-
+                        f_itemidentify = string.IsNullOrWhiteSpace(d?.Substand?.RXD701) && string.IsNullOrWhiteSpace(d?.Substand?.Medicinalproperties)
                                     ? null as string
                                     : SafeJoin(d?.Substand?.RXD701, d?.Substand?.Medicinalproperties),
                         f_itemlotno = null as string,
                         f_itemlotexpire = null as string,
                         f_instructioncode = d?.Substand?.RXD704 ?? null as string,
-
-                        f_instructiondesc = instructiondesc.Any()
-                                            ? string.Join(" ", instructiondesc)
-                                            : null as string,
-                        f_frequencycode = string.IsNullOrWhiteSpace(d?.Usagecode?.Frequencycode)
-                                     ? null as string
-                                    : d.Usagecode.Frequencycode,
-                        f_frequencydesc = string.IsNullOrWhiteSpace(d?.Usagecode?.Frequencydesc)
-                                    ? null as string
-                                    : d.Usagecode.Frequencydesc,
+                        f_instructiondesc = instructiondesc.Any() ? string.Join(" ", instructiondesc) : null as string,
+                        f_frequencycode = string.IsNullOrWhiteSpace(d?.Usagecode?.Frequencycode) ? null as string : d.Usagecode.Frequencycode,
+                        f_frequencydesc = string.IsNullOrWhiteSpace(d?.Usagecode?.Frequencydesc) ? null as string : d.Usagecode.Frequencydesc,
                         f_timecode = null as string,
                         f_timedesc = null as string,
                         f_frequencytime = null as string,
@@ -744,17 +1176,13 @@ namespace ConHIS_Service_XPHL7.Services
                         f_dayofweek = null as string,
                         f_noteprocessing = !string.IsNullOrWhiteSpace(d?.Substand?.Noteprocessing)
                                     ? d.Substand.Noteprocessing
-                                    : !string.IsNullOrWhiteSpace(d?.RXD33)
-                                        ? d.RXD33
-                                        : null as string,
+                                    : !string.IsNullOrWhiteSpace(d?.RXD33) ? d.RXD33 : null as string,
                         f_prn = "0",
                         f_stat = "0",
                         f_comment = null as string,
                         f_tomachineno = r?.AdministrationDevice ??
                                         (!string.IsNullOrEmpty(d?.Actualdispense) &&
-                                         d.Actualdispense.IndexOf("proud", StringComparison.OrdinalIgnoreCase) >= 0
-                                             ? 2
-                                             : 0),
+                                         d.Actualdispense.IndexOf("proud", StringComparison.OrdinalIgnoreCase) >= 0 ? 2 : 0),
                         f_ipd_order_recordno = null as string,
                         f_status = result?.CommonOrder?.OrderControl == "NW" ? "0" :
                                    result?.CommonOrder?.OrderControl == "RP" ? "1" : "0",
@@ -764,9 +1192,6 @@ namespace ConHIS_Service_XPHL7.Services
 
             return new { data = prescriptions };
         }
-
-        #endregion
-        #region Shared Processing Methods IPD
         private object CreatePrescriptionBodyIPD(HL7Message result, object data, DispenseType type)
         {
             string FormatDate(DateTime? dt, string fmt, bool forceBuddhistEra = false)
@@ -809,11 +1234,15 @@ namespace ConHIS_Service_XPHL7.Services
                     {
                         return string.Join(" ", parts.Where(x => !string.IsNullOrWhiteSpace(x)));
                     }
+
                     var instructiondesc = new[] {
-                     d?.Substand?.Usageline1,
-                 d?.Substand?.Usageline2,
-                     d?.Substand?.Usageline3
+                        d?.Substand?.Usageline1,
+                        d?.Substand?.Usageline2,
+                        d?.Substand?.Usageline3
                     }.Where(x => !string.IsNullOrWhiteSpace(x));
+
+                    var poc = result?.PatientVisit?.AssignedPatientLocation?.PointOfCare?.Trim();
+
                     return new
                     {
                         UniqID = $"{d?.Dispensegivecode?.UniqID ?? ""}-{DateTime.Now.ToString("yyyyMMdd")}",
@@ -834,22 +1263,17 @@ namespace ConHIS_Service_XPHL7.Services
                         f_orderacceptdate = FormatDate(result?.MessageHeader?.MessageDateTime, "yyyy-MM-dd HH:mm:ss"),
                         f_orderacceptfromip = null as string,
                         f_pharmacylocationcode = !string.IsNullOrEmpty(d?.Departmentcode)
-    ? d.Departmentcode.Split('^')[0]
-    : !string.IsNullOrEmpty(result?.CommonOrder?.EnterersLocation)
-        ? result.CommonOrder.EnterersLocation.Split('^')[0]
-        : null as string,
-
+                            ? d.Departmentcode.Split('^')[0]
+                            : !string.IsNullOrEmpty(result?.CommonOrder?.EnterersLocation)
+                                ? result.CommonOrder.EnterersLocation.Split('^')[0]
+                                : null as string,
                         f_pharmacylocationdesc = !string.IsNullOrEmpty(d?.Departmentname)
-    ? SafeSubstring(d.Departmentname, 100)
-    : !string.IsNullOrEmpty(result?.CommonOrder?.EnterersLocation) && result.CommonOrder.EnterersLocation.Contains('^')
-        ? result.CommonOrder.EnterersLocation.Split('^')[1]
-        : null as string,
-                        f_prioritycode = !string.IsNullOrEmpty(d?.prioritycode)
-                                    ? SafeSubstring(d.prioritycode, 10)
-                                    : null as string,
-                        f_prioritydesc = !string.IsNullOrEmpty(d?.prioritycode)
-                                    ? SafeSubstring(d.prioritycode, 50)
-                                    : null as string,
+                            ? SafeSubstring(d.Departmentname, 100)
+                            : !string.IsNullOrEmpty(result?.CommonOrder?.EnterersLocation) && result.CommonOrder.EnterersLocation.Contains('^')
+                                ? result.CommonOrder.EnterersLocation.Split('^')[1]
+                                : null as string,
+                        f_prioritycode = !string.IsNullOrEmpty(d?.prioritycode) ? SafeSubstring(d.prioritycode, 10) : null as string,
+                        f_prioritydesc = !string.IsNullOrEmpty(d?.prioritycode) ? SafeSubstring(d.prioritycode, 50) : null as string,
                         f_hn = result?.PatientIdentification?.PatientIDExternal ?? null as string,
                         f_an = result?.PatientVisit?.VisitNumber ?? null as string,
                         f_vn = result?.PatientVisit?.VisitNumber ?? null as string,
@@ -858,12 +1282,11 @@ namespace ConHIS_Service_XPHL7.Services
                                     ? SafeJoin(
                                         result.PatientIdentification.OfficialName.FirstName,
                                         result.PatientIdentification.OfficialName.MiddleName,
-                                        result.PatientIdentification.OfficialName.LastName
-                                      )
+                                        result.PatientIdentification.OfficialName.LastName)
                                     : result?.CommonOrder?.EnteredBy ?? null as string,
                         f_sex = result?.PatientIdentification?.Sex ?? null as string,
                         f_patientdob = FormatDate(result?.PatientIdentification?.DateOfBirth, "yyyy-MM-dd"),
-                        f_wardcode = result?.PatientVisit?.AssignedPatientLocation?.PointOfCare ?? null as string,
+                        f_wardcode = string.IsNullOrWhiteSpace(poc) ? null : poc,
                         f_warddesc = null as string,
                         f_roomcode = null as string,
                         f_roomdesc = null as string,
@@ -890,24 +1313,15 @@ namespace ConHIS_Service_XPHL7.Services
                         f_narcoticFlg = "0",
                         f_psychotropic = "0",
                         f_binlocation = null as string,
-                        f_itemidentify = string.IsNullOrWhiteSpace(d?.Substand?.RXD701) &&
-                                                 string.IsNullOrWhiteSpace(d?.Substand?.Medicinalproperties)
-
+                        f_itemidentify = string.IsNullOrWhiteSpace(d?.Substand?.RXD701) && string.IsNullOrWhiteSpace(d?.Substand?.Medicinalproperties)
                                     ? null as string
                                     : SafeJoin(d?.Substand?.RXD701, d?.Substand?.Medicinalproperties),
                         f_itemlotno = null as string,
                         f_itemlotexpire = null as string,
                         f_instructioncode = d?.Substand?.RXD704 ?? null as string,
-
-                        f_instructiondesc = instructiondesc.Any()
-                                            ? string.Join(" ", instructiondesc)
-                                            : null as string,
-                        f_frequencycode = string.IsNullOrWhiteSpace(d?.Usagecode?.Frequencycode)
-                                     ? null as string
-                                    : d.Usagecode.Frequencycode,
-                        f_frequencydesc = string.IsNullOrWhiteSpace(d?.Usagecode?.Frequencydesc)
-                                    ? null as string
-                                    : d.Usagecode.Frequencydesc,
+                        f_instructiondesc = instructiondesc.Any() ? string.Join(" ", instructiondesc) : null as string,
+                        f_frequencycode = string.IsNullOrWhiteSpace(d?.Usagecode?.Frequencycode) ? null as string : d.Usagecode.Frequencycode,
+                        f_frequencydesc = string.IsNullOrWhiteSpace(d?.Usagecode?.Frequencydesc) ? null as string : d.Usagecode.Frequencydesc,
                         f_timecode = null as string,
                         f_timedesc = null as string,
                         f_frequencytime = null as string,
@@ -915,17 +1329,13 @@ namespace ConHIS_Service_XPHL7.Services
                         f_dayofweek = null as string,
                         f_noteprocessing = !string.IsNullOrWhiteSpace(d?.Substand?.Noteprocessing)
                                     ? d.Substand.Noteprocessing
-                                    : !string.IsNullOrWhiteSpace(d?.RXD33)
-                                        ? d.RXD33
-                                        : null as string,
+                                    : !string.IsNullOrWhiteSpace(d?.RXD33) ? d.RXD33 : null as string,
                         f_prn = "0",
                         f_stat = "0",
                         f_comment = result?.CommonOrder?.PlacerGroup?.ID ?? null as string,
                         f_tomachineno = r?.AdministrationDevice ??
                                         (!string.IsNullOrEmpty(d?.Actualdispense) &&
-                                         d.Actualdispense.IndexOf("proud", StringComparison.OrdinalIgnoreCase) >= 0
-                                             ? 2
-                                             : 0),
+                                         d.Actualdispense.IndexOf("proud", StringComparison.OrdinalIgnoreCase) >= 0 ? 2 : 0),
                         f_ipd_order_recordno = null as string,
                         f_status = result?.CommonOrder?.OrderControl == "NW" ? "0" :
                                    result?.CommonOrder?.OrderControl == "RP" ? "1" : "0",
