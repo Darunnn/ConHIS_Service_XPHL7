@@ -125,6 +125,7 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="Configuration\AppConfig.cs" />
+    <Compile Include="Models\HL7IPDModel.cs" />
     <Compile Include="PagesFrom\Form1.cs">
       <SubType>Form</SubType>
     </Compile>
@@ -152,6 +153,7 @@
     <Compile Include="Services\DrugDispenseProcessor.cs" />
     <Compile Include="Services\Encodeing.cs" />
     <Compile Include="Services\HL7Service.cs" />
+    <Compile Include="Services\HL7ServiceIPD.cs" />
     <Compile Include="Utils\LogManager.cs" />
     <EmbeddedResource Include="PagesFrom\Form1.resx">
       <DependentUpon>Form1.cs</DependentUpon>

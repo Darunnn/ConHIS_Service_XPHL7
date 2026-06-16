@@ -7,11 +7,13 @@ namespace ConHIS_Service_XPHL7.Configuration
     {
         private const string ConnFolder = "Connection";
         private const string ConnFile = "connectdatabase.ini";
+        private const string ConnFileIpd = "connectdatabase_ipd.ini"; // ⭐ IPD ไฟล์ใหม่
         private const string ConfigFolder = "Config";
         private const string ConfigFile = "appsettings.ini";
 
         // Database Settings
-        public string ConnectionString { get; private set; }
+        public string ConnectionString { get; private set; }        // OPD
+        public string IpdConnectionString { get; private set; }    // ⭐ IPD
 
         // API Settings
         public static string ApiEndpoint { get; private set; }
@@ -45,14 +47,12 @@ namespace ConHIS_Service_XPHL7.Configuration
 
         private void LoadConnectionString()
         {
+            // ===== OPD Connection (ไฟล์เดิม) =====
             var path = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, ConnFolder, ConnFile);
 
             if (!File.Exists(path))
-            {
                 throw new FileNotFoundException($"Connection file not found: {path}");
-            }
 
-            // Read and parse the connection file
             var lines = File.ReadAllLines(path);
             var connBuilder = new System.Text.StringBuilder();
 
@@ -69,8 +69,38 @@ namespace ConHIS_Service_XPHL7.Configuration
             ConnectionString = connBuilder.ToString();
 
             if (string.IsNullOrWhiteSpace(ConnectionString))
-            {
                 throw new Exception("Connection string is empty");
+
+            // ===== IPD Connection (ไฟล์ใหม่) =====
+            var ipdPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, ConnFolder, ConnFileIpd);
+
+            if (File.Exists(ipdPath))
+            {
+                var ipdLines = File.ReadAllLines(ipdPath);
+                var ipdBuilder = new System.Text.StringBuilder();
+
+                foreach (var line in ipdLines)
+                {
+                    if (!string.IsNullOrWhiteSpace(line))
+                    {
+                        ipdBuilder.Append(line.Trim());
+                        if (!line.Trim().EndsWith(";"))
+                            ipdBuilder.Append(";");
+                    }
+                }
+
+                IpdConnectionString = ipdBuilder.ToString();
+
+                if (string.IsNullOrWhiteSpace(IpdConnectionString))
+                {
+                    // ถ้าไฟล์มีแต่ว่าง ให้ fallback ใช้ OPD
+                    IpdConnectionString = ConnectionString;
+                }
+            }
+            else
+            {
+                // ถ้าไม่มีไฟล์ IPD ให้ fallback ใช้ OPD connection เดิม
+                IpdConnectionString = ConnectionString;
             }
         }
 
@@ -78,7 +108,6 @@ namespace ConHIS_Service_XPHL7.Configuration
         {
             var path = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, ConfigFolder, ConfigFile);
 
-            // Create default config if not exists
             if (!File.Exists(path))
             {
                 CreateDefaultConfig(path);
@@ -128,20 +157,15 @@ namespace ConHIS_Service_XPHL7.Configuration
                 }
             }
 
-            // Validate required settings
             if (string.IsNullOrWhiteSpace(ApiEndpoint))
-            {
                 throw new Exception("ApiEndpoint is not configured in appsettings.ini");
-            }
         }
 
         private void CreateDefaultConfig(string path)
         {
             var directory = Path.GetDirectoryName(path);
             if (!Directory.Exists(directory))
-            {
                 Directory.CreateDirectory(directory);
-            }
 
             var defaultConfig = @"# ===== API SETTINGS =====
 # URL endpoint สำหรับส่งข้อมูลไป Drug Dispenser API
@@ -161,14 +185,14 @@ AutoStart=true
             File.WriteAllText(path, defaultConfig);
         }
 
-        // Helper method to get configuration summary
         public string GetConfigurationSummary()
         {
             return $@"Configuration Summary:
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 Database Connection:
-  Server: {GetServerFromConnectionString()}
-  Database: {GetDatabaseFromConnectionString()}
+  Server: {GetServerFromConnectionString(ConnectionString)}
+  IPD Database: {GetDatabaseFromConnectionString(IpdConnectionString)}
+  OPD Database: {GetDatabaseFromConnectionString(ConnectionString)}
 
 API Settings:
   Endpoint: {ApiEndpoint}
@@ -183,11 +207,12 @@ Processing Settings:
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━";
         }
 
-        private string GetServerFromConnectionString()
+        private string GetServerFromConnectionString(string connStr = null)
         {
             try
             {
-                var parts = ConnectionString.Split(';');
+                var target = connStr ?? ConnectionString;
+                var parts = target.Split(';');
                 foreach (var part in parts)
                 {
                     if (part.Trim().StartsWith("Server=", StringComparison.OrdinalIgnoreCase))
@@ -198,11 +223,11 @@ Processing Settings:
             return "Unknown";
         }
 
-        private string GetDatabaseFromConnectionString()
+        private string GetDatabaseFromConnectionString(string connStr)
         {
             try
             {
-                var parts = ConnectionString.Split(';');
+                var parts = connStr.Split(';');
                 foreach (var part in parts)
                 {
                     if (part.Trim().StartsWith("Database=", StringComparison.OrdinalIgnoreCase))
