@@ -640,6 +640,8 @@ namespace ConHIS_Service_XPHL7.Services
                  d?.Substand?.Usageline2,
                      d?.Substand?.Usageline3
                     }.Where(x => !string.IsNullOrWhiteSpace(x));
+                    var poc = result?.PatientVisit?.AssignedPatientLocation?.PointOfCare?.Trim();
+                   
                     return new
                     {
                         UniqID = $"{d?.Dispensegivecode?.UniqID ?? ""}-{DateTime.Now.ToString("yyyyMMdd")}",
@@ -689,7 +691,7 @@ namespace ConHIS_Service_XPHL7.Services
                                     : result?.CommonOrder?.EnteredBy ?? null as string,
                         f_sex = result?.PatientIdentification?.Sex ?? null as string,
                         f_patientdob = FormatDate(result?.PatientIdentification?.DateOfBirth, "yyyy-MM-dd"),
-                        f_wardcode = result?.PatientVisit?.AssignedPatientLocation?.PointOfCare ?? null as string,
+                        f_wardcode = string.IsNullOrWhiteSpace(poc) ? null : poc,
                         f_warddesc = null as string,
                         f_roomcode = null as string,
                         f_roomdesc = null as string,
@@ -917,7 +919,7 @@ namespace ConHIS_Service_XPHL7.Services
                                         : null as string,
                         f_prn = "0",
                         f_stat = "0",
-                        f_comment = null as string,
+                        f_comment = result?.CommonOrder?.PlacerGroup?.ID ?? null as string,
                         f_tomachineno = r?.AdministrationDevice ??
                                         (!string.IsNullOrEmpty(d?.Actualdispense) &&
                                          d.Actualdispense.IndexOf("proud", StringComparison.OrdinalIgnoreCase) >= 0

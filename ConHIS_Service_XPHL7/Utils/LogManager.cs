@@ -135,7 +135,7 @@ namespace ConHIS_Service_XPHL7.Utils
         {
             var appFolder = AppDomain.CurrentDomain.BaseDirectory ?? Environment.CurrentDirectory;
             var parsedLogBaseDir = Path.Combine(appFolder, parsedLogFolder);
-
+             
             // 📁 สร้างโฟลเดอร์ตามวันที่ เช่น hl7_parsed/2025-10-15
             var dateFolder = DateTime.Now.ToString("yyyy-MM-dd");
             var parsedLogDir = Path.Combine(parsedLogBaseDir, dateFolder);
