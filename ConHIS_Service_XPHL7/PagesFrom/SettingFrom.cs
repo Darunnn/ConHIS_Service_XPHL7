@@ -2,7 +2,6 @@
 using System.Configuration;
 using System.Drawing;
 using System.IO;
-using System.Net.Http;
 using System.Text;
 using System.Threading.Tasks;
 using System.Windows.Forms;
@@ -14,6 +13,7 @@ namespace ConHIS_Service_XPHL7.PagesFrom
     {
         private const string ConnFolder = "Connection";
         private const string ConnFile = "connectdatabase.ini";
+        private const string ConnFileIPD = "connectdatabase_ipd.ini"; // ⭐ IPD
         private const string ConfigFolder = "Config";
         private const string ConfigFile = "appsettings.ini";
 
@@ -25,11 +25,16 @@ namespace ConHIS_Service_XPHL7.PagesFrom
             LoadCurrentSettings();
         }
 
+        // ════════════════════════════════════════════════════════════════════
+        //  LOAD
+        // ════════════════════════════════════════════════════════════════════
+
         private void LoadCurrentSettings()
         {
             try
             {
                 LoadDatabaseSettings();
+                LoadDatabaseIPDSettings(); // ⭐
                 LoadAPISettings();
                 LoadLogSettings();
             }
@@ -37,82 +42,116 @@ namespace ConHIS_Service_XPHL7.PagesFrom
             {
                 MessageBox.Show(
                     $"เกิดข้อผิดพลาดในการโหลดการตั้งค่า:\n{ex.Message}",
-                    "Error",
-                    MessageBoxButtons.OK,
-                    MessageBoxIcon.Error
-                );
+                    "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
         }
 
         private void LoadDatabaseSettings()
         {
             var path = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, ConnFolder, ConnFile);
+            cmbEncoding.SelectedIndex = 0; // default UTF-8
 
-            // Set default encoding
-            cmbEncoding.SelectedIndex = 0; // Default to UTF-8
+            if (!File.Exists(path)) return;
 
-            if (File.Exists(path))
+            foreach (var line in File.ReadAllLines(path))
             {
-                var lines = File.ReadAllLines(path);
-                foreach (var line in lines)
+                if (string.IsNullOrWhiteSpace(line)) continue;
+                if (line.StartsWith("Server="))
+                    txtServer.Text = line.Replace("Server=", "").Trim().TrimEnd(';');
+                else if (line.StartsWith("Database="))
+                    txtDatabase.Text = line.Replace("Database=", "").Trim().TrimEnd(';');
+                else if (line.StartsWith("User Id="))
+                    txtUserId.Text = line.Replace("User Id=", "").Trim().TrimEnd(';');
+                else if (line.StartsWith("Password="))
+                    txtPassword.Text = line.Replace("Password=", "").Trim().TrimEnd(';');
+                else if (line.StartsWith("Charset="))
                 {
-                    if (string.IsNullOrWhiteSpace(line)) continue;
-
-                    if (line.StartsWith("Server="))
-                        txtServer.Text = line.Replace("Server=", "").Trim().TrimEnd(';');
-                    else if (line.StartsWith("Database="))
-                        txtDatabase.Text = line.Replace("Database=", "").Trim().TrimEnd(';');
-                    else if (line.StartsWith("User Id="))
-                        txtUserId.Text = line.Replace("User Id=", "").Trim().TrimEnd(';');
-                    else if (line.StartsWith("Password="))
-                        txtPassword.Text = line.Replace("Password=", "").Trim().TrimEnd(';');
-                    else if (line.StartsWith("Charset="))
-                    {
-                        var charset = line.Replace("Charset=", "").Trim().TrimEnd(';').ToLower();
-                        if (charset == "tis620" || charset == "tis-620")
-                            cmbEncoding.SelectedIndex = 1; // TIS-620
-                        else
-                            cmbEncoding.SelectedIndex = 0; // UTF-8
-                    }
+                    var charset = line.Replace("Charset=", "").Trim().TrimEnd(';').ToLower();
+                    cmbEncoding.SelectedIndex = (charset == "tis620" || charset == "tis-620") ? 1 : 0;
                 }
             }
+        }
+
+        // ⭐ โหลด IPD settings
+        private void LoadDatabaseIPDSettings()
+        {
+            var path = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, ConnFolder, ConnFileIPD);
+            cmbEncodingIPD.SelectedIndex = 0; // default UTF-8
+
+            if (!File.Exists(path))
+            {
+                // ไม่มีไฟล์ IPD → copy ค่า OPD มาให้เป็น default
+                CopyOPDToIPDFields();
+                return;
+            }
+
+            bool hasContent = false;
+            foreach (var line in File.ReadAllLines(path))
+            {
+                if (string.IsNullOrWhiteSpace(line)) continue;
+                hasContent = true;
+                if (line.StartsWith("Server="))
+                    txtServerIPD.Text = line.Replace("Server=", "").Trim().TrimEnd(';');
+                else if (line.StartsWith("Database="))
+                    txtDatabaseIPD.Text = line.Replace("Database=", "").Trim().TrimEnd(';');
+                else if (line.StartsWith("User Id="))
+                    txtUserIdIPD.Text = line.Replace("User Id=", "").Trim().TrimEnd(';');
+                else if (line.StartsWith("Password="))
+                    txtPasswordIPD.Text = line.Replace("Password=", "").Trim().TrimEnd(';');
+                else if (line.StartsWith("Charset="))
+                {
+                    var charset = line.Replace("Charset=", "").Trim().TrimEnd(';').ToLower();
+                    cmbEncodingIPD.SelectedIndex = (charset == "tis620" || charset == "tis-620") ? 1 : 0;
+                }
+            }
+
+            if (!hasContent)
+                CopyOPDToIPDFields();
+
+            // ตรวจว่าค่าเหมือน OPD ไหม → ติ๊ก checkbox
+            UpdateSameAsOPDCheckbox();
+        }
+
+        private void CopyOPDToIPDFields()
+        {
+            txtServerIPD.Text = txtServer.Text;
+            txtDatabaseIPD.Text = txtDatabase.Text;
+            txtUserIdIPD.Text = txtUserId.Text;
+            txtPasswordIPD.Text = txtPassword.Text;
+            cmbEncodingIPD.SelectedIndex = cmbEncoding.SelectedIndex;
+        }
+
+        private void UpdateSameAsOPDCheckbox()
+        {
+            bool same = txtServerIPD.Text == txtServer.Text
+                     && txtUserIdIPD.Text == txtUserId.Text
+                     && txtPasswordIPD.Text == txtPassword.Text
+                     && cmbEncodingIPD.SelectedIndex == cmbEncoding.SelectedIndex;
+            // database อาจต่างกัน (ipd_machine_gateway vs opd_machine_gateway) นั้น ok
+            chkSameAsOPD.Checked = same;
         }
 
         private void LoadAPISettings()
         {
             var path = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, ConfigFolder, ConfigFile);
+            if (!File.Exists(path)) return;
 
-            if (File.Exists(path))
+            foreach (var line in File.ReadAllLines(path))
             {
-                var lines = File.ReadAllLines(path);
-                foreach (var line in lines)
+                if (string.IsNullOrWhiteSpace(line) || line.StartsWith("#")) continue;
+                var parts = line.Split('=');
+                if (parts.Length != 2) continue;
+
+                switch (parts[0].Trim().ToUpper())
                 {
-                    if (string.IsNullOrWhiteSpace(line) || line.StartsWith("#")) continue;
-
-                    var parts = line.Split('=');
-                    if (parts.Length != 2) continue;
-
-                    var key = parts[0].Trim();
-                    var value = parts[1].Trim();
-
-                    switch (key.ToUpper())
-                    {
-                        case "APIENDPOINT":
-                            txtApiEndpoint.Text = value;
-                            break;
-                        case "APITIMEOUTSECONDS":
-                            if (int.TryParse(value, out int timeout))
-                                numApiTimeout.Value = timeout;
-                            break;
-                        case "APIRETRYATTEMPTS":
-                            if (int.TryParse(value, out int retry))
-                                numApiRetry.Value = retry;
-                            break;
-                        case "APIRETRYDELAYSECONDS":
-                            if (int.TryParse(value, out int delay))
-                                numApiRetryDelay.Value = delay;
-                            break;
-                    }
+                    case "APIENDPOINT":
+                        txtApiEndpoint.Text = parts[1].Trim(); break;
+                    case "APITIMEOUTSECONDS":
+                        if (int.TryParse(parts[1].Trim(), out int t)) numApiTimeout.Value = t; break;
+                    case "APIRETRYATTEMPTS":
+                        if (int.TryParse(parts[1].Trim(), out int r)) numApiRetry.Value = r; break;
+                    case "APIRETRYDELAYSECONDS":
+                        if (int.TryParse(parts[1].Trim(), out int d)) numApiRetryDelay.Value = d; break;
                 }
             }
         }
@@ -121,58 +160,95 @@ namespace ConHIS_Service_XPHL7.PagesFrom
         {
             var logDays = ConfigurationManager.AppSettings["LogRetentionDays"];
             if (!string.IsNullOrEmpty(logDays) && int.TryParse(logDays, out int days))
-            {
                 numLogRetention.Value = days;
+        }
+
+        // ════════════════════════════════════════════════════════════════════
+        //  CHECKBOX: Same as OPD
+        // ════════════════════════════════════════════════════════════════════
+
+        private void ChkSameAsOPD_CheckedChanged(object sender, EventArgs e)
+        {
+            if (chkSameAsOPD.Checked)
+            {
+                // copy OPD → IPD (ยกเว้น Database ให้แก้เองได้)
+                txtServerIPD.Text = txtServer.Text;
+                txtUserIdIPD.Text = txtUserId.Text;
+                txtPasswordIPD.Text = txtPassword.Text;
+                cmbEncodingIPD.SelectedIndex = cmbEncoding.SelectedIndex;
+
+                txtServerIPD.Enabled = false;
+                txtUserIdIPD.Enabled = false;
+                txtPasswordIPD.Enabled = false;
+                cmbEncodingIPD.Enabled = false;
+            }
+            else
+            {
+                txtServerIPD.Enabled = true;
+                txtUserIdIPD.Enabled = true;
+                txtPasswordIPD.Enabled = true;
+                cmbEncodingIPD.Enabled = true;
             }
         }
 
-        // ⭐ Test Database Connection
+        // ════════════════════════════════════════════════════════════════════
+        //  TEST CONNECTION
+        // ════════════════════════════════════════════════════════════════════
+
         private async void BtnTestConnection_Click(object sender, EventArgs e)
         {
-            if (!ValidateDatabaseInputs())
-                return;
+            await TestConnection(
+                txtServer.Text, txtDatabase.Text, txtUserId.Text, txtPassword.Text,
+                cmbEncoding.SelectedIndex == 1 ? "tis620" : "utf8",
+                btnTestConnection, lblConnectionStatus, "OPD");
+        }
 
-            btnTestConnection.Enabled = false;
-            lblConnectionStatus.Text = "⏳ Testing connection...";
-            lblConnectionStatus.ForeColor = Color.Orange;
+        // ⭐ Test IPD
+        private async void BtnTestConnectionIPD_Click(object sender, EventArgs e)
+        {
+            await TestConnection(
+                txtServerIPD.Text, txtDatabaseIPD.Text, txtUserIdIPD.Text, txtPasswordIPD.Text,
+                cmbEncodingIPD.SelectedIndex == 1 ? "tis620" : "utf8",
+                btnTestConnectionIPD, lblConnectionStatusIPD, "IPD");
+        }
+
+        private async Task TestConnection(
+            string server, string database, string userId, string password, string charset,
+            Button btn, Label statusLabel, string label)
+        {
+            if (string.IsNullOrWhiteSpace(server) || string.IsNullOrWhiteSpace(database) ||
+                string.IsNullOrWhiteSpace(userId))
+            {
+                MessageBox.Show("กรุณากรอกข้อมูลให้ครบถ้วน", "Validation",
+                    MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+
+            btn.Enabled = false;
+            statusLabel.Text = "⏳ Testing...";
+            statusLabel.ForeColor = Color.Orange;
+
+            var connStr = $"Server={server};Database={database};User Id={userId};Password={password};Charset={charset};";
 
             try
             {
-                // Get charset based on selected encoding
-                string charset = cmbEncoding.SelectedIndex == 1 ? "tis620" : "utf8";
-
-                var connectionString = $"Server={txtServer.Text.Trim()};" +
-                                     $"Database={txtDatabase.Text.Trim()};" +
-                                     $"User Id={txtUserId.Text.Trim()};" +
-                                     $"Password={txtPassword.Text.Trim()};" +
-                                     $"Charset={charset};";
-
                 await Task.Run(() =>
                 {
-                    using (var connection = new MySqlConnection(connectionString))
+                    using (var conn = new MySqlConnection(connStr))
                     {
-                        connection.Open();
-
-                        // Test query
-                        using (var cmd = new MySqlCommand("SELECT VERSION()", connection))
+                        conn.Open();
+                        using (var cmd = new MySqlCommand("SELECT VERSION()", conn))
                         {
-                            var version = cmd.ExecuteScalar()?.ToString() ?? "Unknown";
-
+                            var ver = cmd.ExecuteScalar()?.ToString() ?? "Unknown";
                             this.Invoke(new Action(() =>
                             {
-                                lblConnectionStatus.Text = $"✅ Connected successfully!\nMySQL Version: {version}";
-                                lblConnectionStatus.ForeColor = Color.Green;
-
+                                statusLabel.Text = $"✅ Connected!";
+                                statusLabel.ForeColor = Color.Green;
                                 MessageBox.Show(
-                                    $"✅ การเชื่อมต่อสำเร็จ!\n\n" +
-                                    $"Server: {txtServer.Text}\n" +
-                                    $"Database: {txtDatabase.Text}\n" +
-                                    $"Encoding: {cmbEncoding.Text}\n" +
-                                    $"MySQL Version: {version}",
-                                    "Connection Successful",
-                                    MessageBoxButtons.OK,
-                                    MessageBoxIcon.Information
-                                );
+                                    $"✅ {label} Database เชื่อมต่อสำเร็จ!\n\n" +
+                                    $"Server: {server}\nDatabase: {database}\nMySQL: {ver}",
+                                    $"{label} Connection OK",
+                                    MessageBoxButtons.OK, MessageBoxIcon.Information);
                             }));
                         }
                     }
@@ -180,53 +256,43 @@ namespace ConHIS_Service_XPHL7.PagesFrom
             }
             catch (Exception ex)
             {
-                lblConnectionStatus.Text = $"❌ Connection failed: {ex.Message}";
-                lblConnectionStatus.ForeColor = Color.Red;
-
+                statusLabel.Text = "❌ Failed";
+                statusLabel.ForeColor = Color.Red;
                 MessageBox.Show(
-                    $"❌ การเชื่อมต่อล้มเหลว!\n\n{ex.Message}\n\n" +
-                    $"กรุณาตรวจสอบ:\n" +
-                    $"• Server address และ port\n" +
-                    $"• Database name\n" +
-                    $"• Username และ Password\n" +
-                    $"• Encoding setting\n" +
-                    $"• Network connectivity",
-                    "Connection Failed",
-                    MessageBoxButtons.OK,
-                    MessageBoxIcon.Error
-                );
+                    $"❌ {label} Database เชื่อมต่อล้มเหลว!\n\n{ex.Message}",
+                    $"{label} Connection Failed",
+                    MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
             finally
             {
-                btnTestConnection.Enabled = true;
+                btn.Enabled = true;
             }
         }
 
-
+        // ════════════════════════════════════════════════════════════════════
+        //  SAVE
+        // ════════════════════════════════════════════════════════════════════
 
         private void BtnSave_Click(object sender, EventArgs e)
         {
             try
             {
-                if (!ValidateInputs())
-                    return;
+                if (!ValidateInputs()) return;
 
                 var result = MessageBox.Show(
                     "คุณต้องการบันทึกการตั้งค่าทั้งหมดหรือไม่?\n\n" +
                     "📁 ไฟล์ที่จะถูกแก้ไข:\n" +
                     "   • Connection\\connectdatabase.ini\n" +
+                    "   • Connection\\connectdatabase_ipd.ini\n" +
                     "   • Config\\appsettings.ini\n" +
                     "   • App.config\n\n" +
                     "⚠️ หมายเหตุ: การตั้งค่าบางอย่างอาจต้อง Restart โปรแกรม",
-                    "Confirm Save",
-                    MessageBoxButtons.YesNo,
-                    MessageBoxIcon.Question
-                );
+                    "Confirm Save", MessageBoxButtons.YesNo, MessageBoxIcon.Question);
 
-                if (result != DialogResult.Yes)
-                    return;
+                if (result != DialogResult.Yes) return;
 
                 SaveDatabaseSettings();
+                SaveDatabaseIPDSettings(); // ⭐
                 SaveAPISettings();
                 SaveLogSettings();
 
@@ -234,174 +300,146 @@ namespace ConHIS_Service_XPHL7.PagesFrom
 
                 MessageBox.Show(
                     "✅ บันทึกการตั้งค่าทั้งหมดสำเร็จ!\n\n" +
-                    "ไฟล์ที่ถูกอัพเดท:\n" +
-                    $"✓ {Path.Combine(ConnFolder, ConnFile)}\n" +
-                    $"✓ {Path.Combine(ConfigFolder, ConfigFile)}\n" +
-                    "✓ App.config\n\n" +
-                    "💡 การตั้งค่าจะมีผลในครั้งถัดไปที่โปรแกรมโหลดข้อมูล",
-                    "Success",
-                    MessageBoxButtons.OK,
-                    MessageBoxIcon.Information
-                );
+                    $"✓ {ConnFolder}\\{ConnFile}\n" +
+                    $"✓ {ConnFolder}\\{ConnFileIPD}\n" +
+                    $"✓ {ConfigFolder}\\{ConfigFile}\n" +
+                    "✓ App.config",
+                    "Success", MessageBoxButtons.OK, MessageBoxIcon.Information);
 
                 this.DialogResult = DialogResult.OK;
                 this.Close();
             }
             catch (Exception ex)
             {
-                MessageBox.Show(
-                    $"❌ เกิดข้อผิดพลาดในการบันทึกการตั้งค่า:\n\n{ex.Message}",
-                    "Error",
-                    MessageBoxButtons.OK,
-                    MessageBoxIcon.Error
-                );
+                MessageBox.Show($"❌ เกิดข้อผิดพลาดในการบันทึก:\n\n{ex.Message}",
+                    "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
-        }
-
-        private bool ValidateDatabaseInputs()
-        {
-            if (string.IsNullOrWhiteSpace(txtServer.Text))
-            {
-                MessageBox.Show("กรุณาระบุ Server", "Validation Error", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-                tabControl.SelectedTab = tabDatabase;
-                txtServer.Focus();
-                return false;
-            }
-
-            if (string.IsNullOrWhiteSpace(txtDatabase.Text))
-            {
-                MessageBox.Show("กรุณาระบุ Database", "Validation Error", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-                tabControl.SelectedTab = tabDatabase;
-                txtDatabase.Focus();
-                return false;
-            }
-
-            if (string.IsNullOrWhiteSpace(txtUserId.Text))
-            {
-                MessageBox.Show("กรุณาระบุ User ID", "Validation Error", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-                tabControl.SelectedTab = tabDatabase;
-                txtUserId.Focus();
-                return false;
-            }
-
-            if (cmbEncoding.SelectedIndex == -1)
-            {
-                MessageBox.Show("กรุณาเลือก Encoding", "Validation Error", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-                tabControl.SelectedTab = tabDatabase;
-                cmbEncoding.Focus();
-                return false;
-            }
-
-            return true;
-        }
-
-        private bool ValidateInputs()
-        {
-            // Validate Database Settings
-            if (!ValidateDatabaseInputs())
-                return false;
-
-            // Validate API Settings
-            if (string.IsNullOrWhiteSpace(txtApiEndpoint.Text))
-            {
-                MessageBox.Show("กรุณาระบุ API Endpoint", "Validation Error", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-                tabControl.SelectedTab = tabAPI;
-                txtApiEndpoint.Focus();
-                return false;
-            }
-
-            if (!Uri.TryCreate(txtApiEndpoint.Text, UriKind.Absolute, out _))
-            {
-                MessageBox.Show("API Endpoint ไม่ถูกต้อง\nกรุณาระบุ URL ที่ถูกต้อง (เช่น https://example.com/api)",
-                    "Validation Error", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-                tabControl.SelectedTab = tabAPI;
-                txtApiEndpoint.Focus();
-                return false;
-            }
-
-            return true;
         }
 
         private void SaveDatabaseSettings()
         {
-            var directory = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, ConnFolder);
-            if (!Directory.Exists(directory))
-                Directory.CreateDirectory(directory);
+            var dir = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, ConnFolder);
+            Directory.CreateDirectory(dir);
 
-            var path = Path.Combine(directory, ConnFile);
-
-            // Determine charset based on selected encoding
             string charset = cmbEncoding.SelectedIndex == 1 ? "TIS-620" : "UTF8";
+            var sb = new StringBuilder();
+            sb.AppendLine($"Server={txtServer.Text.Trim()};");
+            sb.AppendLine($"Database={txtDatabase.Text.Trim()};");
+            sb.AppendLine($"User Id={txtUserId.Text.Trim()};");
+            sb.AppendLine($"Password={txtPassword.Text.Trim()};");
+            sb.AppendLine($"Charset={charset};");
+            File.WriteAllText(Path.Combine(dir, ConnFile), sb.ToString());
+        }
 
-            var content = new StringBuilder();
-            content.AppendLine($"Server={txtServer.Text.Trim()};");
-            content.AppendLine($"Database={txtDatabase.Text.Trim()};");
-            content.AppendLine($"User Id={txtUserId.Text.Trim()};");
-            content.AppendLine($"Password={txtPassword.Text.Trim()};");
-            content.AppendLine($"Charset={charset};");
+        // ⭐ บันทึก IPD
+        private void SaveDatabaseIPDSettings()
+        {
+            var dir = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, ConnFolder);
+            Directory.CreateDirectory(dir);
 
-            File.WriteAllText(path, content.ToString());
+            string charset = cmbEncodingIPD.SelectedIndex == 1 ? "TIS-620" : "UTF8";
+            var sb = new StringBuilder();
+            sb.AppendLine($"Server={txtServerIPD.Text.Trim()};");
+            sb.AppendLine($"Database={txtDatabaseIPD.Text.Trim()};");
+            sb.AppendLine($"User Id={txtUserIdIPD.Text.Trim()};");
+            sb.AppendLine($"Password={txtPasswordIPD.Text.Trim()};");
+            sb.AppendLine($"Charset={charset};");
+            File.WriteAllText(Path.Combine(dir, ConnFileIPD), sb.ToString());
         }
 
         private void SaveAPISettings()
         {
-            var directory = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, ConfigFolder);
-            if (!Directory.Exists(directory))
-                Directory.CreateDirectory(directory);
+            var dir = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, ConfigFolder);
+            Directory.CreateDirectory(dir);
 
-            var path = Path.Combine(directory, ConfigFile);
-
-            var content = new StringBuilder();
-            content.AppendLine("# ===== API SETTINGS =====");
-            content.AppendLine("# URL endpoint สำหรับส่งข้อมูลไป Drug Dispenser API");
-            content.AppendLine("# Format: http://{HOST}/api/conHIS/insertPrescription");
-            content.AppendLine($"ApiEndpoint={txtApiEndpoint.Text.Trim()}");
-            content.AppendLine($"# API timeout in seconds (default: 30)");
-            content.AppendLine($"ApiTimeoutSeconds={numApiTimeout.Value}");
-            content.AppendLine($"# API retry attempts when failed (default: 3)");
-            content.AppendLine($"ApiRetryAttempts={numApiRetry.Value}");
-            content.AppendLine($"# API retry delay in seconds (default: 5)");
-            content.AppendLine($"ApiRetryDelaySeconds={numApiRetryDelay.Value}");
-            content.AppendLine();
-            content.AppendLine("# ===== PROCESSING SETTINGS =====");
-            content.AppendLine("# ระยะเวลาในการตรวจสอบข้อมูลใหม่ (วินาที)");
-            content.AppendLine("# ค่าที่แนะนำ: 15-60 วินาที");
-            content.AppendLine("ProcessingIntervalSeconds=30");
-            content.AppendLine("# จำนวนสูงสุดของ records ที่ประมวลผลในแต่ละรอบ");
-            content.AppendLine("MaxProcessingBatchSize=50");
-            content.AppendLine("# เริ่มการประมวลผลอัตโนมัติเมื่อเปิดโปรแกรม (true/false)");
-            content.AppendLine("AutoStart=true");
-
-            File.WriteAllText(path, content.ToString());
+            var sb = new StringBuilder();
+            sb.AppendLine("# ===== API SETTINGS =====");
+            sb.AppendLine($"ApiEndpoint={txtApiEndpoint.Text.Trim()}");
+            sb.AppendLine($"ApiTimeoutSeconds={numApiTimeout.Value}");
+            sb.AppendLine($"ApiRetryAttempts={numApiRetry.Value}");
+            sb.AppendLine($"ApiRetryDelaySeconds={numApiRetryDelay.Value}");
+            sb.AppendLine();
+            sb.AppendLine("# ===== PROCESSING SETTINGS =====");
+            sb.AppendLine("ProcessingIntervalSeconds=30");
+            sb.AppendLine("MaxProcessingBatchSize=50");
+            sb.AppendLine("AutoStart=true");
+            File.WriteAllText(Path.Combine(dir, ConfigFile), sb.ToString());
         }
 
         private void SaveLogSettings()
         {
             var config = ConfigurationManager.OpenExeConfiguration(ConfigurationUserLevel.None);
-
             if (config.AppSettings.Settings["LogRetentionDays"] == null)
-            {
                 config.AppSettings.Settings.Add("LogRetentionDays", numLogRetention.Value.ToString());
-            }
             else
-            {
                 config.AppSettings.Settings["LogRetentionDays"].Value = numLogRetention.Value.ToString();
-            }
-
             config.Save(ConfigurationSaveMode.Modified);
             ConfigurationManager.RefreshSection("appSettings");
         }
 
+        // ════════════════════════════════════════════════════════════════════
+        //  VALIDATION
+        // ════════════════════════════════════════════════════════════════════
+
+        private bool ValidateDatabaseInputs()
+        {
+            if (string.IsNullOrWhiteSpace(txtServer.Text))
+            {
+                Show("กรุณาระบุ OPD Server", tabDatabase, txtServer); return false;
+            }
+            if (string.IsNullOrWhiteSpace(txtDatabase.Text))
+            {
+                Show("กรุณาระบุ OPD Database", tabDatabase, txtDatabase); return false;
+            }
+            if (string.IsNullOrWhiteSpace(txtUserId.Text))
+            {
+                Show("กรุณาระบุ OPD User ID", tabDatabase, txtUserId); return false;
+            }
+            if (string.IsNullOrWhiteSpace(txtServerIPD.Text))
+            {
+                Show("กรุณาระบุ IPD Server", tabDatabaseIPD, txtServerIPD); return false;
+            }
+            if (string.IsNullOrWhiteSpace(txtDatabaseIPD.Text))
+            {
+                Show("กรุณาระบุ IPD Database", tabDatabaseIPD, txtDatabaseIPD); return false;
+            }
+            if (string.IsNullOrWhiteSpace(txtUserIdIPD.Text))
+            {
+                Show("กรุณาระบุ IPD User ID", tabDatabaseIPD, txtUserIdIPD); return false;
+            }
+            return true;
+        }
+
+        private void Show(string msg, TabPage tab, Control focus)
+        {
+            MessageBox.Show(msg, "Validation Error", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            tabControl.SelectedTab = tab;
+            focus.Focus();
+        }
+
+        private bool ValidateInputs()
+        {
+            if (!ValidateDatabaseInputs()) return false;
+            if (string.IsNullOrWhiteSpace(txtApiEndpoint.Text))
+            {
+                Show("กรุณาระบุ API Endpoint", tabAPI, txtApiEndpoint); return false;
+            }
+            if (!Uri.TryCreate(txtApiEndpoint.Text, UriKind.Absolute, out _))
+            {
+                Show("API Endpoint ไม่ถูกต้อง", tabAPI, txtApiEndpoint); return false;
+            }
+            return true;
+        }
+
+        // ════════════════════════════════════════════════════════════════════
+        //  CANCEL
+        // ════════════════════════════════════════════════════════════════════
+
         private void BtnCancel_Click(object sender, EventArgs e)
         {
-            var result = MessageBox.Show(
-                "คุณต้องการยกเลิกการเปลี่ยนแปลงหรือไม่?\n\nการตั้งค่าที่แก้ไขจะไม่ถูกบันทึก",
-                "Confirm Cancel",
-                MessageBoxButtons.YesNo,
-                MessageBoxIcon.Question
-            );
-
-            if (result == DialogResult.Yes)
+            if (MessageBox.Show(
+                "คุณต้องการยกเลิกการเปลี่ยนแปลงหรือไม่?\nการตั้งค่าที่แก้ไขจะไม่ถูกบันทึก",
+                "Confirm Cancel", MessageBoxButtons.YesNo, MessageBoxIcon.Question) == DialogResult.Yes)
             {
                 this.DialogResult = DialogResult.Cancel;
                 this.Close();

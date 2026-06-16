@@ -873,7 +873,7 @@ namespace ConHIS_Service_XPHL7.Services
                         f_diagnosis = null as string,
                         f_orderitemcode = d?.Dispensegivecode?.Identifier ?? null as string,
                         f_orderitemname = d?.Dispensegivecode?.DrugName ?? null as string,
-                        f_orderitemnameTH = d?.Dispensegivecode?.DrugNameThai ?? null as string,
+                        f_orderitemnameTH = d?.Dispensegivecode?.DrugNamePrint ?? null as string,
                         f_orderitemnamegeneric = null as string,
                         f_orderqty = d?.QTY ?? 0,
                         f_orderunitcode = d?.Dispensegivecode?.DrugUnit ?? null as string,
