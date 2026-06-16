@@ -235,12 +235,13 @@ namespace ConHIS_Service_XPHL7
         private async void ConnectionCheckCallback(object state)
         {
             if (_isCheckingConnection) return;
-
             _isCheckingConnection = true;
 
             try
             {
-                bool isConnected = await Task.Run(() => _databaseService?.TestConnection() ?? false);
+                bool opdConnected = await Task.Run(() => _databaseService?.TestConnection() ?? false);
+                bool ipdConnected = await Task.Run(() => _databaseService?.TestIPDConnection() ?? false);
+                bool isConnected = opdConnected || ipdConnected;
 
                 _logger?.LogConnectDatabase(isConnected, _lastDatabaseConnectionTime, _lastDatabaseDisconnectionTime);
 
@@ -253,19 +254,27 @@ namespace ConHIS_Service_XPHL7
                         {
                             try
                             {
-                                UpdateConnectionStatus(true);
+                                // ⭐ ส่ง opdConnected/ipdConnected แยกกัน
+                                UpdateConnectionStatus(true, opdConnected, ipdConnected);
 
-                                // ⭐ เช็ค tables หลัง reconnect
                                 _logger?.LogInfo("Rechecking database tables after reconnection...");
-                                _ipdTableExists = await CheckTableExists("drug_dispense_ipd");
-                                _opdTableExists = await CheckTableExists("drug_dispense_opd");
-                                //_hasCheckedTables = true;
 
-                                _logger?.LogInfo($"Table Status - IPD: {(_ipdTableExists ? "EXISTS" : "NOT FOUND")}, OPD: {(_opdTableExists ? "EXISTS" : "NOT FOUND")}");
+                                // ⭐ เช็ค table เฉพาะ DB ที่ connect ได้
+                                if (ipdConnected)
+                                    _ipdTableExists = await CheckTableExists("drug_dispense_ipd");
+                                else
+                                    _ipdTableExists = false;
 
-                                // ⭐ อัปเดตสถานะปุ่มตามการมี table
+                                if (opdConnected)
+                                    _opdTableExists = await CheckTableExists("drug_dispense_opd");
+                                else
+                                    _opdTableExists = false;
+
+                                _logger?.LogInfo(
+                                    $"Table Status - IPD: {(_ipdTableExists ? "EXISTS" : "NOT FOUND")}, " +
+                                    $"OPD: {(_opdTableExists ? "EXISTS" : "NOT FOUND")}");
+
                                 UpdateServiceButtonStates();
-
                                 await LoadDataBySelectedDate();
                                 UpdateStatus("✓ Database reconnected - Data refreshed");
 
@@ -285,17 +294,31 @@ namespace ConHIS_Service_XPHL7
                                     else if (shouldResumeOPD)
                                         serviceMessage = "\n\n⚡ OPD Service will resume in 3 seconds...";
 
-                                    // ⭐ เพิ่มข้อความแจ้งเตือนถ้า table หายไป
+                                    // ⭐ warning ทั้ง table missing และ DB ที่ยัง connect ไม่ได้
                                     string tableWarning = "";
-                                    if (_wasIPDRunningBeforeDisconnection && !_ipdTableExists)
+                                    if (!ipdConnected)
+                                        tableWarning += "\n⚠️ IPD Database still disconnected - IPD Service disabled";
+                                    else if (_wasIPDRunningBeforeDisconnection && !_ipdTableExists)
                                         tableWarning += "\n⚠️ IPD table not found - IPD Service disabled";
-                                    if (_wasOPDRunningBeforeDisconnection && !_opdTableExists)
+
+                                    if (!opdConnected)
+                                        tableWarning += "\n⚠️ OPD Database still disconnected - OPD Service disabled";
+                                    else if (_wasOPDRunningBeforeDisconnection && !_opdTableExists)
                                         tableWarning += "\n⚠️ OPD table not found - OPD Service disabled";
+
+                                    // ⭐ แสดงว่า DB ไหน reconnect ได้บ้าง
+                                    string dbStatus = "";
+                                    if (opdConnected && ipdConnected)
+                                        dbStatus = "✅ OPD & IPD Databases restored!";
+                                    else if (opdConnected)
+                                        dbStatus = "✅ OPD Database restored!\n⚠️ IPD Database still disconnected";
+                                    else
+                                        dbStatus = "✅ IPD Database restored!\n⚠️ OPD Database still disconnected";
 
                                     this.BeginInvoke(new Action(() =>
                                     {
                                         ShowAutoCloseMessageBox(
-                                            $"✅ Database connection restored!\n\n" +
+                                            $"{dbStatus}\n\n" +
                                             $"📅 Reconnected at: {_lastDatabaseConnectionTime.Value:yyyy-MM-dd HH:mm:ss}\n" +
                                             $"🔄 Data refreshed automatically." +
                                             tableWarning +
@@ -316,17 +339,13 @@ namespace ConHIS_Service_XPHL7
                     }
                     else
                     {
-                        // ❌ Disconnected
+                        // ❌ Disconnected ทั้งคู่
                         this.Invoke(new Action(() =>
                         {
-                            UpdateConnectionStatus(false);
+                            UpdateConnectionStatus(false, false, false);
 
-                            // ⭐ รีเซ็ตสถานะ table
                             _ipdTableExists = false;
                             _opdTableExists = false;
-                            // _hasCheckedTables = false;
-
-                            // ⭐ อัปเดตปุ่มให้ disabled
                             UpdateServiceButtonStates();
 
                             _wasIPDRunningBeforeDisconnection = (_ipdTimer != null);
@@ -337,7 +356,6 @@ namespace ConHIS_Service_XPHL7
                                 _logger?.LogWarning("IPD Service running - Auto-stopping");
                                 StopIPDService();
                             }
-
                             if (_wasOPDRunningBeforeDisconnection)
                             {
                                 _logger?.LogWarning("OPD Service running - Auto-stopping");
@@ -376,20 +394,37 @@ namespace ConHIS_Service_XPHL7
                         }));
                     }
                 }
+                else if (isConnected)
+                {
+                    // ⭐ สถานะไม่เปลี่ยน แต่ OPD/IPD อาจเปลี่ยน — อัปเดต UI เงียบๆ
+                    this.Invoke(new Action(() =>
+                    {
+                        UpdateConnectionStatus(true, opdConnected, ipdConnected);
+
+                        // ⭐ disable service ที่ DB หายไประหว่างทาง
+                        if (!ipdConnected && _ipdTimer != null)
+                        {
+                            _logger?.LogWarning("IPD DB lost during operation - Auto-stopping IPD");
+                            _wasIPDRunningBeforeDisconnection = true;
+                            StopIPDService();
+                        }
+                        if (!opdConnected && _opdTimer != null)
+                        {
+                            _logger?.LogWarning("OPD DB lost during operation - Auto-stopping OPD");
+                            _wasOPDRunningBeforeDisconnection = true;
+                            StopOPDService();
+                        }
+                    }));
+                }
             }
             catch (Exception ex)
             {
                 _logger?.LogError("Connection check error", ex);
                 this.Invoke(new Action(() =>
                 {
-                    UpdateConnectionStatus(false);
-
-                    // ⭐ รีเซ็ตสถานะ table เมื่อเกิด error
+                    UpdateConnectionStatus(false, false, false);
                     _ipdTableExists = false;
                     _opdTableExists = false;
-                    //_hasCheckedTables = false;
-
-                    // ⭐ อัปเดตปุ่มให้ disabled
                     UpdateServiceButtonStates();
                 }));
             }
@@ -728,54 +763,77 @@ namespace ConHIS_Service_XPHL7
                 }
 
                 _logger.LogInfo("Connecting to database");
-                _databaseService = new DatabaseService(_appConfig.ConnectionString);
+                _databaseService = new DatabaseService(
+     _appConfig.ConnectionString,
+     _appConfig.IpdConnectionString   // ⭐ เพิ่ม
+ );
 
-                bool dbConnected = await Task.Run(() => _databaseService.TestConnection());
-                UpdateConnectionStatus(dbConnected);
+                bool opdConnected = await Task.Run(() => _databaseService.TestConnection());
+                bool ipdConnected = await Task.Run(() => _databaseService.TestIPDConnection());
+                bool anyConnected = opdConnected || ipdConnected;
 
-                if (dbConnected)
+                UpdateConnectionStatus(anyConnected, opdConnected, ipdConnected);
+
+                if (anyConnected)
                 {
-                    _logger.LogInfo("DatabaseService initialized successfully");
+                    _logger.LogInfo($"DatabaseService initialized - OPD: {(opdConnected ? "✓" : "✗")}, IPD: {(ipdConnected ? "✓" : "✗")}");
 
-                    // ⭐ ตรวจสอบว่า Tables มีอยู่หรือไม่
+                    // ตรวจสอบ Tables ตาม DB ที่ connect ได้
                     _logger.LogInfo("Checking database tables...");
-                    _ipdTableExists = await CheckTableExists("drug_dispense_ipd");
-                    _opdTableExists = await CheckTableExists("drug_dispense_opd");
-                    //_hasCheckedTables = true;
+
+                    if (ipdConnected)
+                        _ipdTableExists = await CheckTableExists("drug_dispense_ipd");
+                    else
+                    {
+                        _ipdTableExists = false;
+                        _logger.LogWarning("Skipping IPD table check - IPD DB not connected");
+                    }
+
+                    if (opdConnected)
+                        _opdTableExists = await CheckTableExists("drug_dispense_opd");
+                    else
+                    {
+                        _opdTableExists = false;
+                        _logger.LogWarning("Skipping OPD table check - OPD DB not connected");
+                    }
 
                     _logger.LogInfo($"Table Status - IPD: {(_ipdTableExists ? "EXISTS" : "NOT FOUND")}, OPD: {(_opdTableExists ? "EXISTS" : "NOT FOUND")}");
 
-                    // ⭐ แสดง warning ถ้า table ไม่มี
-                    if (!_ipdTableExists || !_opdTableExists)
+                    // แสดง warning ถ้า DB connect ได้แต่ table ไม่มี
+                    var warnings = new System.Text.StringBuilder();
+
+                    if (ipdConnected && !_ipdTableExists)
+                        warnings.AppendLine("• drug_dispense_ipd (IPD DB connected but table missing)");
+                    if (opdConnected && !_opdTableExists)
+                        warnings.AppendLine("• drug_dispense_opd (OPD DB connected but table missing)");
+
+                    // แสดง warning ถ้า DB connect ไม่ได้เลย
+                    if (!ipdConnected)
+                        warnings.AppendLine("• IPD Database - Connection failed");
+                    if (!opdConnected)
+                        warnings.AppendLine("• OPD Database - Connection failed");
+
+                    if (warnings.Length > 0)
                     {
-                        string missingTables = "";
-                        if (!_ipdTableExists) missingTables += "drug_dispense_ipd";
-                        if (!_opdTableExists)
-                        {
-                            if (missingTables.Length > 0) missingTables += ", ";
-                            missingTables += "drug_dispense_opd";
-                        }
+                        string warningText = warnings.ToString();
+                        _logger.LogWarning($"⚠️ Issues detected:\n{warningText}");
 
-                        _logger.LogWarning($"⚠️ Missing tables: {missingTables}");
-
-                        // แสดง MessageBox แจ้งเตือน
                         this.BeginInvoke(new Action(() =>
                         {
                             ShowAutoCloseMessageBox(
                                 $"⚠️ Database Warning\n\n" +
-                                $"Missing tables detected:\n{missingTables}\n\n" +
+                                $"Issues detected:\n{warningText}\n" +
                                 $"IPD Service: {(_ipdTableExists ? "Available" : "Disabled")}\n" +
                                 $"OPD Service: {(_opdTableExists ? "Available" : "Disabled")}\n\n" +
-                                $"Please create the missing tables to enable all features.",
+                                $"Please check connection and tables.",
                                 "Database Warning",
-                                 3000,
-                                 false,
-                                 false
+                                3000,
+                                false,
+                                false
                             );
                         }));
                     }
 
-                    // ⭐ Update button states based on table availability
                     UpdateServiceButtonStates();
 
                     _isInitializing = true;
@@ -786,7 +844,7 @@ namespace ConHIS_Service_XPHL7
                 }
                 else
                 {
-                    _logger.LogWarning("Initial database connection failed");
+                    _logger.LogWarning("Both OPD and IPD database connections failed");
                 }
 
                 var apiService = new ApiService(AppConfig.ApiEndpoint);
@@ -2200,42 +2258,43 @@ namespace ConHIS_Service_XPHL7
 
             lastSuccessLabel.Text = $"Last Success: {_lastSuccessTime.Value:yyyy-MM-dd HH:mm:ss}{orderInfo}";
         }
-        private void UpdateConnectionStatus(bool isConnected)
+        private void UpdateConnectionStatus(bool anyConnected,
+    bool opdConnected = true, bool ipdConnected = true)
         {
-            _isDatabaseConnected = isConnected;
+            _isDatabaseConnected = anyConnected;
 
             if (connectionStatusLabel.InvokeRequired)
             {
-                connectionStatusLabel.Invoke(new Action(() => UpdateConnectionStatus(isConnected)));
+                connectionStatusLabel.Invoke(
+                    new Action(() => UpdateConnectionStatus(anyConnected, opdConnected, ipdConnected)));
                 return;
             }
 
-            if (isConnected)
+            if (anyConnected)
             {
                 _lastDatabaseConnectionTime = DateTime.Now;
                 string timeStr = _lastDatabaseConnectionTime.Value.ToString("yyyy-MM-dd HH:mm:ss");
 
-                connectionStatusLabel.Text = $"Database: ✓ Connected (Last Connected: {timeStr})";
-                connectionStatusLabel.ForeColor = System.Drawing.Color.Green;
+                // ⭐ แสดงสถานะแยก OPD/IPD
+                string opdStatus = opdConnected ? "✓ OPD" : "✗ OPD";
+                string ipdStatus = ipdConnected ? "✓ IPD" : "✗ IPD";
 
-
+                connectionStatusLabel.Text =
+                    $"Database: {opdStatus} | {ipdStatus} (Last Connected: {timeStr})";
+                connectionStatusLabel.ForeColor = (opdConnected && ipdConnected)
+                    ? System.Drawing.Color.Green
+                    : System.Drawing.Color.Orange; // ⭐ สีส้มถ้า connect ได้แค่อันเดียว
             }
             else
             {
                 _lastDatabaseDisconnectionTime = DateTime.Now;
-
                 string lastConnectedStr = _lastDatabaseConnectionTime.HasValue
                     ? $"Last Connected: {_lastDatabaseConnectionTime.Value:yyyy-MM-dd HH:mm:ss}"
                     : "Never Connected";
 
-                string disconnectedStr = _lastDatabaseDisconnectionTime.HasValue
-                    ? $"Disconnected at: {_lastDatabaseDisconnectionTime.Value:yyyy-MM-dd HH:mm:ss}"
-                    : "";
-
-                connectionStatusLabel.Text = $"Database: ✗ Disconnected ({disconnectedStr}) | {lastConnectedStr}";
+                connectionStatusLabel.Text =
+                    $"Database: ✗ OPD | ✗ IPD Disconnected | {lastConnectedStr}";
                 connectionStatusLabel.ForeColor = System.Drawing.Color.Red;
-
-
             }
         }
         private void UpdateStatusSummary()
