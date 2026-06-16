@@ -34,6 +34,7 @@ namespace ConHIS_Service_XPHL7.Services
     {
         private readonly DatabaseService _databaseService;
         private readonly HL7Service _hl7Service;
+        private readonly HL7ServiceIPD hL7ServiceIPD;
         private readonly ApiService _apiService;
         private readonly LogManager _logger = new LogManager();
         private readonly EncodingService _encodingService;
