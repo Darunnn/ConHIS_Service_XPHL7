@@ -357,7 +357,7 @@ namespace ConHIS_Service_XPHL7.Services
         }
 
         /// <summary>
-        /// Logic การ parse RXE/RXD ร่วมกัน (เหมือนกันทั้งสอง segment ใน IPD)
+        /// Logic การ parse RXE/RXD ร่วมกัน
         /// </summary>
         private RXD_IPD ParseRXDOrRXE(string[] fields, bool isRXE)
         {
@@ -369,7 +369,7 @@ namespace ConHIS_Service_XPHL7.Services
                 .ToArray();
 
             string drugName = drugParts.Length > 0 ? drugParts[0] : "";
-            string drugNamePrint = drugParts.Length > 1 ? drugParts[1] : "";   // IPD → f_orderitemnameTH
+            string drugNamePrint = drugParts.Length > 1 ? drugParts[1] : "";
             string drugNameThai = drugParts.Length > 2 ? drugParts[2] : "";
             string drugUnit = "";
             string cleanedDrugName = drugName;
@@ -459,7 +459,7 @@ namespace ConHIS_Service_XPHL7.Services
                     RXD203 = GetComponent(drugComponents, 2),
                     Identifier = GetComponent(drugComponents, 3),
                     DrugName = cleanedDrugName,
-                    DrugNamePrint = drugNamePrint,   // IPD ใช้ DrugNamePrint เป็น f_orderitemnameTH
+                    DrugNamePrint = drugNamePrint,
                     DrugNameThai = drugNameThai,
                     DrugUnit = drugUnit
                 },
@@ -573,6 +573,7 @@ namespace ConHIS_Service_XPHL7.Services
 
         /// <summary>
         /// รวม field 7 ที่อาจถูกตัดโดย pipe (Medicinal properties มี pipe อยู่ข้างใน)
+        /// หยุดรวมเมื่อเจอ field ที่เป็น "valid field 8 or later" เช่น PROUD หรือตัวเลขล้วน
         /// </summary>
         private List<string> BuildAdjustedFields(string[] fields)
         {
@@ -604,13 +605,50 @@ namespace ConHIS_Service_XPHL7.Services
             return adjustedFields;
         }
 
+        /// <summary>
+        /// ตัดสินว่า field ที่ index >= 8 เป็น field จริง (ไม่ใช่ส่วนต่อของ field 7)
+        /// 
+        /// กฎ:
+        ///   - empty → ถือว่าเป็น field จริง (หยุดรวม)
+        ///   - ขึ้นต้นด้วย "^"       → ยังเป็นส่วนของ field 7 (component ที่ถูกตัด)
+        ///   - มี "^^"               → ยังเป็นส่วนของ field 7
+        ///   - URL (http/https)      → ยังเป็นส่วนของ field 7 (เช่น label ยาที่มี link)
+        ///   - ขึ้นต้นด้วย "ยา"      → ยังเป็นส่วนของ field 7 (ชื่อกลุ่มยา)
+        ///   - มีคำไทยบอกวิธีกิน    → ยังเป็นส่วนของ field 7
+        ///   - "PROUD" หรือตัวเลขล้วน → field จริง (หยุดรวม)
+        /// </summary>
         private bool IsValidField8OrLater(string fieldValue)
         {
-            if (string.IsNullOrEmpty(fieldValue)) return true;
-            if (fieldValue.StartsWith("^")) return false;
-            if (fieldValue.Contains("^^")) return false;
-            if (fieldValue.Equals("PROUD") || fieldValue.All(char.IsDigit)) return true;
-            if (fieldValue.Contains("รับประทาน") || fieldValue.Contains("เม็ด") || fieldValue.Contains("ครั้ง")) return false;
+            if (string.IsNullOrEmpty(fieldValue))
+                return true;
+
+            // ยังเป็นส่วนของ field 7 (component ที่ถูกตัดโดย pipe)
+            if (fieldValue.StartsWith("^"))
+                return false;
+
+            if (fieldValue.Contains("^^"))
+                return false;
+
+            // URL ที่ฝังใน field 7 (เช่น link ข้อมูลยา)
+            if (fieldValue.StartsWith("http://", StringComparison.OrdinalIgnoreCase) ||
+                fieldValue.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
+                return false;
+
+            // ชื่อกลุ่มยาภาษาไทย เช่น "ยาเบาหวาน", "ยาลดบวม"
+            if (fieldValue.StartsWith("ยา"))
+                return false;
+
+            // คำบอกวิธีรับประทาน
+            if (fieldValue.Contains("รับประทาน") ||
+                fieldValue.Contains("เม็ด") ||
+                fieldValue.Contains("ครั้ง"))
+                return false;
+
+            // field จริง: PROUD หรือตัวเลขล้วน (QTY, Dose ฯลฯ)
+            if (fieldValue.Equals("PROUD", StringComparison.OrdinalIgnoreCase) ||
+                fieldValue.All(char.IsDigit))
+                return true;
+
             return true;
         }
 
@@ -624,6 +662,12 @@ namespace ConHIS_Service_XPHL7.Services
             return index < components.Length ? components[index] : "";
         }
 
+        /// <summary>
+        /// Parse datetime string รองรับ format ที่ส่งมาจริง:
+        ///   - yyyyMMddHHmmss         เช่น 20260612100145
+        ///   - yyyyMMdd               เช่น 20260612
+        ///   - yyyyMMddHH:mm:ss       เช่น 2026061210:01:45  ← format ที่พบในข้อมูลจริง
+        /// </summary>
         private DateTime? ParseDateTime(string dateTimeStr)
         {
             if (string.IsNullOrWhiteSpace(dateTimeStr))
@@ -631,17 +675,27 @@ namespace ConHIS_Service_XPHL7.Services
 
             var provider = System.Globalization.CultureInfo.InvariantCulture;
 
+            // แก้ไข: เพิ่ม format yyyyMMddHH:mm:ss ที่พบในข้อมูลจริง เช่น "2026061210:01:45"
             string[] formats =
             {
                 "yyyyMMddHHmmss",
                 "yyyyMMdd",
-                "yyyyMMddHH:mm:ss"
+                "yyyyMMddHH:mm:ss",
+                "yyyyMMddHH':'mm':'ss"
             };
 
             if (DateTime.TryParseExact(dateTimeStr, formats, provider,
                 System.Globalization.DateTimeStyles.None, out DateTime result))
             {
                 return result;
+            }
+
+            // Fallback: ลอง normalize "2026061210:01:45" → "20260612100145" แล้ว parse ใหม่
+            var normalized = dateTimeStr.Replace(":", "");
+            if (DateTime.TryParseExact(normalized, "yyyyMMddHHmmss", provider,
+                System.Globalization.DateTimeStyles.None, out DateTime fallback))
+            {
+                return fallback;
             }
 
             return null;
