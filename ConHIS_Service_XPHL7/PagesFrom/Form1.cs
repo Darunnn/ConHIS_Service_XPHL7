@@ -26,21 +26,17 @@ namespace ConHIS_Service_XPHL7
         private DateTime? _lastFoundTime = null;
         private DateTime? _lastSuccessTime = null;
         private string _lastSuccessOrderId = null;
+
         // Windows API สำหรับปิด MessageBox อัตโนมัติ
         [DllImport("user32.dll", SetLastError = true)]
         static extern IntPtr FindWindow(string lpClassName, string lpWindowName);
         [DllImport("user32.dll", CharSet = CharSet.Auto)]
         static extern IntPtr SendMessage(IntPtr hWnd, UInt32 Msg, IntPtr wParam, IntPtr lParam);
         private const UInt32 WM_CLOSE = 0x0010;
-        // private bool _wasServiceRunningBeforeDisconnection = false;
 
-        // Background service components
-        // private CancellationTokenSource _backgroundCancellationTokenSource = null;
-        //private Timer _backgroundTimer;
-        //private bool _isProcessing = false;
         private int _intervalSeconds = 5;
 
-        // ⭐ Connection Monitor - เพิ่มใหม่
+        // ⭐ Connection Monitor
         private Timer _connectionCheckTimer;
         private DateTime? _lastDatabaseDisconnectionTime = null;
         private readonly int _connectionCheckIntervalSeconds = 5;
@@ -54,13 +50,14 @@ namespace ConHIS_Service_XPHL7
         private DataView _filteredDataView;
 
         // เก็บ HL7Message ที่เชื่อมกับแต่ละแถว
-        private System.Collections.Generic.Dictionary<int, HL7Message> _rowHL7Data = new System.Collections.Generic.Dictionary<int, HL7Message>();
+        private System.Collections.Generic.Dictionary<int, HL7Message> _rowHL7Data =
+            new System.Collections.Generic.Dictionary<int, HL7Message>();
 
         // Connection status
         private bool _isDatabaseConnected = false;
         private bool _isInitializing = false;
 
-        // ⭐ เพิ่มตัวแปรสำหรับ IPD/OPD Services
+        // ⭐ IPD/OPD Services
         private CancellationTokenSource _ipdCancellationTokenSource = null;
         private CancellationTokenSource _opdCancellationTokenSource = null;
         private Timer _ipdTimer;
@@ -70,15 +67,20 @@ namespace ConHIS_Service_XPHL7
         private bool _wasIPDRunningBeforeDisconnection = false;
         private bool _wasOPDRunningBeforeDisconnection = false;
 
+        // ⭐ Auto-start flags (เก็บว่าตอน load ควร auto-start อะไร)
+        private bool _autoStartIPD = false;
+        private bool _autoStartOPD = false;
+
         #endregion
 
         #region Additional Variables for Table Status
         private bool _ipdTableExists = false;
         private bool _opdTableExists = false;
-        // private bool _hasCheckedTables = false;
         #endregion
+
         private EncodingService _encodingService;
-        // ⭐ เพิ่ม Method ตรวจสอบว่า Table มีอยู่หรือไม่
+
+        // ⭐ ตรวจสอบว่า Table มีอยู่หรือไม่
         private async Task<bool> CheckTableExists(string tableName)
         {
             try
@@ -91,18 +93,17 @@ namespace ConHIS_Service_XPHL7
                 return false;
             }
         }
+
         public Form1()
         {
             InitializeComponent();
             this.Load += Form1_Load;
             this.FormClosing += Form1_FormClosing;
             _logger = new LogManager();
-
         }
 
         private void InitializeDataTable()
         {
-            // ⭐ ลบการเชื่อม event เก่า (ถ้ามี)
             if (dataGridView != null)
             {
                 dataGridView.CellClick -= DataGridView_CellClick;
@@ -114,7 +115,7 @@ namespace ConHIS_Service_XPHL7
             _processedDataTable = new DataTable();
             _processedDataTable.Columns.Add("Time Check", typeof(string));
             _processedDataTable.Columns.Add("Transaction DateTime", typeof(string));
-            _processedDataTable.Columns.Add("Service Type", typeof(string)); // ⭐ เพิ่ม column ใหม่
+            _processedDataTable.Columns.Add("Service Type", typeof(string));
             _processedDataTable.Columns.Add("Order No", typeof(string));
             _processedDataTable.Columns.Add("HN", typeof(string));
             _processedDataTable.Columns.Add("Patient Name", typeof(string));
@@ -126,28 +127,24 @@ namespace ConHIS_Service_XPHL7
             _filteredDataView = new DataView(_processedDataTable);
             dataGridView.DataSource = _filteredDataView;
 
-            // ⭐ เพิ่ม event handler สำหรับ sort
             dataGridView.ColumnHeaderMouseClick += DataGridView_ColumnHeaderMouseClick;
-
-            // ⭐ เชื่อม event ครั้งเดียวเท่านั้น
             dataGridView.CellClick += DataGridView_CellClick;
 
             UpdateStatusSummary();
 
             try
             {
-                if (dataGridView.Columns.Count >= 10) // ⭐ เปลี่ยนจาก 9 เป็น 10
+                if (dataGridView.Columns.Count >= 10)
                 {
                     dataGridView.Columns["Time Check"].Width = 165;
                     dataGridView.Columns["Transaction DateTime"].Width = 165;
-                    dataGridView.Columns["Service Type"].Width = 80; // ⭐ เพิ่มความกว้าง column ใหม่
+                    dataGridView.Columns["Service Type"].Width = 80;
                     dataGridView.Columns["Order No"].Width = 110;
                     dataGridView.Columns["HN"].Width = 90;
                     dataGridView.Columns["Patient Name"].Width = 165;
                     dataGridView.Columns["FinancialClass"].Width = 165;
                     dataGridView.Columns["OrderControl"].Width = 90;
                     dataGridView.Columns["Status"].Width = 110;
-
                     dataGridView.Columns["API Response"].Visible = false;
                     AddViewButtonColumn();
                 }
@@ -158,13 +155,10 @@ namespace ConHIS_Service_XPHL7
             }
         }
 
-
-        // ⭐ เพิ่ม Method สำหรับ Reset Notification Flags
         private void ResetNotificationFlags()
         {
             _hasNotifiedDisconnection = false;
             _hasNotifiedReconnection = false;
-            // _wasServiceRunningBeforeDisconnection = false;
         }
 
         // ⭐ เริ่ม Connection Monitor
@@ -172,7 +166,7 @@ namespace ConHIS_Service_XPHL7
         {
             var intervalMs = _connectionCheckIntervalSeconds * 1000;
             _connectionCheckTimer = new Timer(ConnectionCheckCallback, null, intervalMs, intervalMs);
-            ResetNotificationFlags(); // Reset flags เมื่อเริ่ม monitor
+            ResetNotificationFlags();
             _logger?.LogInfo($"Connection monitor started - checking every {_connectionCheckIntervalSeconds} seconds");
         }
 
@@ -181,15 +175,65 @@ namespace ConHIS_Service_XPHL7
         {
             _connectionCheckTimer?.Dispose();
             _connectionCheckTimer = null;
-            ResetNotificationFlags(); // Reset flags เมื่อหยุด monitor
+            ResetNotificationFlags();
             _logger?.LogInfo("Connection monitor stopped");
         }
-        private void ShowAutoCloseMessageBox(string message, string title, int timeoutMs,
-    bool shouldResumeIPD, bool shouldResumeOPD)
-        {
-            System.Threading.Timer timer = null;
 
-            timer = new System.Threading.Timer(async (obj) =>
+        // ⭐ ShowAutoCloseMessageBox - ปิด MessageBox อัตโนมัติ
+        // แยก resume service ออกจาก MessageBox โดยสิ้นเชิง
+        // เพื่อป้องกัน race condition ระหว่าง WM_CLOSE กับ blocking MessageBox.Show()
+        private void ShowAutoCloseMessageBox(string message, string title, int timeoutMs,
+            bool shouldResumeIPD, bool shouldResumeOPD)
+        {
+            // ⭐ ถ้าต้อง resume service → schedule ไว้ก่อนเปิด MessageBox เลย
+            // ใช้ Task.Delay แยก thread เพื่อไม่ให้ถูก block โดย MessageBox.Show()
+            if (shouldResumeIPD || shouldResumeOPD)
+            {
+                // รอให้ MessageBox ปิดก่อน (timeout + buffer 500ms) แล้วค่อย resume
+                int resumeDelayMs = timeoutMs + 800;
+                Task.Run(async () =>
+                {
+                    await Task.Delay(resumeDelayMs);
+
+                    if (!this.IsHandleCreated || this.IsDisposed) return;
+
+                    try
+                    {
+                        this.Invoke(new Action(() =>
+                        {
+                            try
+                            {
+                                if (shouldResumeIPD && _ipdTimer == null && _ipdTableExists)
+                                {
+                                    _logger?.LogInfo("Auto-resuming IPD Service after reconnect");
+                                    StartIPDService();
+                                }
+                                if (shouldResumeOPD && _opdTimer == null && _opdTableExists)
+                                {
+                                    _logger?.LogInfo("Auto-resuming OPD Service after reconnect");
+                                    StartOPDService();
+                                }
+
+                                // ⭐ อัปเดตสถานะปุ่ม manual check
+                                bool anyRunning = (_ipdTimer != null) || (_opdTimer != null);
+                                manualCheckButton.Enabled = !anyRunning;
+                            }
+                            catch (Exception ex)
+                            {
+                                _logger?.LogError("Error resuming services after reconnect", ex);
+                            }
+                        }));
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger?.LogError("Error invoking resume on UI thread", ex);
+                    }
+                });
+            }
+
+            // ⭐ ปิด MessageBox อัตโนมัติด้วย WM_CLOSE
+            System.Threading.Timer closeTimer = null;
+            closeTimer = new System.Threading.Timer((obj) =>
             {
                 try
                 {
@@ -198,40 +242,22 @@ namespace ConHIS_Service_XPHL7
                     {
                         SendMessage(hwnd, WM_CLOSE, IntPtr.Zero, IntPtr.Zero);
                     }
-
-                    if (shouldResumeIPD || shouldResumeOPD)
-                    {
-                        await Task.Delay(500);
-
-                        this.Invoke(new Action(() =>
-                        {
-                            if (shouldResumeIPD && _ipdTimer == null)
-                            {
-                                _logger?.LogInfo("Auto-resuming IPD Service");
-                                StartIPDService();
-                            }
-
-                            if (shouldResumeOPD && _opdTimer == null)
-                            {
-                                _logger?.LogInfo("Auto-resuming OPD Service");
-                                StartOPDService();
-                            }
-                        }));
-                    }
                 }
                 catch (Exception ex)
                 {
-                    _logger?.LogError("Error in auto-close timer", ex);
+                    _logger?.LogError("Error closing MessageBox", ex);
                 }
                 finally
                 {
-                    timer?.Dispose();
+                    closeTimer?.Dispose();
                 }
             }, null, timeoutMs, System.Threading.Timeout.Infinite);
 
+            // Blocking call — แต่ resume service ถูก schedule ไว้แล้วใน Task.Run ข้างบน
             MessageBox.Show(message, title, MessageBoxButtons.OK, MessageBoxIcon.Information);
         }
-        // ⭐  ConnectionCheckCallback เพื่อเช็ค table และอัปเดตปุ่ม
+
+        // ⭐ ConnectionCheckCallback
         private async void ConnectionCheckCallback(object state)
         {
             if (_isCheckingConnection) return;
@@ -254,12 +280,10 @@ namespace ConHIS_Service_XPHL7
                         {
                             try
                             {
-                                // ⭐ ส่ง opdConnected/ipdConnected แยกกัน
                                 UpdateConnectionStatus(true, opdConnected, ipdConnected);
 
                                 _logger?.LogInfo("Rechecking database tables after reconnection...");
 
-                                // ⭐ เช็ค table เฉพาะ DB ที่ connect ได้
                                 if (ipdConnected)
                                     _ipdTableExists = await CheckTableExists("drug_dispense_ipd");
                                 else
@@ -283,6 +307,7 @@ namespace ConHIS_Service_XPHL7
                                     _hasNotifiedReconnection = true;
                                     _hasNotifiedDisconnection = false;
 
+                                    // ⭐ Auto-resume เฉพาะถ้าก่อน disconnect กำลัง running อยู่
                                     bool shouldResumeIPD = _wasIPDRunningBeforeDisconnection && _ipdTableExists;
                                     bool shouldResumeOPD = _wasOPDRunningBeforeDisconnection && _opdTableExists;
 
@@ -294,7 +319,6 @@ namespace ConHIS_Service_XPHL7
                                     else if (shouldResumeOPD)
                                         serviceMessage = "\n\n⚡ OPD Service will resume in 3 seconds...";
 
-                                    // ⭐ warning ทั้ง table missing และ DB ที่ยัง connect ไม่ได้
                                     string tableWarning = "";
                                     if (!ipdConnected)
                                         tableWarning += "\n⚠️ IPD Database still disconnected - IPD Service disabled";
@@ -306,7 +330,6 @@ namespace ConHIS_Service_XPHL7
                                     else if (_wasOPDRunningBeforeDisconnection && !_opdTableExists)
                                         tableWarning += "\n⚠️ OPD table not found - OPD Service disabled";
 
-                                    // ⭐ แสดงว่า DB ไหน reconnect ได้บ้าง
                                     string dbStatus = "";
                                     if (opdConnected && ipdConnected)
                                         dbStatus = "✅ OPD & IPD Databases restored!";
@@ -315,6 +338,9 @@ namespace ConHIS_Service_XPHL7
                                     else
                                         dbStatus = "✅ IPD Database restored!\n⚠️ OPD Database still disconnected";
 
+                                    // ⭐ shouldResume ถูกส่งเข้า ShowAutoCloseMessageBox
+                                    // ซึ่งจะ schedule Task.Run ไว้รอ timeout+800ms แล้วค่อย start service
+                                    // (แยกออกจาก blocking MessageBox.Show() โดยสิ้นเชิง)
                                     this.BeginInvoke(new Action(() =>
                                     {
                                         ShowAutoCloseMessageBox(
@@ -339,7 +365,7 @@ namespace ConHIS_Service_XPHL7
                     }
                     else
                     {
-                        // ❌ Disconnected ทั้งคู่
+                        // ❌ Disconnected
                         this.Invoke(new Action(() =>
                         {
                             UpdateConnectionStatus(false, false, false);
@@ -348,17 +374,18 @@ namespace ConHIS_Service_XPHL7
                             _opdTableExists = false;
                             UpdateServiceButtonStates();
 
+                            // ⭐ บันทึกสถานะก่อน disconnect
                             _wasIPDRunningBeforeDisconnection = (_ipdTimer != null);
                             _wasOPDRunningBeforeDisconnection = (_opdTimer != null);
 
                             if (_wasIPDRunningBeforeDisconnection)
                             {
-                                _logger?.LogWarning("IPD Service running - Auto-stopping");
+                                _logger?.LogWarning("IPD Service running - Auto-stopping due to DB disconnect");
                                 StopIPDService();
                             }
                             if (_wasOPDRunningBeforeDisconnection)
                             {
-                                _logger?.LogWarning("OPD Service running - Auto-stopping");
+                                _logger?.LogWarning("OPD Service running - Auto-stopping due to DB disconnect");
                                 StopOPDService();
                             }
 
@@ -396,12 +423,11 @@ namespace ConHIS_Service_XPHL7
                 }
                 else if (isConnected)
                 {
-                    // ⭐ สถานะไม่เปลี่ยน แต่ OPD/IPD อาจเปลี่ยน — อัปเดต UI เงียบๆ
+                    // สถานะไม่เปลี่ยน แต่ OPD/IPD อาจเปลี่ยน — อัปเดต UI เงียบๆ
                     this.Invoke(new Action(() =>
                     {
                         UpdateConnectionStatus(true, opdConnected, ipdConnected);
 
-                        // ⭐ disable service ที่ DB หายไประหว่างทาง
                         if (!ipdConnected && _ipdTimer != null)
                         {
                             _logger?.LogWarning("IPD DB lost during operation - Auto-stopping IPD");
@@ -436,7 +462,6 @@ namespace ConHIS_Service_XPHL7
 
         private void InitializePanelPaintEvents()
         {
-            // ⭐ Set initial filter to "All" ถ้ายังไม่ได้กำหนด
             if (string.IsNullOrEmpty(_currentStatusFilter))
             {
                 _currentStatusFilter = "All";
@@ -455,25 +480,15 @@ namespace ConHIS_Service_XPHL7
             opdPanel.Click += OPDPanel_Click;
 
             foreach (Control ctrl in totalPanel.Controls)
-            {
                 if (ctrl is Label) { ctrl.Click += TotalPanel_Click; ctrl.Cursor = System.Windows.Forms.Cursors.Hand; }
-            }
             foreach (Control ctrl in successPanel.Controls)
-            {
                 if (ctrl is Label) { ctrl.Click += SuccessPanel_Click; ctrl.Cursor = System.Windows.Forms.Cursors.Hand; }
-            }
             foreach (Control ctrl in failedPanel.Controls)
-            {
                 if (ctrl is Label) { ctrl.Click += FailedPanel_Click; ctrl.Cursor = System.Windows.Forms.Cursors.Hand; }
-            }
             foreach (Control ctrl in ipdPanel.Controls)
-            {
                 if (ctrl is Label) { ctrl.Click += IPDPanel_Click; ctrl.Cursor = System.Windows.Forms.Cursors.Hand; }
-            }
             foreach (Control ctrl in opdPanel.Controls)
-            {
                 if (ctrl is Label) { ctrl.Click += OPDPanel_Click; ctrl.Cursor = System.Windows.Forms.Cursors.Hand; }
-            }
 
             totalPanel.Cursor = System.Windows.Forms.Cursors.Hand;
             successPanel.Cursor = System.Windows.Forms.Cursors.Hand;
@@ -482,16 +497,12 @@ namespace ConHIS_Service_XPHL7
             opdPanel.Cursor = System.Windows.Forms.Cursors.Hand;
         }
 
-        // ⭐ แก้ไขส่วน LoadDataBySelectedDate ที่มีปัญหา
-
         private async Task LoadDataBySelectedDate()
         {
-
             try
             {
                 DateTime selectedDate = dateTimePicker.Value.Date;
                 string searchText = searchTextBox.Text.Trim();
-
 
                 UpdateStatus($"Loading data for {selectedDate:yyyy-MM-dd}...");
 
@@ -507,7 +518,6 @@ namespace ConHIS_Service_XPHL7
 
                 if (!_ipdTableExists && !_opdTableExists)
                 {
-
                     UpdateStatus("✗ No database tables available");
                     return;
                 }
@@ -535,9 +545,7 @@ namespace ConHIS_Service_XPHL7
                 });
 
                 if (dispenseData == null)
-                {
                     dispenseData = new List<DrugDispenseipd>();
-                }
 
                 _logger.LogInfo($"[LoadDataBySelectedDate] Database returned {dispenseData.Count} records");
 
@@ -555,24 +563,18 @@ namespace ConHIS_Service_XPHL7
                     {
                         if (data.Hl7Data == null || data.Hl7Data.Length == 0)
                         {
-
                             skippedCount++;
                             continue;
                         }
-
-
 
                         string hl7String = _encodingService.DecodeHl7Data(data.Hl7Data, data.RecieveOrderType);
 
                         if (string.IsNullOrWhiteSpace(hl7String))
                         {
-
                             skippedCount++;
                             continue;
                         }
 
-                        // ⭐⭐⭐ แก้ไขตรงนี้ - ใช้ RecieveOrderType เป็นตัวกำหนด Service Type เท่านั้น
-                        // ไม่ใช้เป็น orderControl
                         string serviceType = "N/A";
                         if (!string.IsNullOrEmpty(data.RecieveOrderType))
                         {
@@ -581,25 +583,17 @@ namespace ConHIS_Service_XPHL7
                             else if (data.RecieveOrderType.Contains("OPD"))
                                 serviceType = "OPD";
                             else
-                                serviceType = data.RecieveOrderType; // ถ้าเป็นค่าอื่นๆ ก็เอาไปเลย
+                                serviceType = data.RecieveOrderType;
                         }
 
-                        // นับจำนวน IPD/OPD
-                        if (serviceType == "IPD")
-                            ipdRecordCount++;
-                        else if (serviceType == "OPD")
-                            opdRecordCount++;
+                        if (serviceType == "IPD") ipdRecordCount++;
+                        else if (serviceType == "OPD") opdRecordCount++;
 
-
-
-
-                        // Parse HL7
                         HL7Message hl7Message = null;
 
                         try
                         {
                             hl7Message = hl7Service.ParseHL7Message(hl7String);
-
                         }
                         catch (Exception parseEx)
                         {
@@ -609,32 +603,19 @@ namespace ConHIS_Service_XPHL7
                             continue;
                         }
 
-
-
-
-                        // ประมวลผลข้อมูลต่อ
                         DateTime timeCheckDate = DateTime.Now;
                         if (data.RecieveStatusDatetime.HasValue && data.RecieveStatusDatetime.Value != DateTime.MinValue)
-                        {
                             timeCheckDate = data.RecieveStatusDatetime.Value;
-                        }
                         else if (data.DrugDispenseDatetime != DateTime.MinValue)
-                        {
                             timeCheckDate = data.DrugDispenseDatetime;
-                        }
                         else if (hl7Message?.CommonOrder?.TransactionDateTime.HasValue == true)
-                        {
                             timeCheckDate = hl7Message.CommonOrder.TransactionDateTime.Value;
-                        }
 
                         string timeCheck = timeCheckDate.ToString("yyyy-MM-dd HH:mm:ss");
-
-                        DateTime timetransactionDt = data.DrugDispenseDatetime;
-                        string transactionDateTime = timetransactionDt.ToString("yyyy-MM-dd HH:mm:ss");
-
+                        string transactionDateTime = data.DrugDispenseDatetime.ToString("yyyy-MM-dd HH:mm:ss");
                         string orderNo = hl7Message?.CommonOrder?.PlacerOrderNumber ?? "N/A";
                         string hn = hl7Message?.PatientIdentification?.PatientIDExternal ??
-                                   hl7Message?.PatientIdentification?.PatientIDInternal ?? "N/A";
+                                    hl7Message?.PatientIdentification?.PatientIDInternal ?? "N/A";
 
                         string patientName = "N/A";
                         if (hl7Message?.PatientIdentification?.OfficialName != null)
@@ -652,10 +633,8 @@ namespace ConHIS_Service_XPHL7
                             if (string.IsNullOrWhiteSpace(financialClass)) financialClass = "N/A";
                         }
 
-                        // ⭐⭐⭐ แก้ไขตรงนี้ - เอา OrderControl จาก HL7 ตรงๆ ไม่ใช้ RecieveOrderType
                         string orderControl = hl7Message?.CommonOrder?.OrderControl ?? "N/A";
 
-                        // ตัดสินใจแสดงบน Grid
                         string status = "N/A";
                         if (data.RecieveStatus == 'Y')
                         {
@@ -672,25 +651,19 @@ namespace ConHIS_Service_XPHL7
                         }
                         else if (data.RecieveStatus == 'N')
                         {
-
                             skippedCount++;
                             continue;
                         }
 
-                        // ⭐⭐⭐ ส่ง serviceType และ orderControl แยกกัน
                         AddRowToGrid(timeCheck, transactionDateTime, serviceType, orderNo, hn, patientName,
-                                   financialClass, orderControl, status, "Database Record", hl7Message);
+                                     financialClass, orderControl, status, "Database Record", hl7Message);
                         loadedCount++;
-
-                        
                     }
                     catch (Exception ex)
                     {
                         _logger?.LogError($"❌ Error loading record {dispenseId}: {ex.Message}", ex);
-                        _logger?.LogReadError(
-                            dispenseId,
-                            $"Failed to process record: {ex.Message}\nStackTrace: {ex.StackTrace}"
-                        );
+                        _logger?.LogReadError(dispenseId,
+                            $"Failed to process record: {ex.Message}\nStackTrace: {ex.StackTrace}");
                         skippedCount++;
                     }
                 }
@@ -703,23 +676,14 @@ namespace ConHIS_Service_XPHL7
                 UpdateStatusFilterButtons();
 
                 string tableInfo = "";
-                if (_ipdTableExists && _opdTableExists)
-                    tableInfo = "IPD+OPD";
-                else if (_ipdTableExists)
-                    tableInfo = "IPD only";
-                else if (_opdTableExists)
-                    tableInfo = "OPD only";
+                if (_ipdTableExists && _opdTableExists) tableInfo = "IPD+OPD";
+                else if (_ipdTableExists) tableInfo = "IPD only";
+                else if (_opdTableExists) tableInfo = "OPD only";
 
                 if (loadedCount > 0)
-                {
                     UpdateStatus($"✓ Loaded {loadedCount} records ({tableInfo}) | IPD={ipdRecordCount}, OPD={opdRecordCount}");
-                }
                 else
-                {
                     UpdateStatus($"✗ No records found ({tableInfo})");
-                }
-
-
             }
             catch (Exception ex)
             {
@@ -728,8 +692,9 @@ namespace ConHIS_Service_XPHL7
             }
         }
 
-
-
+        // ==========================================
+        // ⭐⭐⭐ Form1_Load - AUTO START เมื่อเปิดโปรแกรม
+        // ==========================================
         private async void Form1_Load(object sender, EventArgs e)
         {
             _logger.LogInfo("Start Interface");
@@ -740,24 +705,22 @@ namespace ConHIS_Service_XPHL7
 
             try
             {
-
                 _appConfig = new AppConfig();
                 _appConfig.LoadConfiguration();
 
                 _intervalSeconds = _appConfig.ProcessingIntervalSeconds;
 
                 if (_intervalSeconds < 5)
-                {
                     _logger.LogWarning($"⚠️ Very fast interval ({_intervalSeconds}s) may cause high load!");
-                }
                 else if (_intervalSeconds <= 10)
-                {
                     _logger.LogInfo($"ℹ️ Using fast interval ({_intervalSeconds}s) - Monitor system load");
-                }
+
                 _encodingService = EncodingService.FromConnectionConfig(_logger.LogInfo);
-_logger.LogInfo($"OPD Encoding: {_encodingService.CurrentEncoding}");
-_logger.LogInfo($"IPD Encoding: {_encodingService.CurrentIPDEncoding}");
-                if (int.TryParse(System.Configuration.ConfigurationManager.AppSettings["LogRetentionDays"], out int retentionDays))
+                _logger.LogInfo($"OPD Encoding: {_encodingService.CurrentEncoding}");
+                _logger.LogInfo($"IPD Encoding: {_encodingService.CurrentIPDEncoding}");
+
+                if (int.TryParse(System.Configuration.ConfigurationManager.AppSettings["LogRetentionDays"],
+                        out int retentionDays))
                 {
                     _logger.LogRetentionDays = retentionDays;
                     _logger.LogInfo($"Log retention days loaded: {retentionDays} days");
@@ -765,9 +728,9 @@ _logger.LogInfo($"IPD Encoding: {_encodingService.CurrentIPDEncoding}");
 
                 _logger.LogInfo("Connecting to database");
                 _databaseService = new DatabaseService(
-     _appConfig.ConnectionString,
-     _appConfig.IpdConnectionString   // ⭐ เพิ่ม
- );
+                    _appConfig.ConnectionString,
+                    _appConfig.IpdConnectionString
+                );
 
                 bool opdConnected = await Task.Run(() => _databaseService.TestConnection());
                 bool ipdConnected = await Task.Run(() => _databaseService.TestIPDConnection());
@@ -779,7 +742,6 @@ _logger.LogInfo($"IPD Encoding: {_encodingService.CurrentIPDEncoding}");
                 {
                     _logger.LogInfo($"DatabaseService initialized - OPD: {(opdConnected ? "✓" : "✗")}, IPD: {(ipdConnected ? "✓" : "✗")}");
 
-                    // ตรวจสอบ Tables ตาม DB ที่ connect ได้
                     _logger.LogInfo("Checking database tables...");
 
                     if (ipdConnected)
@@ -800,15 +762,12 @@ _logger.LogInfo($"IPD Encoding: {_encodingService.CurrentIPDEncoding}");
 
                     _logger.LogInfo($"Table Status - IPD: {(_ipdTableExists ? "EXISTS" : "NOT FOUND")}, OPD: {(_opdTableExists ? "EXISTS" : "NOT FOUND")}");
 
-                    // แสดง warning ถ้า DB connect ได้แต่ table ไม่มี
+                    // ⭐ แสดง warning ถ้า DB connect ได้แต่ table ไม่มี
                     var warnings = new System.Text.StringBuilder();
-
                     if (ipdConnected && !_ipdTableExists)
                         warnings.AppendLine("• drug_dispense_ipd (IPD DB connected but table missing)");
                     if (opdConnected && !_opdTableExists)
                         warnings.AppendLine("• drug_dispense_opd (OPD DB connected but table missing)");
-
-                    // แสดง warning ถ้า DB connect ไม่ได้เลย
                     if (!ipdConnected)
                         warnings.AppendLine("• IPD Database - Connection failed");
                     if (!opdConnected)
@@ -852,18 +811,74 @@ _logger.LogInfo($"IPD Encoding: {_encodingService.CurrentIPDEncoding}");
                 var hl7Service = new HL7Service();
                 _processor = new DrugDispenseProcessor(_databaseService, hl7Service, apiService);
 
-
                 InitializePanelPaintEvents();
                 UpdateStatusFilterButtons();
                 StartConnectionMonitor();
 
-                UpdateStatus("Ready - Services Stopped");
-                InitializeExportButton();
-                // ⭐ เปิดใช้งาน buttons ตามสถานะของ tables
-                UpdateServiceButtonStates();
                 manualCheckButton.Enabled = true;
                 exportButton.Enabled = true;
                 settingsButton.Enabled = true;
+                UpdateServiceButtonStates();
+                InitializeExportButton();
+
+                // ⭐⭐⭐ AUTO START เมื่อเปิดโปรแกรม
+                // start service ก่อน แล้วค่อยแสดง popup แยกต่างหาก
+                _logger.LogInfo("Checking auto-start conditions...");
+
+                bool autoStartedAny = false;
+
+                if (_ipdTableExists)
+                {
+                    _logger.LogInfo("Auto-starting IPD Service on program load");
+                    StartIPDService();
+                    autoStartedAny = true;
+                }
+                else
+                {
+                    _logger.LogInfo("IPD auto-start skipped - table not available");
+                }
+
+                if (_opdTableExists)
+                {
+                    _logger.LogInfo("Auto-starting OPD Service on program load");
+                    StartOPDService();
+                    autoStartedAny = true;
+                }
+                else
+                {
+                    _logger.LogInfo("OPD auto-start skipped - table not available");
+                }
+
+                if (autoStartedAny)
+                {
+                    // ⭐ ปิด manual check ขณะ service กำลัง run
+                    manualCheckButton.Enabled = false;
+
+                    string autoStartMsg = "";
+                    if (_ipdTableExists && _opdTableExists)
+                        autoStartMsg = "✅ IPD & OPD Services started automatically";
+                    else if (_ipdTableExists)
+                        autoStartMsg = "✅ IPD Service started automatically";
+                    else if (_opdTableExists)
+                        autoStartMsg = "✅ OPD Service started automatically";
+
+                    // ⭐ แสดง popup แบบ non-blocking — service เริ่มแล้ว ไม่ต้อง resume
+                    // ใช้ BeginInvoke เพื่อให้ Form แสดงผลก่อน แล้ว popup ค่อยขึ้น
+                    this.BeginInvoke(new Action(() =>
+                    {
+                        ShowAutoCloseMessageBox(
+                            $"🚀 Auto Start\n\n{autoStartMsg}\n\nInterval: {_intervalSeconds} seconds",
+                            "Service Auto Started",
+                            3000,
+                            false,   // ไม่ต้อง resume — start ไปแล้วก่อนแสดง popup
+                            false
+                        );
+                    }));
+                }
+                else
+                {
+                    UpdateStatus("Ready - No tables available for auto-start");
+                }
             }
             catch (Exception ex)
             {
@@ -873,24 +888,16 @@ _logger.LogInfo($"IPD Encoding: {_encodingService.CurrentIPDEncoding}");
             }
         }
 
-
-
-        // เพิ่ม code เหล่านี้ใน Form1.cs
-
         #region Export HL7 Data
 
-        // ตัวแปรเก็บข้อมูลแถวที่เลือก
         private string _selectedOrderNo = null;
         private string _selectedServiceType = null;
         private int _selectedRowIndex = -1;
 
-        // เพิ่มใน InitializeComponent หรือ Form1_Load
         private void InitializeExportButton()
         {
-            // Enable/Disable export button based on selection
             dataGridView.SelectionChanged += DataGridView_SelectionChanged;
 
-            // เพิ่มปุ่มเข้า groupBox2
             if (!groupBox2.Controls.Contains(exportButton))
             {
                 exportButton.Location = new System.Drawing.Point(575, 20);
@@ -909,19 +916,15 @@ _logger.LogInfo($"IPD Encoding: {_encodingService.CurrentIPDEncoding}");
                 if (dataGridView.SelectedRows.Count > 0)
                 {
                     var selectedRow = dataGridView.SelectedRows[0];
-
-                    // ดึงข้อมูลจาก row ที่เลือก
                     _selectedOrderNo = selectedRow.Cells["Order No"]?.Value?.ToString();
                     _selectedServiceType = selectedRow.Cells["Service Type"]?.Value?.ToString();
 
-                    // หา actual row index ใน DataTable
                     if (_filteredDataView.Count > 0 && selectedRow.Index < _filteredDataView.Count)
                     {
                         DataRowView rowView = _filteredDataView[selectedRow.Index];
                         _selectedRowIndex = _processedDataTable.Rows.IndexOf(rowView.Row);
                     }
 
-                    // Enable export button ถ้ามีข้อมูลครบ
                     exportButton.Enabled = !string.IsNullOrEmpty(_selectedOrderNo) &&
                                            !string.IsNullOrEmpty(_selectedServiceType);
 
@@ -929,7 +932,6 @@ _logger.LogInfo($"IPD Encoding: {_encodingService.CurrentIPDEncoding}");
                 }
                 else
                 {
-                    // ไม่มีแถวที่เลือก
                     _selectedOrderNo = null;
                     _selectedServiceType = null;
                     _selectedRowIndex = -1;
@@ -952,20 +954,18 @@ _logger.LogInfo($"IPD Encoding: {_encodingService.CurrentIPDEncoding}");
                     this.BeginInvoke(new Action(() =>
                     {
                         ShowAutoCloseMessageBox(
-                           "กรุณาเลือกแถวข้อมูลที่ต้องการ Export",
-                           "No Selection",
+                            "กรุณาเลือกแถวข้อมูลที่ต้องการ Export",
+                            "No Selection",
                             2000,
                             false,
                             false
                         );
                     }));
-
                     return;
                 }
 
                 _logger?.LogInfo($"[Export] Start - OrderNo: {_selectedOrderNo}, ServiceType: {_selectedServiceType}");
 
-                // ดึงข้อมูล HL7 Binary จาก Database
                 byte[] hl7Data = _databaseService.GetHL7DataByOrderNoAndType(_selectedOrderNo, _selectedServiceType);
 
                 if (hl7Data == null || hl7Data.Length == 0)
@@ -973,26 +973,23 @@ _logger.LogInfo($"IPD Encoding: {_encodingService.CurrentIPDEncoding}");
                     this.BeginInvoke(new Action(() =>
                     {
                         ShowAutoCloseMessageBox(
-                        $"ไม่พบข้อมูล HL7 สำหรับ:\n" +
-                        $"Order No: {_selectedOrderNo}\n" +
-                        $"Service Type: {_selectedServiceType}",
-                        "Data Not Found",
+                            $"ไม่พบข้อมูล HL7 สำหรับ:\n" +
+                            $"Order No: {_selectedOrderNo}\n" +
+                            $"Service Type: {_selectedServiceType}",
+                            "Data Not Found",
                             2000,
                             false,
                             false
                         );
                     }));
-
                     _logger?.LogWarning($"[Export] No HL7 data found");
                     return;
                 }
 
                 _logger?.LogInfo($"[Export] Retrieved HL7 data - Size: {hl7Data.Length} bytes");
 
-                // แสดง SaveFileDialog
                 using (var saveFileDialog = new SaveFileDialog())
                 {
-                    // ทำความสะอาดชื่อไฟล์
                     string safeOrderNo = SanitizeFileName(_selectedOrderNo);
                     string safeServiceType = SanitizeFileName(_selectedServiceType);
 
@@ -1005,30 +1002,24 @@ _logger.LogInfo($"IPD Encoding: {_encodingService.CurrentIPDEncoding}");
                     if (saveFileDialog.ShowDialog() == DialogResult.OK)
                     {
                         string filePath = saveFileDialog.FileName;
-
-                        // เขียนไฟล์ Binary
                         File.WriteAllBytes(filePath, hl7Data);
-
                         _logger?.LogInfo($"[Export] Success - File saved to: {filePath}");
 
-                        // แสดงข้อความสำเร็จ
                         this.BeginInvoke(new Action(() =>
                         {
                             ShowAutoCloseMessageBox(
-                            $"✓ Export สำเร็จ!\n\n" +
-                            $"Order No: {_selectedOrderNo}\n" +
-                            $"Service Type: {_selectedServiceType}\n" +
-                            $"File Size: {FormatFileSize(hl7Data.Length)}\n" +
-                            $"Location: {filePath}",
-                            "Export Success",
+                                $"✓ Export สำเร็จ!\n\n" +
+                                $"Order No: {_selectedOrderNo}\n" +
+                                $"Service Type: {_selectedServiceType}\n" +
+                                $"File Size: {FormatFileSize(hl7Data.Length)}\n" +
+                                $"Location: {filePath}",
+                                "Export Success",
                                 2000,
                                 false,
                                 false
                             );
                         }));
 
-
-                        // เปิด folder ที่เซฟไฟล์
                         if (MessageBox.Show(
                             "ต้องการเปิด Folder ที่เก็บไฟล์หรือไม่?",
                             "Open Folder",
@@ -1046,50 +1037,39 @@ _logger.LogInfo($"IPD Encoding: {_encodingService.CurrentIPDEncoding}");
                 this.BeginInvoke(new Action(() =>
                 {
                     ShowAutoCloseMessageBox(
-                    $"เกิดข้อผิดพลาดในการ Export:\n\n{ex.Message}",
-                    "Export Error",
+                        $"เกิดข้อผิดพลาดในการ Export:\n\n{ex.Message}",
+                        "Export Error",
                         2000,
                         false,
                         false
                     );
                 }));
-
             }
         }
 
-        // Helper: ทำความสะอาดชื่อไฟล์
         private string SanitizeFileName(string fileName)
         {
-            if (string.IsNullOrEmpty(fileName))
-                return "unknown";
-
+            if (string.IsNullOrEmpty(fileName)) return "unknown";
             var invalidChars = Path.GetInvalidFileNameChars();
             var result = new StringBuilder(fileName.Length);
-
             foreach (var c in fileName)
             {
-                if (Array.IndexOf(invalidChars, c) >= 0)
-                    result.Append('_');
-                else
-                    result.Append(c);
+                if (Array.IndexOf(invalidChars, c) >= 0) result.Append('_');
+                else result.Append(c);
             }
-
             return result.ToString();
         }
 
-        // Helper: Format File Size
         private string FormatFileSize(long bytes)
         {
             string[] sizes = { "B", "KB", "MB", "GB" };
             double len = bytes;
             int order = 0;
-
             while (len >= 1024 && order < sizes.Length - 1)
             {
                 order++;
                 len = len / 1024;
             }
-
             return $"{len:0.##} {sizes[order]}";
         }
 
@@ -1100,7 +1080,6 @@ _logger.LogInfo($"IPD Encoding: {_encodingService.CurrentIPDEncoding}");
 
         private async void DateTimePicker_ValueChanged(object sender, EventArgs e)
         {
-            // ⭐ ข้ามการโหลดเมื่อกำลังเริ่มต้น
             if (_isInitializing)
             {
                 _logger.LogInfo("Skipping load during initialization");
@@ -1112,7 +1091,6 @@ _logger.LogInfo($"IPD Encoding: {_encodingService.CurrentIPDEncoding}");
                 await LoadDataBySelectedDate();
             }
         }
-
 
         private async void SearchButton_Click(object sender, EventArgs e)
         {
@@ -1126,15 +1104,12 @@ _logger.LogInfo($"IPD Encoding: {_encodingService.CurrentIPDEncoding}");
                 searchTextBox.Text = string.Empty;
                 dateTimePicker.Value = DateTime.Today;
                 _currentStatusFilter = "All";
-
                 await LoadDataBySelectedDate();
-
                 _logger.LogInfo("Data refreshed");
             }
             catch (Exception ex)
             {
                 _logger.LogError("Error refreshing data", ex);
-
             }
         }
 
@@ -1168,6 +1143,7 @@ _logger.LogInfo($"IPD Encoding: {_encodingService.CurrentIPDEncoding}");
             ApplyStatusFilter();
             UpdateStatusFilterButtons();
         }
+
         private void IPDPanel_Click(object sender, EventArgs e)
         {
             _currentStatusFilter = "IPD";
@@ -1182,17 +1158,14 @@ _logger.LogInfo($"IPD Encoding: {_encodingService.CurrentIPDEncoding}");
             UpdateStatusFilterButtons();
         }
 
-
         private void UpdateStatusFilterButtons()
         {
-            // Reset all panels to default state
             totalPanel.BorderStyle = System.Windows.Forms.BorderStyle.FixedSingle;
             successPanel.BorderStyle = System.Windows.Forms.BorderStyle.FixedSingle;
             failedPanel.BorderStyle = System.Windows.Forms.BorderStyle.FixedSingle;
             ipdPanel.BorderStyle = System.Windows.Forms.BorderStyle.FixedSingle;
             opdPanel.BorderStyle = System.Windows.Forms.BorderStyle.FixedSingle;
 
-            // Set selected panel to 3D border
             if (_currentStatusFilter == "All")
                 totalPanel.BorderStyle = System.Windows.Forms.BorderStyle.Fixed3D;
             else if (_currentStatusFilter == "Success")
@@ -1204,14 +1177,12 @@ _logger.LogInfo($"IPD Encoding: {_encodingService.CurrentIPDEncoding}");
             else if (_currentStatusFilter == "OPD")
                 opdPanel.BorderStyle = System.Windows.Forms.BorderStyle.Fixed3D;
 
-            // ⭐ Force repaint all panels to update top bar colors
             totalPanel.Invalidate();
             successPanel.Invalidate();
             failedPanel.Invalidate();
             ipdPanel.Invalidate();
             opdPanel.Invalidate();
 
-            // Force immediate refresh
             totalPanel.Update();
             successPanel.Update();
             failedPanel.Update();
@@ -1224,18 +1195,13 @@ _logger.LogInfo($"IPD Encoding: {_encodingService.CurrentIPDEncoding}");
             try
             {
                 if (_currentStatusFilter == "All")
-                {
                     _filteredDataView.RowFilter = string.Empty;
-                }
                 else
-                {
                     _filteredDataView.RowFilter = $"[Status] = '{_currentStatusFilter}'";
-                }
+
                 if (string.IsNullOrEmpty(_filteredDataView.Sort))
-                {
                     _filteredDataView.Sort = "[Time Check] DESC";
-                }
-                // ⭐ เรียก ApplyRowColors หลังจาก apply filter
+
                 ApplyRowColors();
 
                 int resultCount = _filteredDataView.Count;
@@ -1249,16 +1215,15 @@ _logger.LogInfo($"IPD Encoding: {_encodingService.CurrentIPDEncoding}");
                 _logger.LogError("Error applying status filter", ex);
             }
         }
+
         private void ApplyOrderTypeFilter(string orderType)
         {
             try
             {
-                // ⭐ ใช้ Service Type column แทน FinancialClass/OrderControl
                 _filteredDataView.RowFilter = $"[Service Type] = '{orderType}'";
                 if (string.IsNullOrEmpty(_filteredDataView.Sort))
-                {
                     _filteredDataView.Sort = "[Time Check] DESC";
-                }
+
                 ApplyRowColors();
 
                 int resultCount = _filteredDataView.Count;
@@ -1271,28 +1236,23 @@ _logger.LogInfo($"IPD Encoding: {_encodingService.CurrentIPDEncoding}");
                 _logger.LogError($"Error applying {orderType} filter", ex);
             }
         }
-        // ⭐ ปรับปรุง ApplyFilter เพื่อ apply สีหลังจาก filter
+
         private void ApplyFilter()
         {
             try
             {
                 string searchText = searchTextBox.Text.Trim();
                 DateTime selectedDate = dateTimePicker.Value.Date;
-
                 var filterParts = new System.Collections.Generic.List<string>();
 
                 if (!string.IsNullOrEmpty(searchText))
-                {
                     filterParts.Add($"([Order No] LIKE '%{searchText}%' OR [HN] LIKE '%{searchText}%')");
-                }
 
                 string datePattern = selectedDate.ToString("yyyy-MM-dd");
                 filterParts.Add($"([Time Check] LIKE '{datePattern}%' OR [Transaction DateTime] LIKE '{datePattern}%')");
 
                 if (_currentStatusFilter != "All")
-                {
                     filterParts.Add($"[Status] = '{_currentStatusFilter}'");
-                }
 
                 string filterExpression = string.Join(" AND ", filterParts);
 
@@ -1301,8 +1261,6 @@ _logger.LogInfo($"IPD Encoding: {_encodingService.CurrentIPDEncoding}");
                 _logger.LogInfo($"Expression: {filterExpression}");
 
                 _filteredDataView.RowFilter = filterExpression;
-
-                // ⭐ เรียก ApplyRowColors หลังจาก apply filter
                 ApplyRowColors();
 
                 int resultCount = _filteredDataView.Count;
@@ -1313,13 +1271,9 @@ _logger.LogInfo($"IPD Encoding: {_encodingService.CurrentIPDEncoding}");
                 if (_currentStatusFilter != "All") info += $" | Status: {_currentStatusFilter}";
 
                 if (resultCount > 0)
-                {
                     UpdateStatus($"✓ {resultCount} record(s) - {info} (Total: {totalCount})");
-                }
                 else
-                {
                     UpdateStatus($"✗ No records - {info} (Total: {totalCount})");
-                }
 
                 UpdateStatusSummary();
                 _logger.LogInfo($"Result: {resultCount} records | Total: {totalCount}");
@@ -1333,8 +1287,8 @@ _logger.LogInfo($"IPD Encoding: {_encodingService.CurrentIPDEncoding}");
 
         #region GridView
         private void AddRowToGrid(string time, string transactionDateTime, string serviceType,
-     string orderNo, string hn, string patientName, string financialClass,
-     string orderControl, string status, string apiResponse, HL7Message hl7Data)
+            string orderNo, string hn, string patientName, string financialClass,
+            string orderControl, string status, string apiResponse, HL7Message hl7Data)
         {
             try
             {
@@ -1343,15 +1297,15 @@ _logger.LogInfo($"IPD Encoding: {_encodingService.CurrentIPDEncoding}");
                     dataGridView.Invoke(new Action(() =>
                     {
                         AddRowToGridDirect(time, transactionDateTime, serviceType, orderNo, hn,
-                                         patientName, financialClass, orderControl, status,
-                                         apiResponse, hl7Data);
+                                           patientName, financialClass, orderControl, status,
+                                           apiResponse, hl7Data);
                     }));
                     return;
                 }
 
                 AddRowToGridDirect(time, transactionDateTime, serviceType, orderNo, hn,
-                                  patientName, financialClass, orderControl, status,
-                                  apiResponse, hl7Data);
+                                   patientName, financialClass, orderControl, status,
+                                   apiResponse, hl7Data);
             }
             catch (Exception ex)
             {
@@ -1359,10 +1313,9 @@ _logger.LogInfo($"IPD Encoding: {_encodingService.CurrentIPDEncoding}");
             }
         }
 
-        // ⭐ method ที่ทำงานจริง
         private void AddRowToGridDirect(string time, string transactionDateTime, string serviceType,
-    string orderNo, string hn, string patientName, string financialClass,
-    string orderControl, string status, string apiResponse, HL7Message hl7Data)
+            string orderNo, string hn, string patientName, string financialClass,
+            string orderControl, string status, string apiResponse, HL7Message hl7Data)
         {
             try
             {
@@ -1372,9 +1325,7 @@ _logger.LogInfo($"IPD Encoding: {_encodingService.CurrentIPDEncoding}");
                                              apiResponse);
 
                 if (hl7Data != null)
-                {
                     _rowHL7Data[rowIndex] = hl7Data;
-                }
 
                 UpdateStatusSummary();
 
@@ -1388,13 +1339,9 @@ _logger.LogInfo($"IPD Encoding: {_encodingService.CurrentIPDEncoding}");
                 {
                     var lastRow = dataGridView.Rows[lastRowIndex];
                     if (status == "Success")
-                    {
                         lastRow.DefaultCellStyle.BackColor = System.Drawing.Color.LightGreen;
-                    }
                     else if (status == "Failed")
-                    {
                         lastRow.DefaultCellStyle.BackColor = System.Drawing.Color.LightCoral;
-                    }
                 }
             }
             catch (Exception ex)
@@ -1402,12 +1349,12 @@ _logger.LogInfo($"IPD Encoding: {_encodingService.CurrentIPDEncoding}");
                 _logger?.LogError("Error adding row to grid", ex);
             }
         }
+
         private void Form1_FormClosing(object sender, FormClosingEventArgs e)
         {
             StopIPDService();
             StopOPDService();
             StopConnectionMonitor();
-
         }
 
         private void AddViewButtonColumn()
@@ -1420,7 +1367,6 @@ _logger.LogInfo($"IPD Encoding: {_encodingService.CurrentIPDEncoding}");
                 viewButtonColumn.Text = "View";
                 viewButtonColumn.UseColumnTextForButtonValue = true;
                 viewButtonColumn.Width = 100;
-
                 dataGridView.Columns.Add(viewButtonColumn);
             }
         }
@@ -1451,27 +1397,23 @@ _logger.LogInfo($"IPD Encoding: {_encodingService.CurrentIPDEncoding}");
                             var detailForm = new HL7DetailForm(hl7Message, filterDate, orderNo, status);
                             detailForm.ShowDialog();
                         }
-
                     }
                     catch (Exception ex)
                     {
                         _logger.LogError("Error showing HL7 detail", ex);
-
                     }
                 }
             }
         }
+
         private void DataGridView_ColumnHeaderMouseClick(object sender, DataGridViewCellMouseEventArgs e)
         {
-
-
-            // ⭐ เรียก ApplyRowColors หลังจาก sort เสร็จ
             this.BeginInvoke(new Action(() =>
             {
-
                 ApplyRowColors();
             }));
         }
+
         private void ApplyRowColors()
         {
             if (dataGridView.InvokeRequired)
@@ -1482,10 +1424,8 @@ _logger.LogInfo($"IPD Encoding: {_encodingService.CurrentIPDEncoding}");
 
             try
             {
-                // ⭐ หยุด redraw ชั่วคราวเพื่อ performance
                 dataGridView.SuspendLayout();
 
-                // หา Status column index
                 int statusColumnIndex = -1;
                 for (int i = 0; i < dataGridView.Columns.Count; i++)
                 {
@@ -1502,7 +1442,6 @@ _logger.LogInfo($"IPD Encoding: {_encodingService.CurrentIPDEncoding}");
                     return;
                 }
 
-                // Apply colors
                 foreach (DataGridViewRow row in dataGridView.Rows)
                 {
                     try
@@ -1513,8 +1452,6 @@ _logger.LogInfo($"IPD Encoding: {_encodingService.CurrentIPDEncoding}");
                             if (cell.Value != null)
                             {
                                 string status = cell.Value.ToString().Trim();
-
-                                // Reset default style
                                 row.DefaultCellStyle.BackColor = System.Drawing.Color.White;
                                 row.DefaultCellStyle.SelectionBackColor = System.Drawing.SystemColors.Highlight;
 
@@ -1537,9 +1474,6 @@ _logger.LogInfo($"IPD Encoding: {_encodingService.CurrentIPDEncoding}");
                     }
                 }
 
-
-
-                // ⭐ Force refresh
                 dataGridView.ResumeLayout();
                 dataGridView.Refresh();
             }
@@ -1552,12 +1486,12 @@ _logger.LogInfo($"IPD Encoding: {_encodingService.CurrentIPDEncoding}");
 
         #region Start/Stop Service Manual and Auto - IPD/OPD
 
-        // ⭐ IPD Button Click
         private void StartStopIPDButton_Click(object sender, EventArgs e)
         {
             if (_ipdTimer == null)
             {
                 StartIPDService();
+                // ⭐ ปิด manual check ขณะ service กำลัง run
                 manualCheckButton.Enabled = false;
                 exportButton.Enabled = false;
             }
@@ -1573,7 +1507,6 @@ _logger.LogInfo($"IPD Encoding: {_encodingService.CurrentIPDEncoding}");
             }
         }
 
-        // ⭐ OPD Button Click
         private void StartStopOPDButton_Click(object sender, EventArgs e)
         {
             if (_opdTimer == null)
@@ -1585,7 +1518,6 @@ _logger.LogInfo($"IPD Encoding: {_encodingService.CurrentIPDEncoding}");
             else
             {
                 StopOPDService();
-                // ถ้า IPD ก็หยุดแล้ว ให้เปิด manual check
                 if (_ipdTimer == null)
                 {
                     manualCheckButton.Enabled = true;
@@ -1594,12 +1526,10 @@ _logger.LogInfo($"IPD Encoding: {_encodingService.CurrentIPDEncoding}");
             }
         }
 
-        // ⭐ แก้ไข StartIPDService เพื่อตรวจสอบ table
         private void StartIPDService()
         {
             if (!_ipdTableExists)
             {
-
                 _logger.LogWarning("Attempted to start IPD Service but table doesn't exist");
                 return;
             }
@@ -1613,12 +1543,10 @@ _logger.LogInfo($"IPD Encoding: {_encodingService.CurrentIPDEncoding}");
             _logger.LogInfo($"IPD Service started with {_intervalSeconds}s interval");
         }
 
-        // ⭐ แก้ไข StartOPDService เพื่อตรวจสอบ table
         private void StartOPDService()
         {
             if (!_opdTableExists)
             {
-
                 _logger.LogWarning("Attempted to start OPD Service but table doesn't exist");
                 return;
             }
@@ -1632,7 +1560,6 @@ _logger.LogInfo($"IPD Encoding: {_encodingService.CurrentIPDEncoding}");
             _logger.LogInfo($"OPD Service started with {_intervalSeconds}s interval");
         }
 
-        // ⭐ Stop IPD Service
         private async void StopIPDService()
         {
             _logger.LogInfo("Stopping IPD Service");
@@ -1670,7 +1597,6 @@ _logger.LogInfo($"IPD Encoding: {_encodingService.CurrentIPDEncoding}");
             _logger.LogInfo("IPD Service stopped");
         }
 
-        // ⭐ Stop OPD Service
         private async void StopOPDService()
         {
             _logger.LogInfo("Stopping OPD Service");
@@ -1708,29 +1634,22 @@ _logger.LogInfo($"IPD Encoding: {_encodingService.CurrentIPDEncoding}");
             _logger.LogInfo("OPD Service stopped");
         }
 
-        // ⭐ IPD Timer Callback
         private async void IPDTimerCallback(object state)
         {
             if (_isIPDProcessing || _ipdTimer == null) return;
-
-            if (_ipdCancellationTokenSource == null || _ipdCancellationTokenSource.IsCancellationRequested)
-                return;
+            if (_ipdCancellationTokenSource == null || _ipdCancellationTokenSource.IsCancellationRequested) return;
 
             await CheckPendingOrders("IPD", false, _ipdCancellationTokenSource.Token);
         }
 
-        // ⭐ OPD Timer Callback
         private async void OPDTimerCallback(object state)
         {
             if (_isOPDProcessing || _opdTimer == null) return;
-
-            if (_opdCancellationTokenSource == null || _opdCancellationTokenSource.IsCancellationRequested)
-                return;
+            if (_opdCancellationTokenSource == null || _opdCancellationTokenSource.IsCancellationRequested) return;
 
             await CheckPendingOrders("OPD", false, _opdCancellationTokenSource.Token);
         }
 
-        // ⭐ Manual Check Button - แก้ไขให้เช็คทั้ง IPD และ OPD
         private async void ManualCheckButton_Click(object sender, EventArgs e)
         {
             if (!_isIPDProcessing && !_isOPDProcessing)
@@ -1738,45 +1657,32 @@ _logger.LogInfo($"IPD Encoding: {_encodingService.CurrentIPDEncoding}");
                 var tasks = new List<Task>();
 
                 if (_ipdTableExists)
-                {
                     tasks.Add(CheckPendingOrders("IPD", true));
-                }
                 else
-                {
                     _logger.LogWarning("Manual check skipped IPD - table doesn't exist");
-                }
 
                 if (_opdTableExists)
-                {
                     tasks.Add(CheckPendingOrders("OPD", true));
-                }
                 else
-                {
                     _logger.LogWarning("Manual check skipped OPD - table doesn't exist");
-                }
-
-
 
                 await Task.WhenAll(tasks);
             }
         }
 
-        // ⭐ แก้ไข CheckPendingOrders ให้รับ orderType
-        private async Task CheckPendingOrders(string orderType, bool isManual, CancellationToken cancellationToken = default)
+        private async Task CheckPendingOrders(string orderType, bool isManual,
+            CancellationToken cancellationToken = default)
         {
             bool isIPD = orderType == "IPD";
 
             if (isIPD && _isIPDProcessing) return;
             if (!isIPD && _isOPDProcessing) return;
 
-            if (isIPD)
-                _isIPDProcessing = true;
-            else
-                _isOPDProcessing = true;
+            if (isIPD) _isIPDProcessing = true;
+            else _isOPDProcessing = true;
 
             try
             {
-                // ⭐ เพิ่ม: ตรวจสอบ table ก่อนทำงาน
                 if (isIPD && !_ipdTableExists)
                 {
                     _logger?.LogWarning($"[{orderType}] Table does not exist - Aborting");
@@ -1806,12 +1712,10 @@ _logger.LogInfo($"IPD Encoding: {_encodingService.CurrentIPDEncoding}");
 
                 cancellationToken.ThrowIfCancellationRequested();
 
-                // ⭐ เพิ่ม: แสดง log ก่อนเรียก database
                 _logger?.LogInfo($"[{orderType}] Querying database for pending orders...");
 
                 List<DrugDispenseipd> pending = null;
 
-                // ⭐ เพิ่ม: Try-Catch เฉพาะการ query database
                 try
                 {
                     pending = await Task.Run(() =>
@@ -1825,7 +1729,6 @@ _logger.LogInfo($"IPD Encoding: {_encodingService.CurrentIPDEncoding}");
                     return;
                 }
 
-                // ⭐ เพิ่ม: ตรวจสอบ null
                 if (pending == null)
                 {
                     _logger?.LogWarning($"[{orderType}] Database returned null");
@@ -1835,12 +1738,9 @@ _logger.LogInfo($"IPD Encoding: {_encodingService.CurrentIPDEncoding}");
                 _logger.LogInfo($"[{orderType}] Retrieved {pending.Count} records");
 
                 if (pending.Count > 0)
-                {
                     UpdateLastFound(pending.Count);
-                }
                 else
                 {
-                    // ⭐ เพิ่ม: Log ชัดเจนว่าไม่มีข้อมูล
                     _logger?.LogInfo($"[{orderType}] No pending orders found");
                     UpdateStatus($"✓ {orderType} - No pending orders");
                 }
@@ -1853,9 +1753,7 @@ _logger.LogInfo($"IPD Encoding: {_encodingService.CurrentIPDEncoding}");
                 {
                     this.Text = $"ConHIS Service - {orderType} Pending: {remainingCount}";
                     if (remainingCount > 0)
-                    {
                         UpdateStatus($"[{orderType}] Processing {remainingCount} pending orders...");
-                    }
                 }));
 
                 if (pending.Count > 0)
@@ -1880,7 +1778,7 @@ _logger.LogInfo($"IPD Encoding: {_encodingService.CurrentIPDEncoding}");
                                     cancellationToken
                                 );
                             }
-                            else // OPD
+                            else
                             {
                                 _processor.ProcessPendingOpdOrders(
                                     msg => { _logger.LogInfo($"[{orderType}] {msg}"); },
@@ -1900,7 +1798,7 @@ _logger.LogInfo($"IPD Encoding: {_encodingService.CurrentIPDEncoding}");
                         catch (Exception processEx)
                         {
                             _logger?.LogError($"[{orderType}] Processing failed", processEx);
-                            throw; // Re-throw เพื่อให้ outer catch จัดการ
+                            throw;
                         }
                     }, cancellationToken);
 
@@ -1932,7 +1830,6 @@ _logger.LogInfo($"IPD Encoding: {_encodingService.CurrentIPDEncoding}");
             }
             catch (Exception ex)
             {
-                // ⭐ ปรับปรุง: Log error แบบละเอียด
                 _logger?.LogError($"[{orderType}] Critical error in CheckPendingOrders", ex);
                 _logger?.LogError($"[{orderType}] StackTrace: {ex.StackTrace}", ex);
 
@@ -1941,7 +1838,6 @@ _logger.LogInfo($"IPD Encoding: {_encodingService.CurrentIPDEncoding}");
                     this.Text = "ConHIS Service - Drug Dispense Monitor";
                     UpdateStatus($"✗ {orderType} Error: {ex.Message}");
 
-                    // ⭐ เพิ่ม: แสดง MessageBox เมื่อเกิด error ร้ายแรง
                     MessageBox.Show(
                         $"เกิดข้อผิดพลาดร้ายแรงใน {orderType} Service:\n\n" +
                         $"{ex.Message}\n\n" +
@@ -1954,10 +1850,8 @@ _logger.LogInfo($"IPD Encoding: {_encodingService.CurrentIPDEncoding}");
             }
             finally
             {
-                if (isIPD)
-                    _isIPDProcessing = false;
-                else
-                    _isOPDProcessing = false;
+                if (isIPD) _isIPDProcessing = false;
+                else _isOPDProcessing = false;
 
                 if (isManual)
                 {
@@ -1971,12 +1865,11 @@ _logger.LogInfo($"IPD Encoding: {_encodingService.CurrentIPDEncoding}");
             }
         }
 
-        // ⭐ Helper Methods
-        private void ProcessOrderResult(Services.ProcessResult result, ref int remainingCount, string orderType, CancellationToken cancellationToken)
+        private void ProcessOrderResult(Services.ProcessResult result, ref int remainingCount,
+            string orderType, CancellationToken cancellationToken)
         {
             try
             {
-                // ⭐ ตรวจสอบ cancellation ก่อน
                 if (cancellationToken.IsCancellationRequested)
                 {
                     _logger?.LogInfo($"[{orderType}] Processing cancelled for order");
@@ -1986,10 +1879,8 @@ _logger.LogInfo($"IPD Encoding: {_encodingService.CurrentIPDEncoding}");
                 var hl7Message = result.ParsedMessage;
                 string orderNo = hl7Message?.CommonOrder?.PlacerOrderNumber ?? "N/A";
 
-                // ⭐ Thread-safe decrement
                 int currentRemaining = Interlocked.Decrement(ref remainingCount);
 
-                // ⭐ ป้องกัน negative count
                 if (currentRemaining < 0)
                 {
                     _logger?.LogWarning($"[{orderType}] Remaining count went negative, resetting to 0");
@@ -1997,7 +1888,6 @@ _logger.LogInfo($"IPD Encoding: {_encodingService.CurrentIPDEncoding}");
                     currentRemaining = 0;
                 }
 
-                // ⭐ Update UI อย่าง thread-safe
                 if (this.IsHandleCreated && !this.IsDisposed)
                 {
                     this.BeginInvoke(new Action(() =>
@@ -2009,19 +1899,12 @@ _logger.LogInfo($"IPD Encoding: {_encodingService.CurrentIPDEncoding}");
                                 this.Text = $"ConHIS Service - {orderType} Pending: {currentRemaining}";
 
                                 if (currentRemaining > 0)
-                                {
                                     UpdateStatus($"[{orderType}] Processing... {currentRemaining} remaining");
-                                }
                                 else
-                                {
                                     UpdateStatus($"[{orderType}] Completed processing all orders");
-                                }
                             }
                         }
-                        catch (ObjectDisposedException)
-                        {
-                            // Form disposed, ignore silently
-                        }
+                        catch (ObjectDisposedException) { }
                         catch (Exception ex)
                         {
                             _logger?.LogError($"[{orderType}] Error updating UI", ex);
@@ -2029,7 +1912,6 @@ _logger.LogInfo($"IPD Encoding: {_encodingService.CurrentIPDEncoding}");
                     }));
                 }
 
-                // ⭐ Update last success
                 if (result.Success)
                 {
                     UpdateLastSuccess(orderNo);
@@ -2040,7 +1922,6 @@ _logger.LogInfo($"IPD Encoding: {_encodingService.CurrentIPDEncoding}");
                     _logger?.LogWarning($"[{orderType}] Order {orderNo} failed: {result.Message}");
                 }
 
-                // ⭐ Extract HL7 data safely
                 string hn = hl7Message?.PatientIdentification?.PatientIDExternal ??
                            hl7Message?.PatientIdentification?.PatientIDInternal ?? "N/A";
 
@@ -2049,8 +1930,7 @@ _logger.LogInfo($"IPD Encoding: {_encodingService.CurrentIPDEncoding}");
                 {
                     try
                     {
-                        transactionDateTime = result.DrugDispenseDatetime.Value
-                            .ToString("yyyy-MM-dd HH:mm:ss");
+                        transactionDateTime = result.DrugDispenseDatetime.Value.ToString("yyyy-MM-dd HH:mm:ss");
                     }
                     catch (Exception ex)
                     {
@@ -2058,18 +1938,12 @@ _logger.LogInfo($"IPD Encoding: {_encodingService.CurrentIPDEncoding}");
                     }
                 }
 
-                // ⭐⭐⭐ เพิ่มส่วนนี้ - ดึง timeCheck จาก Database
-           
-
                 string patientName = "N/A";
                 if (hl7Message?.PatientIdentification?.OfficialName != null)
                 {
                     var name = hl7Message.PatientIdentification.OfficialName;
                     patientName = $"{name.Prefix ?? ""} {name.FirstName ?? ""} {name.LastName ?? ""}".Trim();
-                    if (string.IsNullOrWhiteSpace(patientName))
-                    {
-                        patientName = "N/A";
-                    }
+                    if (string.IsNullOrWhiteSpace(patientName)) patientName = "N/A";
                 }
 
                 string financialClass = "N/A";
@@ -2077,17 +1951,12 @@ _logger.LogInfo($"IPD Encoding: {_encodingService.CurrentIPDEncoding}");
                 {
                     var fc = hl7Message.PatientVisit.FinancialClass;
                     financialClass = $"{fc.ID ?? ""} {fc.Name ?? ""}".Trim();
-                    if (string.IsNullOrWhiteSpace(financialClass))
-                    {
-                        financialClass = "N/A";
-                    }
+                    if (string.IsNullOrWhiteSpace(financialClass)) financialClass = "N/A";
                 }
 
-                string serviceType = orderType; // "IPD" หรือ "OPD"
-
+                string serviceType = orderType;
                 string orderControl = hl7Message?.CommonOrder?.OrderControl ?? "N/A";
 
-                // ⭐ Add to grid with error handling
                 if (this.IsHandleCreated && !this.IsDisposed)
                 {
                     try
@@ -2095,7 +1964,7 @@ _logger.LogInfo($"IPD Encoding: {_encodingService.CurrentIPDEncoding}");
                         AddRowToGrid(
                             DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss"),
                             transactionDateTime,
-                            serviceType,  // ⭐ เพิ่ม parameter ใหม่
+                            serviceType,
                             orderNo,
                             hn,
                             patientName,
@@ -2107,8 +1976,8 @@ _logger.LogInfo($"IPD Encoding: {_encodingService.CurrentIPDEncoding}");
                         );
 
                         _logger?.LogInfo($"[{orderType}] Order {orderNo} added to grid - " +
-                                       $"ServiceType: {serviceType}, OrderControl: {orderControl}, " +
-                                       $"Status: {(result.Success ? "Success" : "Failed")}");
+                                        $"ServiceType: {serviceType}, OrderControl: {orderControl}, " +
+                                        $"Status: {(result.Success ? "Success" : "Failed")}");
                     }
                     catch (Exception ex)
                     {
@@ -2124,8 +1993,6 @@ _logger.LogInfo($"IPD Encoding: {_encodingService.CurrentIPDEncoding}");
             {
                 _logger?.LogError($"[{orderType}] Critical error in ProcessOrderResult", ex);
 
-                // ⭐ ลอง update status แม้เกิด error
-
                 if (this.IsHandleCreated && !this.IsDisposed)
                 {
                     this.BeginInvoke(new Action(() =>
@@ -2133,10 +2000,9 @@ _logger.LogInfo($"IPD Encoding: {_encodingService.CurrentIPDEncoding}");
                         UpdateStatus($"[{orderType}] Error processing order: {ex.Message}");
                     }));
                 }
-
-
             }
         }
+
         private void UpdateButtonState(Button button, bool isRunning, string text)
         {
             if (button.InvokeRequired)
@@ -2152,7 +2018,6 @@ _logger.LogInfo($"IPD Encoding: {_encodingService.CurrentIPDEncoding}");
             }
             else
             {
-                // กลับไปสีเดิม
                 if (button == startStopIPDButton)
                     button.BackColor = System.Drawing.Color.FromArgb(52, 152, 219); // Blue for IPD
                 else
@@ -2177,13 +2042,9 @@ _logger.LogInfo($"IPD Encoding: {_encodingService.CurrentIPDEncoding}");
                 status = "All Services Stopped";
 
             if (orderType != null && processedCount > 0)
-            {
                 status += $" - [{orderType}] Processed {processedCount} orders";
-            }
             else if (orderType != null && processedCount == 0)
-            {
                 status += $" - [{orderType}] No pending orders";
-            }
 
             UpdateStatus(status);
         }
@@ -2202,6 +2063,7 @@ _logger.LogInfo($"IPD Encoding: {_encodingService.CurrentIPDEncoding}");
             statusLabel.Text = $"Status: {status}";
             _logger.LogInfo($"Status: {status}");
         }
+
         private void UpdateLastCheck()
         {
             var now = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss");
@@ -2217,6 +2079,7 @@ _logger.LogInfo($"IPD Encoding: {_encodingService.CurrentIPDEncoding}");
 
             lastCheckLabel.Text = $"Last Check: {now}";
         }
+
         private void UpdateLastFound(int foundCount)
         {
             if (foundCount > 0)
@@ -2235,14 +2098,13 @@ _logger.LogInfo($"IPD Encoding: {_encodingService.CurrentIPDEncoding}");
                 lastFoundLabel.Text = $"Last Found: {_lastFoundTime.Value:yyyy-MM-dd HH:mm:ss}";
             }
         }
+
         private void UpdateLastSuccess(string orderId = null)
         {
             _lastSuccessTime = DateTime.Now;
 
             if (!string.IsNullOrEmpty(orderId))
-            {
                 _lastSuccessOrderId = orderId;
-            }
 
             string orderInfo = !string.IsNullOrEmpty(_lastSuccessOrderId)
                 ? $" | Order NO: {_lastSuccessOrderId}"
@@ -2259,8 +2121,9 @@ _logger.LogInfo($"IPD Encoding: {_encodingService.CurrentIPDEncoding}");
 
             lastSuccessLabel.Text = $"Last Success: {_lastSuccessTime.Value:yyyy-MM-dd HH:mm:ss}{orderInfo}";
         }
+
         private void UpdateConnectionStatus(bool anyConnected,
-    bool opdConnected = true, bool ipdConnected = true)
+            bool opdConnected = true, bool ipdConnected = true)
         {
             _isDatabaseConnected = anyConnected;
 
@@ -2276,7 +2139,6 @@ _logger.LogInfo($"IPD Encoding: {_encodingService.CurrentIPDEncoding}");
                 _lastDatabaseConnectionTime = DateTime.Now;
                 string timeStr = _lastDatabaseConnectionTime.Value.ToString("yyyy-MM-dd HH:mm:ss");
 
-                // ⭐ แสดงสถานะแยก OPD/IPD
                 string opdStatus = opdConnected ? "✓ OPD" : "✗ OPD";
                 string ipdStatus = ipdConnected ? "✓ IPD" : "✗ IPD";
 
@@ -2284,7 +2146,7 @@ _logger.LogInfo($"IPD Encoding: {_encodingService.CurrentIPDEncoding}");
                     $"Database: {opdStatus} | {ipdStatus} (Last Connected: {timeStr})";
                 connectionStatusLabel.ForeColor = (opdConnected && ipdConnected)
                     ? System.Drawing.Color.Green
-                    : System.Drawing.Color.Orange; // ⭐ สีส้มถ้า connect ได้แค่อันเดียว
+                    : System.Drawing.Color.Orange;
             }
             else
             {
@@ -2298,6 +2160,7 @@ _logger.LogInfo($"IPD Encoding: {_encodingService.CurrentIPDEncoding}");
                 connectionStatusLabel.ForeColor = System.Drawing.Color.Red;
             }
         }
+
         private void UpdateStatusSummary()
         {
             if (InvokeRequired)
@@ -2317,18 +2180,13 @@ _logger.LogInfo($"IPD Encoding: {_encodingService.CurrentIPDEncoding}");
                 foreach (DataRow row in _processedDataTable.Rows)
                 {
                     string status = row["Status"]?.ToString() ?? "";
-                    string serviceType = row["Service Type"]?.ToString() ?? ""; // ⭐ ใช้ Service Type แทน
+                    string serviceType = row["Service Type"]?.ToString() ?? "";
 
-                    if (status == "Success")
-                        successCount++;
-                    else if (status == "Failed")
-                        failedCount++;
+                    if (status == "Success") successCount++;
+                    else if (status == "Failed") failedCount++;
 
-                    // ⭐ นับ IPD/OPD จาก Service Type column โดยตรง
-                    if (serviceType == "IPD")
-                        ipdCount++;
-                    else if (serviceType == "OPD")
-                        opdCount++;
+                    if (serviceType == "IPD") ipdCount++;
+                    else if (serviceType == "OPD") opdCount++;
                 }
 
                 totalCountLabel.Text = totalRecords.ToString();
@@ -2365,7 +2223,6 @@ _logger.LogInfo($"IPD Encoding: {_encodingService.CurrentIPDEncoding}");
 
         private void DrawPanelTopBar(Panel panel, PaintEventArgs e, System.Drawing.Color barColor, string filterType)
         {
-            // วาดแถบสีเฉพาะ panel ที่ถูกเลือก
             if (_currentStatusFilter == filterType)
             {
                 using (var brush = new System.Drawing.SolidBrush(barColor))
@@ -2375,7 +2232,6 @@ _logger.LogInfo($"IPD Encoding: {_encodingService.CurrentIPDEncoding}");
             }
             else
             {
-                // วาดแถบสีเทาอ่อนสำหรับ panel ที่ไม่ได้เลือก
                 using (var brush = new System.Drawing.SolidBrush(System.Drawing.Color.FromArgb(220, 220, 220)))
                 {
                     e.Graphics.FillRectangle(brush, 0, 0, e.ClipRectangle.Width, 3);
@@ -2394,7 +2250,6 @@ _logger.LogInfo($"IPD Encoding: {_encodingService.CurrentIPDEncoding}");
             startStopIPDButton.Enabled = _ipdTableExists;
             startStopOPDButton.Enabled = _opdTableExists;
 
-            // แสดง tooltip หรือเปลี่ยนสีถ้า disabled
             if (!_ipdTableExists)
             {
                 startStopIPDButton.Text = "⚠️ IPD (No Table)";
@@ -2402,8 +2257,12 @@ _logger.LogInfo($"IPD Encoding: {_encodingService.CurrentIPDEncoding}");
             }
             else
             {
-                startStopIPDButton.Text = "▶ Start IPD";
-                startStopIPDButton.BackColor = System.Drawing.Color.FromArgb(52, 152, 219);
+                // ⭐ อย่า reset text ถ้า service กำลัง run อยู่
+                if (_ipdTimer == null)
+                {
+                    startStopIPDButton.Text = "▶ Start IPD";
+                    startStopIPDButton.BackColor = System.Drawing.Color.FromArgb(52, 152, 219);
+                }
             }
 
             if (!_opdTableExists)
@@ -2413,8 +2272,11 @@ _logger.LogInfo($"IPD Encoding: {_encodingService.CurrentIPDEncoding}");
             }
             else
             {
-                startStopOPDButton.Text = "▶ Start OPD";
-                startStopOPDButton.BackColor = System.Drawing.Color.FromArgb(46, 204, 113);
+                if (_opdTimer == null)
+                {
+                    startStopOPDButton.Text = "▶ Start OPD";
+                    startStopOPDButton.BackColor = System.Drawing.Color.FromArgb(46, 204, 113);
+                }
             }
         }
         #endregion
@@ -2434,14 +2296,12 @@ _logger.LogInfo($"IPD Encoding: {_encodingService.CurrentIPDEncoding}");
                             {
                                 _logger?.LogInfo("Reloading configuration after settings changed");
 
-                                // Reload configuration
                                 _appConfig?.ReloadConfiguration();
                                 _logger?.ReloadLogRetentionDays();
                                 _logger?.CleanOldLogs();
 
                                 UpdateStatus("✓ Settings updated successfully");
 
-                                // แสดง MessageBox แจ้งผลสำเร็จแบบสั้นกระชับ
                                 MessageBox.Show(
                                     "การตั้งค่าถูกบันทึกเรียบร้อยแล้ว\n\n" +
                                     "ไฟล์ที่อัพเดท:\n" +
@@ -2485,7 +2345,5 @@ _logger.LogInfo($"IPD Encoding: {_encodingService.CurrentIPDEncoding}");
             }
         }
         #endregion
-
-
     }
 }
