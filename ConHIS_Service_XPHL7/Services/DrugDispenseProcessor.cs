@@ -906,10 +906,17 @@ namespace ConHIS_Service_XPHL7.Services
                 }
                 else if (orderControl == "RP")
                 {
-                    apiResponse = ProcessReplaceOrder(data, hl7Message, DispenseType.OPD);
-                    success = true;
-                    _databaseService.UpdateReceiveOpdStatus(data.DrugDispenseopdId, 'Y');
-                    lock (_pendingUpdateLock) { _pendingUpdatedIds.Add(data.DrugDispenseopdId); }
+                    _logger.LogInfo($"OPD RP order - mark F without calling API: {data.PrescId}");
+                    _databaseService.UpdateReceiveOpdStatus(data.DrugDispenseopdId, 'F');
+                    success = false;
+                    apiResponse = "RP not supported for OPD";
+                }
+                else
+                {
+                    _logger.LogWarning($"OPD unsupported OrderControl '{orderControl}' for PrescId={data.PrescId} - mark F");
+                    _databaseService.UpdateReceiveOpdStatus(data.DrugDispenseopdId, 'F');
+                    success = false;
+                    apiResponse = $"Unsupported OrderControl: {orderControl}";
                 }
 
                 onProcessed?.Invoke(new ProcessResult
