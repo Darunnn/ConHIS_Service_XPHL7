@@ -526,7 +526,7 @@ namespace ConHIS_Service_XPHL7.Services
                                 FROM drug_dispense_ipd
                                 WHERE (DATE(recieve_status_datetime) = @Date
                                        OR DATE(drug_dispense_datetime) = @Date)
-                                  AND recieve_status IN ('Y', 'F', 'P')
+                                  AND recieve_status IN ('Y', 'F')
                                 ORDER BY drug_dispense_datetime DESC";
 
                             using (var cmd = new MySqlCommand(sql, conn))
@@ -634,7 +634,7 @@ namespace ConHIS_Service_XPHL7.Services
                                 FROM drug_dispense_ipd
                                 WHERE (DATE(recieve_status_datetime) = @Date
                                        OR DATE(drug_dispense_datetime) = @Date)
-                                  AND recieve_status IN ('Y', 'F', 'P')
+                                  AND recieve_status IN ('Y', 'F')
                                   AND CAST(hl7_data AS CHAR) LIKE @SearchText
                                 ORDER BY drug_dispense_datetime DESC";
 
