@@ -45,6 +45,9 @@ namespace ConHIS_Service_XPHL7
         private bool _hasNotifiedDisconnection = false;
         private bool _hasNotifiedReconnection = false;
 
+        // ⭐⭐ Auto-start on first connect (กรณี DB ยังไม่ connect ตอน load)
+        private bool _hasAutoStartedOnLoad = false;
+
         // DataTable for DataGridView
         private DataTable _processedDataTable;
         private DataView _filteredDataView;
@@ -179,17 +182,12 @@ namespace ConHIS_Service_XPHL7
             _logger?.LogInfo("Connection monitor stopped");
         }
 
-        // ⭐ ShowAutoCloseMessageBox - ปิด MessageBox อัตโนมัติ
-        // แยก resume service ออกจาก MessageBox โดยสิ้นเชิง
-        // เพื่อป้องกัน race condition ระหว่าง WM_CLOSE กับ blocking MessageBox.Show()
+        // ⭐ ShowAutoCloseMessageBox
         private void ShowAutoCloseMessageBox(string message, string title, int timeoutMs,
             bool shouldResumeIPD, bool shouldResumeOPD)
         {
-            // ⭐ ถ้าต้อง resume service → schedule ไว้ก่อนเปิด MessageBox เลย
-            // ใช้ Task.Delay แยก thread เพื่อไม่ให้ถูก block โดย MessageBox.Show()
             if (shouldResumeIPD || shouldResumeOPD)
             {
-                // รอให้ MessageBox ปิดก่อน (timeout + buffer 500ms) แล้วค่อย resume
                 int resumeDelayMs = timeoutMs + 800;
                 Task.Run(async () =>
                 {
@@ -214,7 +212,6 @@ namespace ConHIS_Service_XPHL7
                                     StartOPDService();
                                 }
 
-                                // ⭐ อัปเดตสถานะปุ่ม manual check
                                 bool anyRunning = (_ipdTimer != null) || (_opdTimer != null);
                                 manualCheckButton.Enabled = !anyRunning;
                             }
@@ -231,7 +228,6 @@ namespace ConHIS_Service_XPHL7
                 });
             }
 
-            // ⭐ ปิด MessageBox อัตโนมัติด้วย WM_CLOSE
             System.Threading.Timer closeTimer = null;
             closeTimer = new System.Threading.Timer((obj) =>
             {
@@ -253,7 +249,6 @@ namespace ConHIS_Service_XPHL7
                 }
             }, null, timeoutMs, System.Threading.Timeout.Infinite);
 
-            // Blocking call — แต่ resume service ถูก schedule ไว้แล้วใน Task.Run ข้างบน
             MessageBox.Show(message, title, MessageBoxButtons.OK, MessageBoxIcon.Information);
         }
 
@@ -275,7 +270,7 @@ namespace ConHIS_Service_XPHL7
                 {
                     if (isConnected)
                     {
-                        // ✅ Reconnected
+                        // ✅ Reconnected (หรือ first connect)
                         this.Invoke(new Action(async () =>
                         {
                             try
@@ -302,12 +297,60 @@ namespace ConHIS_Service_XPHL7
                                 await LoadDataBySelectedDate();
                                 UpdateStatus("✓ Database reconnected - Data refreshed");
 
+                                // ⭐⭐ AUTO-START ครั้งแรก (กรณี DB ไม่ connect ตอน Form_Load)
+                                if (!_hasAutoStartedOnLoad)
+                                {
+                                    _hasAutoStartedOnLoad = true;
+                                    _logger?.LogInfo("First connection detected - running auto-start...");
+
+                                    bool autoStartedAny = false;
+
+                                    if (_ipdTableExists && _ipdTimer == null)
+                                    {
+                                        _logger?.LogInfo("Auto-starting IPD Service (first connect)");
+                                        StartIPDService();
+                                        autoStartedAny = true;
+                                    }
+                                    if (_opdTableExists && _opdTimer == null)
+                                    {
+                                        _logger?.LogInfo("Auto-starting OPD Service (first connect)");
+                                        StartOPDService();
+                                        autoStartedAny = true;
+                                    }
+
+                                    if (autoStartedAny)
+                                    {
+                                        manualCheckButton.Enabled = false;
+
+                                        string autoStartMsg = "";
+                                        if (_ipdTableExists && _opdTableExists)
+                                            autoStartMsg = "✅ IPD & OPD Services started automatically";
+                                        else if (_ipdTableExists)
+                                            autoStartMsg = "✅ IPD Service started automatically";
+                                        else if (_opdTableExists)
+                                            autoStartMsg = "✅ OPD Service started automatically";
+
+                                        this.BeginInvoke(new Action(() =>
+                                        {
+                                            ShowAutoCloseMessageBox(
+                                                $"🚀 Auto Start\n\n{autoStartMsg}\n\nInterval: {_intervalSeconds} seconds",
+                                                "Service Auto Started",
+                                                3000,
+                                                false,
+                                                false
+                                            );
+                                        }));
+                                    }
+
+                                    // ไม่ต้องแสดง reconnect popup ซ้ำ → return ออกไปเลย
+                                    return;
+                                }
+
                                 if (!_hasNotifiedReconnection)
                                 {
                                     _hasNotifiedReconnection = true;
                                     _hasNotifiedDisconnection = false;
 
-                                    // ⭐ Auto-resume เฉพาะถ้าก่อน disconnect กำลัง running อยู่
                                     bool shouldResumeIPD = _wasIPDRunningBeforeDisconnection && _ipdTableExists;
                                     bool shouldResumeOPD = _wasOPDRunningBeforeDisconnection && _opdTableExists;
 
@@ -338,9 +381,6 @@ namespace ConHIS_Service_XPHL7
                                     else
                                         dbStatus = "✅ IPD Database restored!\n⚠️ OPD Database still disconnected";
 
-                                    // ⭐ shouldResume ถูกส่งเข้า ShowAutoCloseMessageBox
-                                    // ซึ่งจะ schedule Task.Run ไว้รอ timeout+800ms แล้วค่อย start service
-                                    // (แยกออกจาก blocking MessageBox.Show() โดยสิ้นเชิง)
                                     this.BeginInvoke(new Action(() =>
                                     {
                                         ShowAutoCloseMessageBox(
@@ -374,7 +414,6 @@ namespace ConHIS_Service_XPHL7
                             _opdTableExists = false;
                             UpdateServiceButtonStates();
 
-                            // ⭐ บันทึกสถานะก่อน disconnect
                             _wasIPDRunningBeforeDisconnection = (_ipdTimer != null);
                             _wasOPDRunningBeforeDisconnection = (_opdTimer != null);
 
@@ -693,7 +732,7 @@ namespace ConHIS_Service_XPHL7
         }
 
         // ==========================================
-        // ⭐⭐⭐ Form1_Load - AUTO START เมื่อเปิดโปรแกรม
+        // ⭐⭐⭐ Form1_Load
         // ==========================================
         private async void Form1_Load(object sender, EventArgs e)
         {
@@ -741,7 +780,6 @@ namespace ConHIS_Service_XPHL7
                 if (anyConnected)
                 {
                     _logger.LogInfo($"DatabaseService initialized - OPD: {(opdConnected ? "✓" : "✗")}, IPD: {(ipdConnected ? "✓" : "✗")}");
-
                     _logger.LogInfo("Checking database tables...");
 
                     if (ipdConnected)
@@ -762,7 +800,6 @@ namespace ConHIS_Service_XPHL7
 
                     _logger.LogInfo($"Table Status - IPD: {(_ipdTableExists ? "EXISTS" : "NOT FOUND")}, OPD: {(_opdTableExists ? "EXISTS" : "NOT FOUND")}");
 
-                    // ⭐ แสดง warning ถ้า DB connect ได้แต่ table ไม่มี
                     var warnings = new System.Text.StringBuilder();
                     if (ipdConnected && !_ipdTableExists)
                         warnings.AppendLine("• drug_dispense_ipd (IPD DB connected but table missing)");
@@ -804,7 +841,9 @@ namespace ConHIS_Service_XPHL7
                 }
                 else
                 {
-                    _logger.LogWarning("Both OPD and IPD database connections failed");
+                    // ⭐⭐ DB ไม่ connect ตอน load → Connection Monitor จะ trigger auto-start เมื่อ connect ได้
+                    _logger.LogWarning("Both OPD and IPD database connections failed on startup - will auto-start when connected");
+                    UpdateStatus("⚠️ Database not connected - Waiting for connection...");
                 }
 
                 var apiService = new ApiService(AppConfig.ApiEndpoint);
@@ -821,63 +860,64 @@ namespace ConHIS_Service_XPHL7
                 UpdateServiceButtonStates();
                 InitializeExportButton();
 
-                // ⭐⭐⭐ AUTO START เมื่อเปิดโปรแกรม
-                // start service ก่อน แล้วค่อยแสดง popup แยกต่างหาก
-                _logger.LogInfo("Checking auto-start conditions...");
-
-                bool autoStartedAny = false;
-
-                if (_ipdTableExists)
+                // ⭐⭐⭐ AUTO START เมื่อเปิดโปรแกรม (กรณี DB connect สำเร็จตั้งแต่แรก)
+                if (anyConnected)
                 {
-                    _logger.LogInfo("Auto-starting IPD Service on program load");
-                    StartIPDService();
-                    autoStartedAny = true;
-                }
-                else
-                {
-                    _logger.LogInfo("IPD auto-start skipped - table not available");
-                }
+                    _logger.LogInfo("Checking auto-start conditions...");
 
-                if (_opdTableExists)
-                {
-                    _logger.LogInfo("Auto-starting OPD Service on program load");
-                    StartOPDService();
-                    autoStartedAny = true;
-                }
-                else
-                {
-                    _logger.LogInfo("OPD auto-start skipped - table not available");
-                }
+                    bool autoStartedAny = false;
 
-                if (autoStartedAny)
-                {
-                    // ⭐ ปิด manual check ขณะ service กำลัง run
-                    manualCheckButton.Enabled = false;
-
-                    string autoStartMsg = "";
-                    if (_ipdTableExists && _opdTableExists)
-                        autoStartMsg = "✅ IPD & OPD Services started automatically";
-                    else if (_ipdTableExists)
-                        autoStartMsg = "✅ IPD Service started automatically";
-                    else if (_opdTableExists)
-                        autoStartMsg = "✅ OPD Service started automatically";
-
-                    // ⭐ แสดง popup แบบ non-blocking — service เริ่มแล้ว ไม่ต้อง resume
-                    // ใช้ BeginInvoke เพื่อให้ Form แสดงผลก่อน แล้ว popup ค่อยขึ้น
-                    this.BeginInvoke(new Action(() =>
+                    if (_ipdTableExists)
                     {
-                        ShowAutoCloseMessageBox(
-                            $"🚀 Auto Start\n\n{autoStartMsg}\n\nInterval: {_intervalSeconds} seconds",
-                            "Service Auto Started",
-                            3000,
-                            false,   // ไม่ต้อง resume — start ไปแล้วก่อนแสดง popup
-                            false
-                        );
-                    }));
-                }
-                else
-                {
-                    UpdateStatus("Ready - No tables available for auto-start");
+                        _logger.LogInfo("Auto-starting IPD Service on program load");
+                        StartIPDService();
+                        autoStartedAny = true;
+                    }
+                    else
+                    {
+                        _logger.LogInfo("IPD auto-start skipped - table not available");
+                    }
+
+                    if (_opdTableExists)
+                    {
+                        _logger.LogInfo("Auto-starting OPD Service on program load");
+                        StartOPDService();
+                        autoStartedAny = true;
+                    }
+                    else
+                    {
+                        _logger.LogInfo("OPD auto-start skipped - table not available");
+                    }
+
+                    if (autoStartedAny)
+                    {
+                        // ⭐ mark ว่า auto-start ทำแล้ว ไม่ต้องทำซ้ำใน Connection Monitor
+                        _hasAutoStartedOnLoad = true;
+                        manualCheckButton.Enabled = false;
+
+                        string autoStartMsg = "";
+                        if (_ipdTableExists && _opdTableExists)
+                            autoStartMsg = "✅ IPD & OPD Services started automatically";
+                        else if (_ipdTableExists)
+                            autoStartMsg = "✅ IPD Service started automatically";
+                        else if (_opdTableExists)
+                            autoStartMsg = "✅ OPD Service started automatically";
+
+                        this.BeginInvoke(new Action(() =>
+                        {
+                            ShowAutoCloseMessageBox(
+                                $"🚀 Auto Start\n\n{autoStartMsg}\n\nInterval: {_intervalSeconds} seconds",
+                                "Service Auto Started",
+                                3000,
+                                false,
+                                false
+                            );
+                        }));
+                    }
+                    else
+                    {
+                        UpdateStatus("Ready - No tables available for auto-start");
+                    }
                 }
             }
             catch (Exception ex)
@@ -1491,14 +1531,12 @@ namespace ConHIS_Service_XPHL7
             if (_ipdTimer == null)
             {
                 StartIPDService();
-                // ⭐ ปิด manual check ขณะ service กำลัง run
                 manualCheckButton.Enabled = false;
                 exportButton.Enabled = false;
             }
             else
             {
                 StopIPDService();
-                // ถ้า OPD ก็หยุดแล้ว ให้เปิด manual check
                 if (_opdTimer == null)
                 {
                     manualCheckButton.Enabled = true;
@@ -2014,14 +2052,14 @@ namespace ConHIS_Service_XPHL7
             button.Text = text;
             if (isRunning)
             {
-                button.BackColor = System.Drawing.Color.FromArgb(231, 76, 60); // Red for Stop
+                button.BackColor = System.Drawing.Color.FromArgb(231, 76, 60);
             }
             else
             {
                 if (button == startStopIPDButton)
-                    button.BackColor = System.Drawing.Color.FromArgb(52, 152, 219); // Blue for IPD
+                    button.BackColor = System.Drawing.Color.FromArgb(52, 152, 219);
                 else
-                    button.BackColor = System.Drawing.Color.FromArgb(46, 204, 113); // Green for OPD
+                    button.BackColor = System.Drawing.Color.FromArgb(46, 204, 113);
             }
         }
 
@@ -2257,7 +2295,6 @@ namespace ConHIS_Service_XPHL7
             }
             else
             {
-                // ⭐ อย่า reset text ถ้า service กำลัง run อยู่
                 if (_ipdTimer == null)
                 {
                     startStopIPDButton.Text = "▶ Start IPD";
