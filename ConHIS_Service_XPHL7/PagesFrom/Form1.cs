@@ -562,7 +562,7 @@ namespace ConHIS_Service_XPHL7
 
 
 
-                        string hl7String = _encodingService.DecodeHl7Data(data.Hl7Data);
+                        string hl7String = _encodingService.DecodeHl7Data(data.Hl7Data, data.RecieveOrderType);
 
                         if (string.IsNullOrWhiteSpace(hl7String))
                         {
@@ -755,7 +755,8 @@ namespace ConHIS_Service_XPHL7
                     _logger.LogInfo($"ℹ️ Using fast interval ({_intervalSeconds}s) - Monitor system load");
                 }
                 _encodingService = EncodingService.FromConnectionConfig(_logger.LogInfo);
-                _logger.LogInfo($"Encoding Service initialized with: {_encodingService.CurrentEncoding}");
+                _logger.LogInfo($"OPD Encoding: {_encodingService.CurrentEncoding}");
+                _logger.LogInfo($"IPD Encoding: {_encodingService.CurrentIPDEncoding}");
                 if (int.TryParse(System.Configuration.ConfigurationManager.AppSettings["LogRetentionDays"], out int retentionDays))
                 {
                     _logger.LogRetentionDays = retentionDays;

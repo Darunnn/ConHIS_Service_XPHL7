@@ -7,57 +7,94 @@ namespace ConHIS_Service_XPHL7.Services
     public class EncodingService
     {
         private readonly string _selectedEncoding;
+        private readonly string _ipdEncoding;  // ⭐ เพิ่ม encoding สำหรับ IPD
         private readonly Action<string> _logger;
 
-        /// <summary>
-        /// Initialize EncodingService with selected encoding type
-        /// </summary>
-        /// <param name="selectedEncoding">Encoding type: "UTF-8" or "TIS-620"</param>
-        /// <param name="logger">Optional logger action for warnings/errors</param>
-        public EncodingService(string selectedEncoding, Action<string> logger = null)
+        public EncodingService(string selectedEncoding, Action<string> logger = null, string ipdEncoding = null)
         {
             _selectedEncoding = selectedEncoding?.ToUpper() ?? "UTF-8";
+            _ipdEncoding = ipdEncoding?.ToUpper() ?? _selectedEncoding; // ⭐ fallback ใช้ OPD ถ้าไม่มี
             _logger = logger;
         }
 
-        /// <summary>
-        /// Create EncodingService from connection configuration file
-        /// </summary>
-        /// <param name="logger">Optional logger action</param>
-        /// <returns>EncodingService instance</returns>
+        // ════════════════════════════════════════════════════════════════════
+        //  สร้างจาก config file — อ่านทั้ง OPD และ IPD
+        // ════════════════════════════════════════════════════════════════════
+
         public static EncodingService FromConnectionConfig(Action<string> logger = null)
         {
             const string ConnFolder = "Connection";
             const string ConnFile = "connectdatabase.ini";
+            const string ConnFileIPD = "connectdatabase_ipd.ini"; // ⭐
 
-            var path = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, ConnFolder, ConnFile);
+            string baseDir = AppDomain.CurrentDomain.BaseDirectory;
 
-            if (File.Exists(path))
+            // ── OPD ──────────────────────────────────────────────────────
+            string opdEncoding = ReadCharsetFromFile(
+                Path.Combine(baseDir, ConnFolder, ConnFile), logger);
+
+            // ── IPD ──────────────────────────────────────────────────────
+            string ipdEncoding = ReadCharsetFromFile(
+                Path.Combine(baseDir, ConnFolder, ConnFileIPD), logger);
+
+            // ถ้าไม่มีไฟล์ IPD ให้ fallback ใช้ค่า OPD
+            if (string.IsNullOrEmpty(ipdEncoding))
             {
-                var lines = File.ReadAllLines(path);
-                foreach (var line in lines)
+                ipdEncoding = opdEncoding;
+                logger?.Invoke($"IPD config not found, using OPD encoding: {opdEncoding}");
+            }
+
+            logger?.Invoke($"Encoding initialized — OPD: {opdEncoding}, IPD: {ipdEncoding}");
+            return new EncodingService(opdEncoding, logger, ipdEncoding);
+        }
+
+        // ── helper อ่าน Charset= จากไฟล์ ────────────────────────────────
+        private static string ReadCharsetFromFile(string filePath, Action<string> logger)
+        {
+            try
+            {
+                if (!File.Exists(filePath))
+                {
+                    logger?.Invoke($"Config file not found: {filePath}");
+                    return "UTF-8";
+                }
+
+                foreach (var line in File.ReadAllLines(filePath))
                 {
                     if (string.IsNullOrWhiteSpace(line)) continue;
 
                     if (line.StartsWith("Charset=", StringComparison.OrdinalIgnoreCase))
                     {
                         var charset = line.Replace("Charset=", "").Trim().TrimEnd(';').ToUpper();
-                        logger?.Invoke($"Loaded encoding from config: {charset}");
-                        return new EncodingService(charset, logger);
+                        logger?.Invoke($"Loaded charset '{charset}' from: {Path.GetFileName(filePath)}");
+                        return NormalizeCharset(charset);
                     }
                 }
             }
+            catch (Exception ex)
+            {
+                logger?.Invoke($"Error reading config '{filePath}': {ex.Message}");
+            }
 
-            logger?.Invoke("No charset found in config, using default UTF-8");
-            return new EncodingService("UTF-8", logger);
+            return "UTF-8";
         }
 
+        // ── แปลง charset name ให้เป็น standard ──────────────────────────
+        private static string NormalizeCharset(string charset)
+        {
+            if (charset == "TIS620" || charset == "TIS-620")
+                return "TIS-620";
+            return "UTF-8";
+        }
+
+        // ════════════════════════════════════════════════════════════════════
+        //  Decode — เลือก encoding ตาม orderType
+        // ════════════════════════════════════════════════════════════════════
+
         /// <summary>
-        /// Decode HL7 byte data based on selected encoding
+        /// Decode HL7 data โดยเลือก encoding ตาม orderType (IPD/OPD)
         /// </summary>
-        /// <param name="hl7Data">Raw byte array from database</param>
-        /// <returns>Decoded HL7 string</returns>
-        public string DecodeHl7Data(byte[] hl7Data)
+        public string DecodeHl7Data(byte[] hl7Data, string orderType = null)
         {
             if (hl7Data == null || hl7Data.Length == 0)
             {
@@ -65,48 +102,50 @@ namespace ConHIS_Service_XPHL7.Services
                 return string.Empty;
             }
 
-            string hl7String = string.Empty;
+            // ⭐ เลือก encoding ตาม orderType
+            string encoding = (orderType?.ToUpper() == "IPD") ? _ipdEncoding : _selectedEncoding;
 
+            return DecodeWithEncoding(hl7Data, encoding);
+        }
+
+        // ── decode ด้วย encoding ที่กำหนด ───────────────────────────────
+        private string DecodeWithEncoding(byte[] hl7Data, string encoding)
+        {
             try
             {
-                // Check selected encoding and decode accordingly
-                if (_selectedEncoding == "TIS-620" || _selectedEncoding == "TIS620")
+                if (encoding == "TIS-620" || encoding == "TIS620")
                 {
-                    // Try TIS-620 encoding first
                     try
                     {
                         Encoding tis620 = Encoding.GetEncoding("TIS-620");
-                        hl7String = tis620.GetString(hl7Data);
-                       
+                        return tis620.GetString(hl7Data);
                     }
                     catch (Exception ex)
                     {
-                        _logger?.Invoke($"Failed to decode with TIS-620: {ex.Message}. Falling back to UTF-8.");
-                        hl7String = Encoding.UTF8.GetString(hl7Data);
+                        _logger?.Invoke($"TIS-620 decode failed: {ex.Message}, falling back to UTF-8");
+                        return Encoding.UTF8.GetString(hl7Data);
                     }
                 }
                 else
                 {
-                    // Use UTF-8 encoding
-                    hl7String = Encoding.UTF8.GetString(hl7Data);
-                    
+                    return Encoding.UTF8.GetString(hl7Data);
                 }
             }
             catch (Exception ex)
             {
-                _logger?.Invoke($"Critical error decoding HL7 data: {ex.Message}");
-                // Last resort: try default encoding
-                hl7String = Encoding.Default.GetString(hl7Data);
+                _logger?.Invoke($"Critical error decoding HL7: {ex.Message}");
+                return Encoding.Default.GetString(hl7Data);
             }
-
-            return hl7String;
         }
 
-        /// <summary>
-        /// Load encoding setting from connection string
-        /// </summary>
-        /// <param name="connectionString">Database connection string</param>
-        /// <returns>Encoding type (UTF-8 or TIS-620)</returns>
+        // ════════════════════════════════════════════════════════════════════
+        //  Properties
+        // ════════════════════════════════════════════════════════════════════
+
+        public string CurrentEncoding => _selectedEncoding;
+        public string CurrentIPDEncoding => _ipdEncoding;  // ⭐
+
+        // ── static helper (backward compatible) ─────────────────────────
         public static string GetEncodingFromConnectionString(string connectionString)
         {
             if (string.IsNullOrWhiteSpace(connectionString))
@@ -114,32 +153,19 @@ namespace ConHIS_Service_XPHL7.Services
 
             try
             {
-                var parts = connectionString.Split(';');
-                foreach (var part in parts)
+                foreach (var part in connectionString.Split(';'))
                 {
-                    var trimmedPart = part.Trim();
-                    if (trimmedPart.StartsWith("Charset=", StringComparison.OrdinalIgnoreCase))
+                    var trimmed = part.Trim();
+                    if (trimmed.StartsWith("Charset=", StringComparison.OrdinalIgnoreCase))
                     {
-                        var charset = trimmedPart.Split('=')[1].Trim().ToUpper();
-
-                        if (charset == "TIS620" || charset == "TIS-620")
-                            return "TIS-620";
-                        else
-                            return "UTF-8";
+                        var charset = trimmed.Split('=')[1].Trim().ToUpper();
+                        return NormalizeCharset(charset);
                     }
                 }
             }
-            catch
-            {
-                // If parsing fails, return default
-            }
+            catch { }
 
-            return "UTF-8"; // Default
+            return "UTF-8";
         }
-
-        /// <summary>
-        /// Get current encoding being used
-        /// </summary>
-        public string CurrentEncoding => _selectedEncoding;
     }
 }

@@ -139,7 +139,7 @@ namespace ConHIS_Service_XPHL7.Services
             cancellationToken.ThrowIfCancellationRequested();
 
             // ── 1. Decode HL7 ──────────────────────────────────────────────
-            string hl7String = _encodingService.DecodeHl7Data(data.Hl7Data);
+            string hl7String = _encodingService.DecodeHl7Data(data.Hl7Data, "OPD");
 
             if (string.IsNullOrWhiteSpace(hl7String))
             {
@@ -610,7 +610,7 @@ namespace ConHIS_Service_XPHL7.Services
         {
             cancellationToken.ThrowIfCancellationRequested();
 
-            string hl7String = _encodingService.DecodeHl7Data(data.Hl7Data);
+            string hl7String = _encodingService.DecodeHl7Data(data.Hl7Data, "IPD");
 
             HL7Message hl7Message = null;
             try
@@ -1093,7 +1093,7 @@ namespace ConHIS_Service_XPHL7.Services
                     }.Where(x => !string.IsNullOrWhiteSpace(x));
 
                     var poc = result?.PatientVisit?.AssignedPatientLocation?.PointOfCare?.Trim();
-
+                    var warddesc = result?.PatientVisit?.AssignedPatientLocation?.Room?.Trim();
                     return new
                     {
                         UniqID = $"{d?.Dispensegivecode?.UniqID ?? ""}-{DateTime.Now.ToString("yyyyMMdd")}",
@@ -1137,8 +1137,8 @@ namespace ConHIS_Service_XPHL7.Services
                                     : result?.CommonOrder?.EnteredBy ?? null as string,
                         f_sex = result?.PatientIdentification?.Sex ?? null as string,
                         f_patientdob = FormatDate(result?.PatientIdentification?.DateOfBirth, "yyyy-MM-dd"),
-                        f_wardcode = string.IsNullOrWhiteSpace(poc) ? null : poc,
-                        f_warddesc = null as string,
+                        f_wardcode = string.IsNullOrWhiteSpace(poc) ? null as string : poc,
+                        f_warddesc = string.IsNullOrWhiteSpace(warddesc) ? null as string : warddesc,
                         f_roomcode = null as string,
                         f_roomdesc = null as string,
                         f_bedcode = null as string,
@@ -1246,7 +1246,7 @@ namespace ConHIS_Service_XPHL7.Services
                     }.Where(x => !string.IsNullOrWhiteSpace(x));
 
                     var poc = result?.PatientVisit?.AssignedPatientLocation?.PointOfCare?.Trim();
-
+                    var warddesc = result?.PatientVisit?.AssignedPatientLocation?.Room?.Trim();
                     return new
                     {
                         UniqID = $"{d?.Dispensegivecode?.UniqID ?? ""}-{DateTime.Now.ToString("yyyyMMdd")}",
@@ -1290,8 +1290,8 @@ namespace ConHIS_Service_XPHL7.Services
                                     : result?.CommonOrder?.EnteredBy ?? null as string,
                         f_sex = result?.PatientIdentification?.Sex ?? null as string,
                         f_patientdob = FormatDate(result?.PatientIdentification?.DateOfBirth, "yyyy-MM-dd"),
-                        f_wardcode = string.IsNullOrWhiteSpace(poc) ? null : poc,
-                        f_warddesc = null as string,
+                        f_wardcode = string.IsNullOrWhiteSpace(poc) ? null as string : poc,
+                        f_warddesc = string.IsNullOrWhiteSpace(warddesc) ? null as string : warddesc,
                         f_roomcode = null as string,
                         f_roomdesc = null as string,
                         f_bedcode = null as string,
