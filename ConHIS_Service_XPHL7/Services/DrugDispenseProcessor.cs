@@ -539,7 +539,7 @@ namespace ConHIS_Service_XPHL7.Services
 
         #endregion
 
-        #region IPD Processing (original — ส่ง API)
+        #region IPD Processing (ส่ง API — รองรับทั้ง NW และ RP)
 
         public void ProcessPendingOrders(
             Action<string> logAction,
@@ -677,8 +677,11 @@ namespace ConHIS_Service_XPHL7.Services
 
             cancellationToken.ThrowIfCancellationRequested();
 
-            var orderControl = !string.IsNullOrEmpty(data.RecieveOrderType) ? data.RecieveOrderType : hl7Message.CommonOrder?.OrderControl;
-            _logger.LogInfo($"OrderControl: {orderControl} for IPD prescription ID: {data.PrescId}");
+            // ✅ แก้ไข: ใช้ OrderControl จาก HL7 โดยตรง
+            // RecieveOrderType ใน DB เป็น "IPD"/"OPD" ไม่ใช่ "NW"/"RP"
+            // ดังนั้นต้องอ่าน OrderControl จาก parsed HL7 เสมอ
+            var orderControl = hl7Message.CommonOrder?.OrderControl;
+            _logger.LogInfo($"OrderControl (from HL7): {orderControl} for IPD prescription ID: {data.PrescId}");
 
             string apiResponse = null;
             bool success = false;
@@ -701,11 +704,19 @@ namespace ConHIS_Service_XPHL7.Services
                     _databaseService.UpdateReceiveStatus(data.DrugDispenseipdId, 'Y');
                     lock (_pendingUpdateLock) { _pendingUpdatedIds.Add(data.DrugDispenseipdId); }
                 }
+                else
+                {
+                    // OrderControl ที่ไม่รองรับ — mark F และ log
+                    var warnMsg = $"Unsupported OrderControl '{orderControl}' for IPD prescription ID: {data.PrescId}";
+                    _logger.LogWarning(warnMsg);
+                    logAction(warnMsg);
+                    _databaseService.UpdateReceiveStatus(data.DrugDispenseipdId, 'F');
+                }
 
                 onProcessed?.Invoke(new ProcessResult
                 {
                     Success = success,
-                    Message = success ? "Processed successfully" : apiResponse,
+                    Message = success ? "Processed successfully" : $"Unsupported OrderControl: {orderControl}",
                     ApiResponse = apiResponse,
                     DispenseData = data,
                     ParsedMessage = hl7Message,
@@ -875,6 +886,7 @@ namespace ConHIS_Service_XPHL7.Services
 
             cancellationToken.ThrowIfCancellationRequested();
 
+            // OPD: คงเดิม — ใช้ RecieveOrderType จาก DB ก่อน ถ้าไม่มีค่อยใช้จาก HL7
             var orderControl = !string.IsNullOrEmpty(data.RecieveOrderType) ? data.RecieveOrderType : hl7Message.CommonOrder?.OrderControl;
             _logger.LogInfo($"OrderControl: {orderControl} for OPD prescription ID: {data.PrescId}");
 
@@ -1196,6 +1208,7 @@ namespace ConHIS_Service_XPHL7.Services
 
             return new { data = prescriptions };
         }
+
         private object CreatePrescriptionBodyIPD(HL7Message result, object data, DispenseType type)
         {
             string FormatDate(DateTime? dt, string fmt, bool forceBuddhistEra = false)
@@ -1349,6 +1362,7 @@ namespace ConHIS_Service_XPHL7.Services
 
             return new { data = prescriptions };
         }
+
         #endregion
     }
 }
