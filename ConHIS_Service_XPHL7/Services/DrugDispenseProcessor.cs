@@ -5,6 +5,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
+using System.Text.RegularExpressions;
 using System.Threading;
 
 namespace ConHIS_Service_XPHL7.Services
@@ -1261,10 +1262,12 @@ namespace ConHIS_Service_XPHL7.Services
                     }
 
                     var instructiondesc = new[] {
-                        d?.Substand?.Usageline1,
-                        d?.Substand?.Usageline2,
-                        d?.Substand?.Usageline3
-                    }.Where(x => !string.IsNullOrWhiteSpace(x));
+    d?.Substand?.Usageline1,
+    d?.Substand?.Usageline2,
+    d?.Substand?.Usageline3
+}.Where(x => !string.IsNullOrWhiteSpace(x));
+
+                    var instructiondescText = instructiondesc.Any() ? string.Join(" ", instructiondesc) : null;
 
                     var poc = result?.PatientVisit?.AssignedPatientLocation?.PointOfCare?.Trim();
                     var warddesc = result?.PatientVisit?.AssignedPatientLocation?.Room?.Trim();
@@ -1329,7 +1332,7 @@ namespace ConHIS_Service_XPHL7.Services
                         f_orderqty = d?.QTY ?? 0,
                         f_orderunitcode = d?.Dispensegivecode?.DrugUnit ?? null as string,
                         f_orderunitdesc = d?.Dispensegivecode?.DrugUnit ?? null as string,
-                        f_dosage = d?.Dose ?? 0,
+                        f_dosage = ExtractDosage(instructiondescText) ??  0,
                         f_dosageunit = d?.Usageunit?.Name ?? null as string,
                         f_dosagetext = d?.Strengthunit ?? null as string,
                         f_drugformcode = d?.Dosageform ?? null as string,
@@ -1373,5 +1376,57 @@ namespace ConHIS_Service_XPHL7.Services
         }
 
         #endregion
+        private static double? ExtractDosage(string text)
+        {
+            if (string.IsNullOrWhiteSpace(text))
+                return null;
+
+            if (text.Contains("จากนั้น"))
+                return null;
+
+            var matchPos = Regex.Match(text, @"ครั้งละ\s*");
+
+            if (!matchPos.Success)
+            {
+                var mDirect = Regex.Match(text.Trim(), @"^รับประทานละ\s*(\d+)\s*เม็ด");
+                if (mDirect.Success)
+                    return double.Parse(mDirect.Groups[1].Value);
+                return null;
+            }
+
+            string after = text.Substring(matchPos.Index + matchPos.Length);
+
+            if (Regex.IsMatch(after, @"^ครึ่ง-1\s*เม็ด")) return 0.5;
+            if (Regex.IsMatch(after, @"^ครึ่ง\s*เม็ด")) return 0.5;
+            if (Regex.IsMatch(after, @"^ครึ่ง\s+")) return 0.5;
+
+            var mHalf = Regex.Match(after, @"^(\d+)\s*เม็ดครึ่ง");
+            if (mHalf.Success)
+                return double.Parse(mHalf.Groups[1].Value) + 0.5;
+
+            if (Regex.IsMatch(after, @"^1/8"))
+                return 0.125;
+
+            var mFrac = Regex.Match(after, @"^(\d+)/(\d+)");
+            if (mFrac.Success)
+                return Math.Round(double.Parse(mFrac.Groups[1].Value) / double.Parse(mFrac.Groups[2].Value), 4);
+
+            var mRange = Regex.Match(after, @"^(\d+)-(\d+)\s*เม็ด");
+            if (mRange.Success)
+                return double.Parse(mRange.Groups[1].Value);
+
+            var mNum = Regex.Match(after, @"^(\d+(?:\.\d+)?)\s*เม็ด");
+            if (mNum.Success)
+                return double.Parse(mNum.Groups[1].Value);
+
+            var mNumDay = Regex.Match(after, @"^(\d+(?:\.\d+)?)\s*เม็ดวันละ");
+            if (mNumDay.Success)
+                return double.Parse(mNumDay.Groups[1].Value);
+
+            if (Regex.IsMatch(after, @"^\s*เม็ด"))
+                return 1.0;
+
+            return null;
+        }
     }
 }
