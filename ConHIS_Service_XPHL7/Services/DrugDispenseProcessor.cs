@@ -1209,6 +1209,7 @@ namespace ConHIS_Service_XPHL7.Services
                         f_ipd_order_recordno = null as string,
                         f_status = result?.CommonOrder?.OrderControl == "NW" ? "0" :
                                    result?.CommonOrder?.OrderControl == "RP" ? "1" : "0",
+                        f_io_flag= type == DispenseType.IPD ? "I" : "O",
                     };
                 })
                 .ToArray();
@@ -1363,6 +1364,7 @@ namespace ConHIS_Service_XPHL7.Services
                         f_ipd_order_recordno = null as string,
                         f_status = result?.CommonOrder?.OrderControl == "NW" ? "0" :
                                    result?.CommonOrder?.OrderControl == "RP" ? "1" : "0",
+                        f_io_flag= type == DispenseType.IPD ? "I" : "O",
                     };
                 })
                 .ToArray();
