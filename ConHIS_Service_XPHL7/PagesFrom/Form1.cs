@@ -252,7 +252,7 @@ namespace ConHIS_Service_XPHL7
             MessageBox.Show(message, title, MessageBoxButtons.OK, MessageBoxIcon.Information);
         }
 
-        // ⭐ ConnectionCheckCallback
+        // ⭐ ConnectionCheckCallback — แก้ไข OPD/IPD partial disconnect & auto-resume
         private async void ConnectionCheckCallback(object state)
         {
             if (_isCheckingConnection) return;
@@ -270,7 +270,7 @@ namespace ConHIS_Service_XPHL7
                 {
                     if (isConnected)
                     {
-                        // ✅ Reconnected (หรือ first connect)
+                        // ✅ Reconnected (หรือ first connect) — ทั้ง DB หาย แล้วกลับมา
                         this.Invoke(new Action(async () =>
                         {
                             try
@@ -342,7 +342,6 @@ namespace ConHIS_Service_XPHL7
                                         }));
                                     }
 
-                                    // ไม่ต้องแสดง reconnect popup ซ้ำ → return ออกไปเลย
                                     return;
                                 }
 
@@ -353,6 +352,10 @@ namespace ConHIS_Service_XPHL7
 
                                     bool shouldResumeIPD = _wasIPDRunningBeforeDisconnection && _ipdTableExists;
                                     bool shouldResumeOPD = _wasOPDRunningBeforeDisconnection && _opdTableExists;
+
+                                    // ✅ Clear flags ก่อน resume เพื่อป้องกัน double-resume
+                                    if (shouldResumeIPD) _wasIPDRunningBeforeDisconnection = false;
+                                    if (shouldResumeOPD) _wasOPDRunningBeforeDisconnection = false;
 
                                     string serviceMessage = "";
                                     if (shouldResumeIPD && shouldResumeOPD)
@@ -405,7 +408,7 @@ namespace ConHIS_Service_XPHL7
                     }
                     else
                     {
-                        // ❌ Disconnected
+                        // ❌ ทั้ง OPD และ IPD หลุดพร้อมกัน
                         this.Invoke(new Action(() =>
                         {
                             UpdateConnectionStatus(false, false, false);
@@ -462,11 +465,13 @@ namespace ConHIS_Service_XPHL7
                 }
                 else if (isConnected)
                 {
-                    // สถานะไม่เปลี่ยน แต่ OPD/IPD อาจเปลี่ยน — อัปเดต UI เงียบๆ
-                    this.Invoke(new Action(() =>
+                    // ✅ FIX: สถานะรวมไม่เปลี่ยน (ยังมี DB อย่างน้อยหนึ่งตัว connect)
+                    // แต่ OPD หรือ IPD อาจหลุด/กลับมาแบบ partial → ต้องจัดการแยก
+                    this.Invoke(new Action(async () =>
                     {
                         UpdateConnectionStatus(true, opdConnected, ipdConnected);
 
+                        // --- ❌ หยุด service ที่ DB หายไป ---
                         if (!ipdConnected && _ipdTimer != null)
                         {
                             _logger?.LogWarning("IPD DB lost during operation - Auto-stopping IPD");
@@ -479,6 +484,66 @@ namespace ConHIS_Service_XPHL7
                             _wasOPDRunningBeforeDisconnection = true;
                             StopOPDService();
                         }
+
+                        // ✅ FIX: Resume service ที่ DB กลับมา (partial reconnect)
+                        if (ipdConnected && _ipdTimer == null && _wasIPDRunningBeforeDisconnection)
+                        {
+                            _logger?.LogInfo("IPD DB restored (partial reconnect) - Re-checking table...");
+                            _ipdTableExists = await CheckTableExists("drug_dispense_ipd");
+                            if (_ipdTableExists)
+                            {
+                                _logger?.LogInfo("Auto-resuming IPD Service (partial reconnect)");
+                                _wasIPDRunningBeforeDisconnection = false;
+                                StartIPDService();
+
+                                this.BeginInvoke(new Action(() =>
+                                {
+                                    ShowAutoCloseMessageBox(
+                                        "✅ IPD Database restored!\n\n⚡ IPD Service resumed automatically.",
+                                        "IPD Connection Restored",
+                                        3000,
+                                        false,
+                                        false
+                                    );
+                                }));
+                            }
+                            else
+                            {
+                                _logger?.LogWarning("IPD DB restored but table not found - IPD Service remains stopped");
+                            }
+                        }
+
+                        if (opdConnected && _opdTimer == null && _wasOPDRunningBeforeDisconnection)
+                        {
+                            _logger?.LogInfo("OPD DB restored (partial reconnect) - Re-checking table...");
+                            _opdTableExists = await CheckTableExists("drug_dispense_opd");
+                            if (_opdTableExists)
+                            {
+                                _logger?.LogInfo("Auto-resuming OPD Service (partial reconnect)");
+                                _wasOPDRunningBeforeDisconnection = false;
+                                StartOPDService();
+
+                                this.BeginInvoke(new Action(() =>
+                                {
+                                    ShowAutoCloseMessageBox(
+                                        "✅ OPD Database restored!\n\n⚡ OPD Service resumed automatically.",
+                                        "OPD Connection Restored",
+                                        3000,
+                                        false,
+                                        false
+                                    );
+                                }));
+                            }
+                            else
+                            {
+                                _logger?.LogWarning("OPD DB restored but table not found - OPD Service remains stopped");
+                            }
+                        }
+
+                        UpdateServiceButtonStates();
+
+                        bool anyRunning = (_ipdTimer != null) || (_opdTimer != null);
+                        manualCheckButton.Enabled = !anyRunning;
                     }));
                 }
             }
@@ -841,7 +906,6 @@ namespace ConHIS_Service_XPHL7
                 }
                 else
                 {
-                    // ⭐⭐ DB ไม่ connect ตอน load → Connection Monitor จะ trigger auto-start เมื่อ connect ได้
                     _logger.LogWarning("Both OPD and IPD database connections failed on startup - will auto-start when connected");
                     UpdateStatus("⚠️ Database not connected - Waiting for connection...");
                 }
@@ -891,7 +955,6 @@ namespace ConHIS_Service_XPHL7
 
                     if (autoStartedAny)
                     {
-                        // ⭐ mark ว่า auto-start ทำแล้ว ไม่ต้องทำซ้ำใน Connection Monitor
                         _hasAutoStartedOnLoad = true;
                         manualCheckButton.Enabled = false;
 
