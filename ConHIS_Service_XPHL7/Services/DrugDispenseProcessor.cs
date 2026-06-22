@@ -1211,6 +1211,7 @@ namespace ConHIS_Service_XPHL7.Services
                         f_status = result?.CommonOrder?.OrderControl == "NW" ? "0" :
                                    result?.CommonOrder?.OrderControl == "RP" ? "1" : "0",
                         f_io_flag= type == DispenseType.IPD ? "I" : "O",
+                        f_dispensestatus = "0",
                     };
                 })
                 .ToArray();
@@ -1268,7 +1269,7 @@ namespace ConHIS_Service_XPHL7.Services
 }.Where(x => !string.IsNullOrWhiteSpace(x));
 
                     var instructiondescText = instructiondesc.Any() ? string.Join(" ", instructiondesc) : null;
-
+                    var dosageValue = ExtractDosage(instructiondescText);
                     var poc = result?.PatientVisit?.AssignedPatientLocation?.PointOfCare?.Trim();
                     var warddesc = result?.PatientVisit?.AssignedPatientLocation?.Room?.Trim();
                     return new
@@ -1332,7 +1333,7 @@ namespace ConHIS_Service_XPHL7.Services
                         f_orderqty = d?.QTY ?? 0,
                         f_orderunitcode = d?.Dispensegivecode?.DrugUnit ?? null as string,
                         f_orderunitdesc = d?.Dispensegivecode?.DrugUnit ?? null as string,
-                        f_dosage = ExtractDosage(instructiondescText) ??  0,
+                        f_dosage = dosageValue ??  0,
                         f_dosageunit = d?.Usageunit?.Name ?? null as string,
                         f_dosagetext = d?.Strengthunit ?? null as string,
                         f_drugformcode = d?.Dosageform ?? null as string,
@@ -1361,13 +1362,17 @@ namespace ConHIS_Service_XPHL7.Services
                         f_prn = "0",
                         f_stat = "0",
                         f_comment = result?.CommonOrder?.PlacerGroup?.ID ?? null as string,
-                        f_tomachineno = r?.AdministrationDevice ??
-                                        (!string.IsNullOrEmpty(d?.Actualdispense) &&
-                                         d.Actualdispense.IndexOf("proud", StringComparison.OrdinalIgnoreCase) >= 0 ? 2 : 0),
+                        f_tomachineno = (instructiondescText != null &&
+                 (instructiondescText.Contains("มีอาการ") || instructiondescText.Contains("เวลามีอาการ")))
+                    ? 0
+                    : (r?.AdministrationDevice ??
+                       (!string.IsNullOrEmpty(d?.Actualdispense) &&
+                        d.Actualdispense.IndexOf("proud", StringComparison.OrdinalIgnoreCase) >= 0 ? 2 : 0)),
                         f_ipd_order_recordno = null as string,
                         f_status = result?.CommonOrder?.OrderControl == "NW" ? "0" :
                                    result?.CommonOrder?.OrderControl == "RP" ? "1" : "0",
                         f_io_flag= type == DispenseType.IPD ? "I" : "O",
+                        f_dispensestatus = ((dosageValue == null || dosageValue == 0.0 || dosageValue == 0) ? 2 : 0).ToString(),
                     };
                 })
                 .ToArray();
@@ -1426,7 +1431,7 @@ namespace ConHIS_Service_XPHL7.Services
             if (Regex.IsMatch(after, @"^\s*เม็ด"))
                 return 1.0;
 
-            return null;
+            return 0.0;
         }
     }
 }
