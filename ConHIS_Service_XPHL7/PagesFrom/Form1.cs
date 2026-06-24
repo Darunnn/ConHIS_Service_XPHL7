@@ -60,6 +60,12 @@ namespace ConHIS_Service_XPHL7
         private bool _isDatabaseConnected = false;
         private bool _isInitializing = false;
 
+        // ⭐ FIX: เก็บสถานะ connected ของ OPD/IPD แยกกันอย่างอิสระ
+        // (ห้ามใช้ _isDatabaseConnected รวมในการตัดสินใจ resume แต่ละฝั่งอีก
+        //  เพราะถ้า "OR" กันแล้วฝั่งหนึ่งกลับมาก่อน อีกฝั่งจะถูกมองว่า "reconnect เสร็จแล้ว" ไปด้วย)
+        private bool _wasOpdConnectedLastCheck = false;
+        private bool _wasIpdConnectedLastCheck = false;
+
         // ⭐ IPD/OPD Services
         private CancellationTokenSource _ipdCancellationTokenSource = null;
         private CancellationTokenSource _opdCancellationTokenSource = null;
@@ -252,7 +258,17 @@ namespace ConHIS_Service_XPHL7
             MessageBox.Show(message, title, MessageBoxButtons.OK, MessageBoxIcon.Information);
         }
 
-        // ⭐ ConnectionCheckCallback — แก้ไข OPD/IPD partial disconnect & auto-resume
+        // ⭐ FIX: ConnectionCheckCallback — เช็คและจัดการ reconnect ของ OPD/IPD แบบเป็นอิสระจากกันอย่างสมบูรณ์
+        //
+        // 🐛 บัคเดิม: ใช้ "isConnected = opdConnected || ipdConnected" ตัวเดียวเทียบกับ _isDatabaseConnected
+        // ผลคือถ้า OPD/IPD หลุดพร้อมกัน แล้ว IPD กลับมาก่อน OPD -> isConnected จะกลายเป็น true ทันที
+        // ระบบจะคิดว่า "reconnect เสร็จสมบูรณ์แล้ว" และตั้ง _isDatabaseConnected = true ไปเลย
+        // ทำให้รอบถัดไปที่ OPD กลับมาจริง ๆ isConnected ไม่เปลี่ยนค่าอีก (true -> true)
+        // จึงไม่มีโค้ดจุดไหนเซ็ต flag ให้ OPD auto-resume ได้ทัน -> OPD ค้างไม่ start
+        //
+        // ✅ วิธีแก้: เก็บสถานะ "เคย connected ล่าสุด" ของ OPD และ IPD แยกกันคนละตัว
+        // (_wasOpdConnectedLastCheck / _wasIpdConnectedLastCheck) แล้วตรวจจับ transition
+        // (false -> true = reconnect, true -> false = disconnect) ของแต่ละฝั่งแยกกันเสมอ
         private async void ConnectionCheckCallback(object state)
         {
             if (_isCheckingConnection) return;
@@ -266,191 +282,157 @@ namespace ConHIS_Service_XPHL7
 
                 _logger?.LogConnectDatabase(isConnected, _lastDatabaseConnectionTime, _lastDatabaseDisconnectionTime);
 
-                if (isConnected != _isDatabaseConnected)
+                // ตรวจจับ transition ของแต่ละฝั่งแยกกันอย่างเป็นอิสระ
+                bool opdJustReconnected = opdConnected && !_wasOpdConnectedLastCheck;
+                bool opdJustDisconnected = !opdConnected && _wasOpdConnectedLastCheck;
+                bool ipdJustReconnected = ipdConnected && !_wasIpdConnectedLastCheck;
+                bool ipdJustDisconnected = !ipdConnected && _wasIpdConnectedLastCheck;
+
+                bool anyTransition = opdJustReconnected || opdJustDisconnected || ipdJustReconnected || ipdJustDisconnected;
+
+                if (anyTransition)
                 {
-                    if (isConnected)
+                    this.Invoke(new Action(async () =>
                     {
-                        // ✅ Reconnected (หรือ first connect) — ทั้ง DB หาย แล้วกลับมา
-                        this.Invoke(new Action(async () =>
+                        try
                         {
-                            try
+                            UpdateConnectionStatus(isConnected, opdConnected, ipdConnected);
+
+                            // ── ❌ ฝั่งใดหลุด → stop service ของฝั่งนั้น ──────────────
+                            if (ipdJustDisconnected)
                             {
-                                UpdateConnectionStatus(true, opdConnected, ipdConnected);
+                                _logger?.LogWarning("IPD DB disconnected - Auto-stopping IPD");
+                                _ipdTableExists = false;
+                                if (_ipdTimer != null)
+                                {
+                                    _wasIPDRunningBeforeDisconnection = true;
+                                    StopIPDService();
+                                }
+                            }
+                            if (opdJustDisconnected)
+                            {
+                                _logger?.LogWarning("OPD DB disconnected - Auto-stopping OPD");
+                                _opdTableExists = false;
+                                if (_opdTimer != null)
+                                {
+                                    _wasOPDRunningBeforeDisconnection = true;
+                                    StopOPDService();
+                                }
+                            }
 
-                                _logger?.LogInfo("Rechecking database tables after reconnection...");
+                            // ── ✅ ฝั่งใด reconnect → เช็ค table แล้ว resume เฉพาะฝั่งนั้น ──
+                            if (ipdJustReconnected)
+                            {
+                                _logger?.LogInfo("IPD DB reconnected - Re-checking table...");
+                                _ipdTableExists = await CheckTableExists("drug_dispense_ipd");
+                                _logger?.LogInfo($"IPD Table Status: {(_ipdTableExists ? "EXISTS" : "NOT FOUND")}");
+                            }
+                            if (opdJustReconnected)
+                            {
+                                _logger?.LogInfo("OPD DB reconnected - Re-checking table...");
+                                _opdTableExists = await CheckTableExists("drug_dispense_opd");
+                                _logger?.LogInfo($"OPD Table Status: {(_opdTableExists ? "EXISTS" : "NOT FOUND")}");
+                            }
 
-                                if (ipdConnected)
-                                    _ipdTableExists = await CheckTableExists("drug_dispense_ipd");
-                                else
-                                    _ipdTableExists = false;
+                            UpdateServiceButtonStates();
 
-                                if (opdConnected)
-                                    _opdTableExists = await CheckTableExists("drug_dispense_opd");
-                                else
-                                    _opdTableExists = false;
-
-                                _logger?.LogInfo(
-                                    $"Table Status - IPD: {(_ipdTableExists ? "EXISTS" : "NOT FOUND")}, " +
-                                    $"OPD: {(_opdTableExists ? "EXISTS" : "NOT FOUND")}");
-
-                                UpdateServiceButtonStates();
+                            if (ipdJustReconnected || opdJustReconnected)
+                            {
                                 await LoadDataBySelectedDate();
                                 UpdateStatus("✓ Database reconnected - Data refreshed");
+                            }
 
-                                // ⭐⭐ AUTO-START ครั้งแรก (กรณี DB ไม่ connect ตอน Form_Load)
-                                if (!_hasAutoStartedOnLoad)
+                            // ⭐⭐ AUTO-START ครั้งแรก (กรณี DB ไม่ connect เลยตอน Form_Load)
+                            if (!_hasAutoStartedOnLoad && isConnected)
+                            {
+                                _hasAutoStartedOnLoad = true;
+                                _logger?.LogInfo("First connection detected - running auto-start...");
+
+                                bool autoStartedAny = false;
+
+                                if (_ipdTableExists && _ipdTimer == null)
                                 {
-                                    _hasAutoStartedOnLoad = true;
-                                    _logger?.LogInfo("First connection detected - running auto-start...");
-
-                                    bool autoStartedAny = false;
-
-                                    if (_ipdTableExists && _ipdTimer == null)
-                                    {
-                                        _logger?.LogInfo("Auto-starting IPD Service (first connect)");
-                                        StartIPDService();
-                                        autoStartedAny = true;
-                                    }
-                                    if (_opdTableExists && _opdTimer == null)
-                                    {
-                                        _logger?.LogInfo("Auto-starting OPD Service (first connect)");
-                                        StartOPDService();
-                                        autoStartedAny = true;
-                                    }
-
-                                    if (autoStartedAny)
-                                    {
-                                        manualCheckButton.Enabled = false;
-
-                                        string autoStartMsg = "";
-                                        if (_ipdTableExists && _opdTableExists)
-                                            autoStartMsg = "✅ IPD & OPD Services started automatically";
-                                        else if (_ipdTableExists)
-                                            autoStartMsg = "✅ IPD Service started automatically";
-                                        else if (_opdTableExists)
-                                            autoStartMsg = "✅ OPD Service started automatically";
-
-                                        this.BeginInvoke(new Action(() =>
-                                        {
-                                            ShowAutoCloseMessageBox(
-                                                $"🚀 Auto Start\n\n{autoStartMsg}\n\nInterval: {_intervalSeconds} seconds",
-                                                "Service Auto Started",
-                                                3000,
-                                                false,
-                                                false
-                                            );
-                                        }));
-                                    }
-
-                                    return;
+                                    _logger?.LogInfo("Auto-starting IPD Service (first connect)");
+                                    StartIPDService();
+                                    autoStartedAny = true;
+                                }
+                                if (_opdTableExists && _opdTimer == null)
+                                {
+                                    _logger?.LogInfo("Auto-starting OPD Service (first connect)");
+                                    StartOPDService();
+                                    autoStartedAny = true;
                                 }
 
-                                if (!_hasNotifiedReconnection)
+                                if (autoStartedAny)
                                 {
-                                    _hasNotifiedReconnection = true;
-                                    _hasNotifiedDisconnection = false;
+                                    manualCheckButton.Enabled = false;
 
-                                    bool shouldResumeIPD = _wasIPDRunningBeforeDisconnection && _ipdTableExists;
-                                    bool shouldResumeOPD = _wasOPDRunningBeforeDisconnection && _opdTableExists;
-
-                                    // ✅ Clear flags ก่อน resume เพื่อป้องกัน double-resume
-                                    if (shouldResumeIPD) _wasIPDRunningBeforeDisconnection = false;
-                                    if (shouldResumeOPD) _wasOPDRunningBeforeDisconnection = false;
-
-                                    string serviceMessage = "";
-                                    if (shouldResumeIPD && shouldResumeOPD)
-                                        serviceMessage = "\n\n⚡ Both IPD & OPD Services will resume in 3 seconds...";
-                                    else if (shouldResumeIPD)
-                                        serviceMessage = "\n\n⚡ IPD Service will resume in 3 seconds...";
-                                    else if (shouldResumeOPD)
-                                        serviceMessage = "\n\n⚡ OPD Service will resume in 3 seconds...";
-
-                                    string tableWarning = "";
-                                    if (!ipdConnected)
-                                        tableWarning += "\n⚠️ IPD Database still disconnected - IPD Service disabled";
-                                    else if (_wasIPDRunningBeforeDisconnection && !_ipdTableExists)
-                                        tableWarning += "\n⚠️ IPD table not found - IPD Service disabled";
-
-                                    if (!opdConnected)
-                                        tableWarning += "\n⚠️ OPD Database still disconnected - OPD Service disabled";
-                                    else if (_wasOPDRunningBeforeDisconnection && !_opdTableExists)
-                                        tableWarning += "\n⚠️ OPD table not found - OPD Service disabled";
-
-                                    string dbStatus = "";
-                                    if (opdConnected && ipdConnected)
-                                        dbStatus = "✅ OPD & IPD Databases restored!";
-                                    else if (opdConnected)
-                                        dbStatus = "✅ OPD Database restored!\n⚠️ IPD Database still disconnected";
-                                    else
-                                        dbStatus = "✅ IPD Database restored!\n⚠️ OPD Database still disconnected";
+                                    string autoStartMsg = "";
+                                    if (_ipdTableExists && _opdTableExists)
+                                        autoStartMsg = "✅ IPD & OPD Services started automatically";
+                                    else if (_ipdTableExists)
+                                        autoStartMsg = "✅ IPD Service started automatically";
+                                    else if (_opdTableExists)
+                                        autoStartMsg = "✅ OPD Service started automatically";
 
                                     this.BeginInvoke(new Action(() =>
                                     {
                                         ShowAutoCloseMessageBox(
-                                            $"{dbStatus}\n\n" +
-                                            $"📅 Reconnected at: {_lastDatabaseConnectionTime.Value:yyyy-MM-dd HH:mm:ss}\n" +
-                                            $"🔄 Data refreshed automatically." +
-                                            tableWarning +
-                                            serviceMessage,
-                                            "Connection Restored",
+                                            $"🚀 Auto Start\n\n{autoStartMsg}\n\nInterval: {_intervalSeconds} seconds",
+                                            "Service Auto Started",
                                             3000,
-                                            shouldResumeIPD,
-                                            shouldResumeOPD
+                                            false,
+                                            false
                                         );
                                     }));
                                 }
-                            }
-                            catch (Exception ex)
-                            {
-                                _logger?.LogError("Error after reconnection", ex);
-                            }
-                        }));
-                    }
-                    else
-                    {
-                        // ❌ ทั้ง OPD และ IPD หลุดพร้อมกัน
-                        this.Invoke(new Action(() =>
-                        {
-                            UpdateConnectionStatus(false, false, false);
 
-                            _ipdTableExists = false;
-                            _opdTableExists = false;
-                            UpdateServiceButtonStates();
-
-                            _wasIPDRunningBeforeDisconnection = (_ipdTimer != null);
-                            _wasOPDRunningBeforeDisconnection = (_opdTimer != null);
-
-                            if (_wasIPDRunningBeforeDisconnection)
-                            {
-                                _logger?.LogWarning("IPD Service running - Auto-stopping due to DB disconnect");
-                                StopIPDService();
-                            }
-                            if (_wasOPDRunningBeforeDisconnection)
-                            {
-                                _logger?.LogWarning("OPD Service running - Auto-stopping due to DB disconnect");
-                                StopOPDService();
+                                _wasOpdConnectedLastCheck = opdConnected;
+                                _wasIpdConnectedLastCheck = ipdConnected;
+                                return;
                             }
 
-                            UpdateStatus("✗ Database connection lost - Reconnecting...");
+                            // ── ✅ Resume service ที่ reconnect กลับมา (เฉพาะฝั่งที่เพิ่งกลับมาจริง ๆ) ──
+                            bool shouldResumeIPD = ipdJustReconnected && _wasIPDRunningBeforeDisconnection && _ipdTableExists;
+                            bool shouldResumeOPD = opdJustReconnected && _wasOPDRunningBeforeDisconnection && _opdTableExists;
 
-                            if (!_hasNotifiedDisconnection)
+                            if (shouldResumeIPD)
                             {
-                                _hasNotifiedDisconnection = true;
-                                _hasNotifiedReconnection = false;
+                                _wasIPDRunningBeforeDisconnection = false;
+                                _logger?.LogInfo("Auto-resuming IPD Service after reconnect");
+                                StartIPDService();
+                            }
+                            if (shouldResumeOPD)
+                            {
+                                _wasOPDRunningBeforeDisconnection = false;
+                                _logger?.LogInfo("Auto-resuming OPD Service after reconnect");
+                                StartOPDService();
+                            }
 
+                            if (ipdJustReconnected && _wasIPDRunningBeforeDisconnection && !_ipdTableExists)
+                                _logger?.LogWarning("IPD DB restored but table not found - IPD Service remains stopped");
+                            if (opdJustReconnected && _wasOPDRunningBeforeDisconnection && !_opdTableExists)
+                                _logger?.LogWarning("OPD DB restored but table not found - OPD Service remains stopped");
+
+                            // ── 🔔 Notification: รวมข้อความตาม transition ที่เกิดขึ้นจริงรอบนี้ ──
+                            if (opdJustDisconnected || ipdJustDisconnected)
+                            {
                                 string serviceMessage = "";
                                 if (_wasIPDRunningBeforeDisconnection && _wasOPDRunningBeforeDisconnection)
                                     serviceMessage = "\n\n⏸️ Both services stopped and will auto-resume when reconnected.";
-                                else if (_wasIPDRunningBeforeDisconnection)
+                                else if (ipdJustDisconnected && _wasIPDRunningBeforeDisconnection)
                                     serviceMessage = "\n\n⏸️ IPD Service stopped and will auto-resume when reconnected.";
-                                else if (_wasOPDRunningBeforeDisconnection)
+                                else if (opdJustDisconnected && _wasOPDRunningBeforeDisconnection)
                                     serviceMessage = "\n\n⏸️ OPD Service stopped and will auto-resume when reconnected.";
+
+                                string lostWhat = (opdJustDisconnected && ipdJustDisconnected) ? "OPD & IPD"
+                                    : opdJustDisconnected ? "OPD" : "IPD";
 
                                 this.BeginInvoke(new Action(() =>
                                 {
                                     ShowAutoCloseMessageBox(
-                                        $"❌ Database connection lost!\n\n" +
-                                        $"📅 Lost at: {_lastDatabaseDisconnectionTime.Value:yyyy-MM-dd HH:mm:ss}\n" +
+                                        $"❌ {lostWhat} Database connection lost!\n\n" +
+                                        $"📅 Lost at: {DateTime.Now:yyyy-MM-dd HH:mm:ss}\n" +
                                         $"🔄 Reconnecting every {_connectionCheckIntervalSeconds} seconds." +
                                         serviceMessage,
                                         "Connection Lost",
@@ -460,91 +442,64 @@ namespace ConHIS_Service_XPHL7
                                     );
                                 }));
                             }
-                        }));
-                    }
-                }
-                else if (isConnected)
-                {
-                    // ✅ FIX: สถานะรวมไม่เปลี่ยน (ยังมี DB อย่างน้อยหนึ่งตัว connect)
-                    // แต่ OPD หรือ IPD อาจหลุด/กลับมาแบบ partial → ต้องจัดการแยก
-                    this.Invoke(new Action(async () =>
-                    {
-                        UpdateConnectionStatus(true, opdConnected, ipdConnected);
 
-                        // --- ❌ หยุด service ที่ DB หายไป ---
-                        if (!ipdConnected && _ipdTimer != null)
-                        {
-                            _logger?.LogWarning("IPD DB lost during operation - Auto-stopping IPD");
-                            _wasIPDRunningBeforeDisconnection = true;
-                            StopIPDService();
-                        }
-                        if (!opdConnected && _opdTimer != null)
-                        {
-                            _logger?.LogWarning("OPD DB lost during operation - Auto-stopping OPD");
-                            _wasOPDRunningBeforeDisconnection = true;
-                            StopOPDService();
-                        }
-
-                        // ✅ FIX: Resume service ที่ DB กลับมา (partial reconnect)
-                        if (ipdConnected && _ipdTimer == null && _wasIPDRunningBeforeDisconnection)
-                        {
-                            _logger?.LogInfo("IPD DB restored (partial reconnect) - Re-checking table...");
-                            _ipdTableExists = await CheckTableExists("drug_dispense_ipd");
-                            if (_ipdTableExists)
+                            if (opdJustReconnected || ipdJustReconnected)
                             {
-                                _logger?.LogInfo("Auto-resuming IPD Service (partial reconnect)");
-                                _wasIPDRunningBeforeDisconnection = false;
-                                StartIPDService();
+                                string tableWarning = "";
+                                if (ipdJustReconnected && _wasIPDRunningBeforeDisconnection && !_ipdTableExists)
+                                    tableWarning += "\n⚠️ IPD table not found - IPD Service disabled";
+                                if (opdJustReconnected && _wasOPDRunningBeforeDisconnection && !_opdTableExists)
+                                    tableWarning += "\n⚠️ OPD table not found - OPD Service disabled";
+
+                                string serviceMessage = "";
+                                if (shouldResumeIPD && shouldResumeOPD)
+                                    serviceMessage = "\n\n⚡ Both IPD & OPD Services resumed automatically.";
+                                else if (shouldResumeIPD)
+                                    serviceMessage = "\n\n⚡ IPD Service resumed automatically.";
+                                else if (shouldResumeOPD)
+                                    serviceMessage = "\n\n⚡ OPD Service resumed automatically.";
+
+                                string restoredWhat = (opdJustReconnected && ipdJustReconnected) ? "OPD & IPD"
+                                    : opdJustReconnected ? "OPD" : "IPD";
 
                                 this.BeginInvoke(new Action(() =>
                                 {
                                     ShowAutoCloseMessageBox(
-                                        "✅ IPD Database restored!\n\n⚡ IPD Service resumed automatically.",
-                                        "IPD Connection Restored",
+                                        $"✅ {restoredWhat} Database restored!\n\n" +
+                                        $"📅 Reconnected at: {DateTime.Now:yyyy-MM-dd HH:mm:ss}\n" +
+                                        $"🔄 Data refreshed automatically." +
+                                        tableWarning +
+                                        serviceMessage,
+                                        "Connection Restored",
                                         3000,
                                         false,
                                         false
                                     );
                                 }));
                             }
-                            else
-                            {
-                                _logger?.LogWarning("IPD DB restored but table not found - IPD Service remains stopped");
-                            }
-                        }
 
-                        if (opdConnected && _opdTimer == null && _wasOPDRunningBeforeDisconnection)
+                            UpdateServiceButtonStates();
+
+                            bool anyRunning = (_ipdTimer != null) || (_opdTimer != null);
+                            manualCheckButton.Enabled = !anyRunning;
+                        }
+                        catch (Exception ex)
                         {
-                            _logger?.LogInfo("OPD DB restored (partial reconnect) - Re-checking table...");
-                            _opdTableExists = await CheckTableExists("drug_dispense_opd");
-                            if (_opdTableExists)
-                            {
-                                _logger?.LogInfo("Auto-resuming OPD Service (partial reconnect)");
-                                _wasOPDRunningBeforeDisconnection = false;
-                                StartOPDService();
-
-                                this.BeginInvoke(new Action(() =>
-                                {
-                                    ShowAutoCloseMessageBox(
-                                        "✅ OPD Database restored!\n\n⚡ OPD Service resumed automatically.",
-                                        "OPD Connection Restored",
-                                        3000,
-                                        false,
-                                        false
-                                    );
-                                }));
-                            }
-                            else
-                            {
-                                _logger?.LogWarning("OPD DB restored but table not found - OPD Service remains stopped");
-                            }
+                            _logger?.LogError("Error handling connection transition", ex);
                         }
-
-                        UpdateServiceButtonStates();
-
-                        bool anyRunning = (_ipdTimer != null) || (_opdTimer != null);
-                        manualCheckButton.Enabled = !anyRunning;
+                        finally
+                        {
+                            // ⭐ อัปเดต "สถานะล่าสุด" ของแต่ละฝั่งเสมอ ไม่ว่าจะเข้า branch ไหน
+                            _wasOpdConnectedLastCheck = opdConnected;
+                            _wasIpdConnectedLastCheck = ipdConnected;
+                        }
                     }));
+                }
+                else
+                {
+                    // ไม่มี transition ฝั่งใดเลยรอบนี้ — sync ค่าล่าสุดไว้เผื่อ edge case
+                    _wasOpdConnectedLastCheck = opdConnected;
+                    _wasIpdConnectedLastCheck = ipdConnected;
                 }
             }
             catch (Exception ex)
@@ -839,6 +794,11 @@ namespace ConHIS_Service_XPHL7
                 bool opdConnected = await Task.Run(() => _databaseService.TestConnection());
                 bool ipdConnected = await Task.Run(() => _databaseService.TestIPDConnection());
                 bool anyConnected = opdConnected || ipdConnected;
+
+                // ⭐ FIX: seed สถานะเริ่มต้นของ OPD/IPD แยกกัน ก่อนที่ ConnectionCheckCallback
+                // (ConnectionMonitor) จะเริ่มรันรอบแรก เพื่อไม่ให้รอบแรกเข้าใจผิดว่าเป็น "reconnect"
+                _wasOpdConnectedLastCheck = opdConnected;
+                _wasIpdConnectedLastCheck = ipdConnected;
 
                 UpdateConnectionStatus(anyConnected, opdConnected, ipdConnected);
 

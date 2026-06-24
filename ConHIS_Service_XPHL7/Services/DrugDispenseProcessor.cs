@@ -1285,13 +1285,15 @@ namespace ConHIS_Service_XPHL7.Services
                         return string.Join(" ", parts.Where(x => !string.IsNullOrWhiteSpace(x)));
                     }
 
-                    var instructiondesc = new[] {
-    d?.Substand?.Usageline1,
-    d?.Substand?.Usageline2,
-    d?.Substand?.Usageline3
-}.Where(x => !string.IsNullOrWhiteSpace(x));
+                    //                    var instructiondesc = new[] {
+                    //    d?.Substand?.Usageline1,
+                    //    d?.Substand?.Usageline2,
+                    //    d?.Substand?.Usageline3
+                    //}.Where(x => !string.IsNullOrWhiteSpace(x));
 
-                    var instructiondescText = instructiondesc.Any() ? string.Join(" ", instructiondesc) : null;
+                    //                    var instructiondescText = instructiondesc.Any() ? string.Join(" ", instructiondesc) : null;
+                    //                    var dosageValue = ExtractDosage(instructiondescText);
+                    var instructiondescText = !string.IsNullOrWhiteSpace(d?.RXD33) ? d.RXD33.Trim() : null as string;
                     var dosageValue = ExtractDosage(instructiondescText);
                     var poc = result?.PatientVisit?.AssignedPatientLocation?.PointOfCare?.Trim();
                     var warddesc = result?.PatientVisit?.AssignedPatientLocation?.Room?.Trim();
@@ -1371,7 +1373,7 @@ namespace ConHIS_Service_XPHL7.Services
                         f_itemlotno = null as string,
                         f_itemlotexpire = null as string,
                         f_instructioncode = d?.Substand?.RXD704 ?? null as string,
-                        f_instructiondesc = instructiondesc.Any() ? string.Join(" ", instructiondesc) : null as string,
+                        f_instructiondesc = instructiondescText,
                         f_frequencycode = string.IsNullOrWhiteSpace(d?.Usagecode?.Frequencycode) ? null as string : d.Usagecode.Frequencycode,
                         f_frequencydesc = string.IsNullOrWhiteSpace(d?.Usagecode?.Frequencydesc) ? null as string : d.Usagecode.Frequencydesc,
                         f_timecode = null as string,
@@ -1428,7 +1430,8 @@ namespace ConHIS_Service_XPHL7.Services
             if (Regex.IsMatch(after, @"^ครึ่ง\s*เม็ด")) return 0.5;
             if (Regex.IsMatch(after, @"^ครึ่ง\s+")) return 0.5;
 
-            var mHalf = Regex.Match(after, @"^(\d+)\s*เม็ดครึ่ง");
+            // ⭐ แก้: รองรับเว้นวรรคระหว่าง "เม็ด" กับ "ครึ่ง" เช่น "1 เม็ด ครึ่ง"
+            var mHalf = Regex.Match(after, @"^(\d+)\s*เม็ด\s*ครึ่ง");
             if (mHalf.Success)
                 return double.Parse(mHalf.Groups[1].Value) + 0.5;
 
