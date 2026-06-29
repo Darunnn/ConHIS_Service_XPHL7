@@ -1349,7 +1349,9 @@ namespace ConHIS_Service_XPHL7.Services
                         f_right = result?.PatientVisit?.FinancialClass != null
                                     ? SafeJoin(result.PatientVisit.FinancialClass.ID, result.PatientVisit.FinancialClass.Name)
                                     : null as string,
-                        f_drugallergy = null as string,
+                        f_drugallergy = (result?.Allergies != null && result.Allergies.Any(a => !string.IsNullOrWhiteSpace(a?.AllergyName)))
+                                    ? "มีแพ้ยา"
+                                    : null as string,
                         f_diagnosis = null as string,
                         f_orderitemcode = d?.Dispensegivecode?.Identifier ?? null as string,
                         f_orderitemname = d?.Dispensegivecode?.DrugName ?? null as string,
